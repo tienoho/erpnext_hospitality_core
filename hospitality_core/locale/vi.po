@@ -1,0 +1,197 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: hospitality_core\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-27 09:30+0000\n"
+"PO-Revision-Date: 2026-08-27 09:30+0000\n"
+"Last-Translator: Antigravity AI\n"
+"Language-Team: Vietnamese\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: vi_VN\n"
+
+msgid "Hospitality Core"
+msgstr "Quản lý Khách sạn & Nghỉ dưỡng"
+
+msgid "Hospitality"
+msgstr "Quản lý Khách sạn"
+
+msgid "Hospitality Analytics"
+msgstr "Phân tích Doanh thu Khách sạn"
+
+msgid "Hotel Room"
+msgstr "Phòng khách sạn"
+
+msgid "Hotel Room Type"
+msgstr "Hạng phòng"
+
+msgid "Room Rate Plan"
+msgstr "Bảng giá phòng"
+
+msgid "Hotel Reservation"
+msgstr "Đặt phòng khách sạn"
+
+msgid "Hotel Group Booking"
+msgstr "Đặt phòng theo đoàn"
+
+msgid "Hotel Group Booking Room"
+msgstr "Phòng trong đoàn"
+
+msgid "Guest"
+msgstr "Khách lưu trú"
+
+msgid "Guest Folio"
+msgstr "Tài khoản phòng (Folio)"
+
+msgid "Folio Transaction"
+msgstr "Giao dịch chi tiêu phòng"
+
+msgid "Folio Transaction Move Log"
+msgstr "Lịch sử chuyển giao dịch Folio"
+
+msgid "Folio Ledger Adjustment"
+msgstr "Điều chỉnh số dư Folio"
+
+msgid "Guest Balance Ledger"
+msgstr "Sổ cái công nợ khách"
+
+msgid "Allowance Reason Code"
+msgstr "Mã lý do giảm trừ"
+
+msgid "EOD Closing Entry"
+msgstr "Chốt ca cuối ngày (Night Audit)"
+
+msgid "EOD Discrepancies"
+msgstr "Chênh lệch cuối ngày"
+
+msgid "EOD Expense Breakdown"
+msgstr "Phân tích chi phí cuối ngày"
+
+msgid "EOD Item Group Sales"
+msgstr "Doanh thu theo nhóm hàng cuối ngày"
+
+msgid "EOD Item Sales"
+msgstr "Doanh thu theo món cuối ngày"
+
+msgid "EOD Payment Summary"
+msgstr "Tổng hợp thanh toán cuối ngày"
+
+msgid "EOD POS Profile"
+msgstr "Hồ sơ điểm bán cuối ngày"
+
+msgid "EOD Stock Balance"
+msgstr "Tồn kho cuối ngày"
+
+msgid "Expense Category"
+msgstr "Hạng mục chi phí khách sạn"
+
+msgid "Hospitality Expense"
+msgstr "Chi phí khách sạn"
+
+msgid "Hospitality Expense Tax"
+msgstr "Thuế chi phí khách sạn"
+
+msgid "Hospitality Accounting Settings"
+msgstr "Cài đặt Kế toán Khách sạn"
+
+msgid "Hotel Maintenance Request"
+msgstr "Yêu cầu bảo trì phòng"
+
+msgid "Hotel Reception"
+msgstr "Lễ tân khách sạn"
+
+msgid "Item Recipe"
+msgstr "Công thức định lượng F&B"
+
+msgid "Recipe Ingredient"
+msgstr "Nguyên vật liệu định lượng"
+
+msgid "Lost and Found Item"
+msgstr "Đồ thất lạc & tìm thấy"
+
+msgid "Reservation Routing"
+msgstr "Quy tắc định tuyến đặt phòng"
+
+msgid "Sales Report"
+msgstr "Báo cáo bán hàng khách sạn"
+
+msgid "Front Desk Operations"
+msgstr "Nghiệp vụ Tiền sảnh & Lễ tân"
+
+msgid "Front Desk Console"
+msgstr "Bàn điều khiển Lễ tân"
+
+msgid "Tape Chart"
+msgstr "Sơ đồ phòng trực quan (Tape Chart)"
+
+msgid "Housekeeping Board"
+msgstr "Bảng quản lý buồng phòng"
+
+msgid "Availability Query"
+msgstr "Tra cứu tình trạng phòng trống"
+
+msgid "Guest 360 View"
+msgstr "Hồ sơ khách hàng 360"
+
+msgid "Night Audit"
+msgstr "Kiểm toán đêm"
+
+msgid "Room Rent"
+msgstr "Tiền phòng"
+
+msgid "Room Charge"
+msgstr "Gán vào tiền phòng"
+
+msgid "POS Charge"
+msgstr "Chi tiêu dịch vụ / Nhà hàng"
+
+msgid "Payment Credit"
+msgstr "Thanh toán trả trước / Đặt cọc"
+
+msgid "Reserved"
+msgstr "Đã đặt phòng"
+
+msgid "Confirmed"
+msgstr "Đã xác nhận"
+
+msgid "Checked In"
+msgstr "Đang lưu trú (Checked In)"
+
+msgid "Checked Out"
+msgstr "Đã trả phòng (Checked Out)"
+
+msgid "Cancelled"
+msgstr "Đã hủy"
+
+msgid "Clean"
+msgstr "Phòng sạch"
+
+msgid "Dirty"
+msgstr "Phòng bẩn (Cần dọn)"
+
+msgid "Inspected"
+msgstr "Đã kiểm tra"
+
+msgid "Out of Order"
+msgstr "Phòng hỏng hóc (OOO)"
+
+msgid "Out of Service"
+msgstr "Tạm ngừng phục vụ (OOS)"
+
+msgid "Charge to Room"
+msgstr "Gán nợ vào phòng"
+
+msgid "Print Folio"
+msgstr "In sao kê Folio"
+
+msgid "Posting Error"
+msgstr "Lỗi nhập liệu"
+
+msgid "Guest Satisfaction / Complaint"
+msgstr "Bồi thường / Khiếu nại của khách"
+
+msgid "Management Complementary"
+msgstr "Miễn phí từ ban quản lý (FOC)"

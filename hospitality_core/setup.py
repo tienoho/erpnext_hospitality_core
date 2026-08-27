@@ -5,6 +5,11 @@ def after_install():
     create_roles()
     create_custom_fields()
     create_default_data()
+    enable_vietnamese_language()
+
+def enable_vietnamese_language():
+    if frappe.db.exists("Language", "vi"):
+        frappe.db.set_value("Language", "vi", "enabled", 1)
 
 def create_roles():
     roles = ["Hospitality User", "Hospitality Manager", "Housekeeping Staff"]
@@ -49,6 +54,14 @@ def create_default_data():
                 "requires_manager_approval": r["mgr"]
             }).insert()
 
+    # Determine default UOM
+    uom = frappe.db.get_value("UOM", {"enabled": 1}, "name") or "Nos"
+    if not frappe.db.exists("UOM", uom):
+        try:
+            frappe.get_doc({"doctype": "UOM", "uom_name": uom, "name": uom}).insert(ignore_permissions=True)
+        except Exception:
+            pass
+
     # Create Service Items
     items = [
         {"code": "ROOM-RENT", "name": "Room Rent"},
@@ -86,6 +99,7 @@ def create_default_data():
             item = frappe.new_doc("Item")
             item.item_code = i["code"]
             item.item_name = i["name"]
-            item.item_group = target_item_group
+            item.item_group = target_item_group or "All Item Groups"
+            item.stock_uom = uom
             item.is_stock_item = 0
             item.insert(ignore_permissions=True)
