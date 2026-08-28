@@ -189,6 +189,83 @@ frappe.ui.form.on('Hotel Reservation', {
 
             }, __('Actions'));
         }
+
+        // KEYCARD ENCODER BUTTONS (Hardware Bridge Integration)
+        if (['Reserved', 'Checked In'].includes(frm.doc.status) && frm.doc.room) {
+            frm.add_custom_button(__('Ghi Thẻ Phòng'), function () {
+                if (window.frappe && frappe.hospitality && frappe.hospitality.encode_keycard) {
+                    frappe.hospitality.encode_keycard(
+                        frm.doc.room,
+                        frm.doc.arrival_date + ' 14:00:00',
+                        frm.doc.departure_date + ' 12:00:00',
+                        frm.doc.guest,
+                        false
+                    );
+                } else {
+                    // Direct fetch fallback if keycard_encoder_bridge.js is not loaded
+                    fetch('http://127.0.0.1:8765/api/lock/encode_card', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            room_no: frm.doc.room,
+                            checkin_time: frm.doc.arrival_date + ' 14:00:00',
+                            checkout_time: frm.doc.departure_date + ' 12:00:00',
+                            guest_name: frm.doc.guest,
+                            is_duplicate: false
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            frappe.show_alert({ message: __('Ghi thẻ phòng thành công: ') + data.card_uid, indicator: 'green' });
+                        } else {
+                            frappe.msgprint({ title: __('Lỗi Ghi Thẻ'), message: data.error || data.message, indicator: 'red' });
+                        }
+                    })
+                    .catch(err => {
+                        frappe.msgprint({
+                            title: __('Không thể kết nối Đầu đọc thẻ'),
+                            indicator: 'red',
+                            message: __('Vui lòng chạy Hardware Bridge tại <b>http://127.0.0.1:8765</b> trên máy trạm Lễ tân.')
+                        });
+                    });
+                }
+            }, __('Khóa Thẻ Từ'));
+
+            frm.add_custom_button(__('Ghi Thẻ Phụ (Duplicate)'), function () {
+                fetch('http://127.0.0.1:8765/api/lock/encode_card', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_no: frm.doc.room,
+                        checkin_time: frm.doc.arrival_date + ' 14:00:00',
+                        checkout_time: frm.doc.departure_date + ' 12:00:00',
+                        guest_name: frm.doc.guest,
+                        is_duplicate: true
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        frappe.show_alert({ message: __('Ghi thẻ phụ thành công: ') + data.card_uid, indicator: 'green' });
+                    }
+                })
+                .catch(() => {
+                    frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
+                });
+            }, __('Khóa Thẻ Từ'));
+
+            frm.add_custom_button(__('Xóa / Thu Hồi Thẻ'), function () {
+                fetch('http://127.0.0.1:8765/api/lock/clear_card', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        frappe.show_alert({ message: __('Đã xóa và thu hồi thẻ phòng!'), indicator: 'green' });
+                    })
+                    .catch(() => {
+                        frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
+                    });
+            }, __('Khóa Thẻ Từ'));
+        }
     },
 
     room_type: function (frm) {

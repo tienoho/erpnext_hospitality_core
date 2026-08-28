@@ -1,61 +1,310 @@
-"Hospitality Core","Quản lý Khách sạn & Nghỉ dưỡng"
-"Hospitality","Quản lý Khách sạn"
-"Hospitality Analytics","Phân tích Doanh thu Khách sạn"
-"Hotel Room","Phòng khách sạn"
-"Hotel Room Type","Hạng phòng"
-"Room Rate Plan","Bảng giá phòng"
-"Hotel Reservation","Đặt phòng khách sạn"
-"Hotel Group Booking","Đặt phòng theo đoàn"
-"Hotel Group Booking Room","Phòng trong đoàn"
-"Guest","Khách lưu trú"
-"Guest Folio","Tài khoản phòng (Folio)"
-"Folio Transaction","Giao dịch chi tiêu phòng"
-"Folio Transaction Move Log","Lịch sử chuyển giao dịch Folio"
-"Folio Ledger Adjustment","Điều chỉnh số dư Folio"
-"Guest Balance Ledger","Sổ cái công nợ khách"
-"Allowance Reason Code","Mã lý do giảm trừ"
-"EOD Closing Entry","Chốt ca cuối ngày (Night Audit)"
-"EOD Discrepancies","Chênh lệch cuối ngày"
-"EOD Expense Breakdown","Phân tích chi phí cuối ngày"
-"EOD Item Group Sales","Doanh thu theo nhóm hàng cuối ngày"
-"EOD Item Sales","Doanh thu theo món cuối ngày"
-"EOD Payment Summary","Tổng hợp thanh toán cuối ngày"
-"EOD POS Profile","Hồ sơ điểm bán cuối ngày"
-"EOD Stock Balance","Tồn kho cuối ngày"
-"Expense Category","Hạng mục chi phí khách sạn"
-"Hospitality Expense","Chi phí khách sạn"
-"Hospitality Expense Tax","Thuế chi phí khách sạn"
-"Hospitality Accounting Settings","Cài đặt Kế toán Khách sạn"
-"Hotel Maintenance Request","Yêu cầu bảo trì phòng"
-"Hotel Reception","Lễ tân khách sạn"
-"Item Recipe","Công thức định lượng F&B"
-"Recipe Ingredient","Nguyên vật liệu định lượng"
-"Lost and Found Item","Đồ thất lạc & tìm thấy"
-"Reservation Routing","Quy tắc định tuyến đặt phòng"
-"Sales Report","Báo cáo bán hàng khách sạn"
-"Front Desk Operations","Nghiệp vụ Tiền sảnh & Lễ tân"
-"Front Desk Console","Bàn điều khiển Lễ tân"
-"Tape Chart","Sơ đồ phòng trực quan (Tape Chart)"
-"Housekeeping Board","Bảng quản lý buồng phòng"
-"Availability Query","Tra cứu tình trạng phòng trống"
-"Guest 360 View","Hồ sơ khách hàng 360"
-"Night Audit","Kiểm toán đêm"
-"Room Rent","Tiền phòng"
-"Room Charge","Gán vào tiền phòng"
-"POS Charge","Chi tiêu dịch vụ / Nhà hàng"
-"Payment Credit","Thanh toán trả trước / Đặt cọc"
-"Reserved","Đã đặt phòng"
-"Confirmed","Đã xác nhận"
-"Checked In","Đang lưu trú (Checked In)"
-"Checked Out","Đã trả phòng (Checked Out)"
-"Cancelled","Đã hủy"
-"Clean","Phòng sạch"
-"Dirty","Phòng bẩn (Cần dọn)"
-"Inspected","Đã kiểm tra"
-"Out of Order","Phòng hỏng hóc (OOO)"
-"Out of Service","Tạm ngừng phục vụ (OOS)"
-"Charge to Room","Gán nợ vào phòng"
-"Print Folio","In sao kê Folio"
-"Posting Error","Lỗi nhập liệu"
-"Guest Satisfaction / Complaint","Bồi thường / Khiếu nại của khách"
-"Management Complementary","Miễn phí từ ban quản lý (FOC)"
+Account,Tài khoản
+Account Name,Tên tài khoản
+Account Number,Số hiệu TK
+Accounting,Kế toán
+Accounting Period is Closed,Kỳ kế toán đã được khóa sổ
+Accounts,Kế toán
+Accounts Payable,Công nợ phải trả (AP)
+Accounts Receivable,Công nợ phải thu (AR)
+Accumulated Depreciation,Khấu hao lũy kế
+Accumulated Depreciation Account,TK Khấu hao (214)
+Actions,Thao tác
+Active,Đang hoạt động
+Actual Qty,Số lượng thực tồn
+Add,Thêm
+Add Row,Thêm dòng
+Allowance Reason Code,Mã lý do giảm trừ
+Amend,Sửa đổi
+Amount,Thành tiền
+An error occurred,Đã xảy ra lỗi
+Apply,Áp dụng
+Approved,Đã duyệt
+Are you sure you want to proceed?,Bạn có chắc chắn muốn tiếp tục?
+Are you sure?,Bạn có chắc chắn?
+Asset,Tài sản cố định
+Asset Category,Nhóm tài sản
+Asset Depreciation Ledger,Sổ khấu hao
+Asset Movement,Điều chuyển TSCĐ
+Asset Name,Tên tài sản
+Asset Owner,Người quản lý tài sản
+Asset Repair,Sửa chữa TSCĐ
+Asset Value Adjustment,Điều chỉnh TSCĐ
+Assets,Tài sản
+Attendance,Chấm công
+Availability Query,Tra cứu phòng trống
+Available For Use Date,Ngày đưa vào SD
+Back,Quay lại
+Balance Sheet,Báo cáo THTC
+Bank Account,Tài khoản ngân hàng
+Bank Reconciliation,Đối soát ngân hàng
+Batch,Lô hàng
+Batch has expired,Lô hàng này đã hết hạn sử dụng
+Bill of Materials,Định mức BOM
+Billed,Đã lập hóa đơn
+Billing Address,Địa chỉ hóa đơn
+BOM,Định mức BOM
+Branch,Chi nhánh
+Brand,Thương hiệu
+Buying,Mua hàng
+Cancel,Hủy chứng từ
+Cancelled,Đã hủy
+Cannot be deleted,Không thể xóa bản ghi này
+Cannot post to a Group Account,Không thể hạch toán vào Tài khoản nhóm / Tổng hợp
+Cards,Thẻ nghiệp vụ
+Cash Flow,Lưu chuyển tiền tệ
+Changes saved,Thay đổi đã được lưu
+Chart of Accounts,Cây tài khoản
+Check-in successful,Làm thủ tục nhận phòng thành công
+Check-out successful,Làm thủ tục trả phòng thành công
+Checked In,Đang lưu trú
+Checked Out,Đã trả phòng
+Clear Filters,Xóa bộ lọc
+Close,Đóng
+Closed,Đã đóng
+Company,Pháp nhân
+Completed,Hoàn tất
+Confirm,Xác nhận
+Confirmed,Đã xác nhận
+Cost Center,Trung tâm chi phí
+Cost Center Allocation,Phân bổ chi phí
+Create New,Tạo mới
+Credit,Có
+Credit Amount,Số tiền Có
+Custom Field,Trường tùy chỉnh
+Customer,Khách hàng
+Customer Group,Nhóm khách hàng
+Customer Type,Loại khách
+Dashboard,Bảng điều khiển
+Debit,Nợ
+Debit Amount,Số tiền Nợ
+Default Warehouse,Kho mặc định
+Delete,Xóa
+Delivery Note,Phiếu xuất giao
+Department,Phòng ban
+Deposit recorded successfully,Đã ghi nhận tiền đặt cọc thành công
+Depreciation Expense Account,TK Chi phí KH (642)
+Depreciation Schedule,Lịch khấu hao
+Designation,Chức vụ
+Disabled,Vô hiệu hóa
+Discard,Hủy bỏ
+Discount Amount,Tiền chiết khấu
+Discount Percentage,Chiết khấu (%)
+Do you really want to delete this document?,Bạn có chắc muốn xóa chứng từ này?
+Document cancelled successfully,Chứng từ đã được hủy thành công
+Document deleted successfully,Chứng từ đã được xóa thành công
+Document submitted successfully,Chứng từ đã được ghi sổ thành công
+Download,Tải xuống
+Draft,Bản nháp
+Duplicate,Nhân bản
+Edit,Sửa
+Email,Gửi Email
+Employee,Nhân viên
+Employee Advance,Tạm ứng nhân viên
+Employee Checkin,Nhật ký Check-in
+Employment Type,Loại HĐ lao động
+Enabled,Kích hoạt
+EOD Closing Entry,Chốt ngày (EOD)
+EOD Discrepancies,Chênh lệch EOD
+EOD Expense Breakdown,Chi phí EOD
+EOD Item Group Sales,Doanh thu nhóm hàng EOD
+EOD Item Sales,Doanh thu món EOD
+EOD Payment Summary,Tổng hợp thanh toán EOD
+EOD POS Profile,Điểm bán EOD
+EOD Stock Balance,Tồn kho EOD
+Exchange Rate Revaluation,Định giá lại tỷ giá
+Expense Category,Hạng mục chi phí
+Expense Claim,Tạm ứng / Hoàn ứng
+Export,Xuất Excel
+Filters,Bộ lọc
+Fiscal Year,Niên độ tài chính
+Fiscal Year not found,Không tìm thấy Niên độ tài chính
+Fixed Asset Account,TK Tài sản (211)
+Folio closed successfully,Đã đóng tài khoản Folio thành công
+Folio Ledger Adjustment,Điều chỉnh Folio
+Folio Transaction,Giao dịch Folio
+Folio Transaction Move Log,Nhật ký chuyển Folio
+Front Desk Console,Bàn Lễ tân
+Front Desk Operations,Nghiệp vụ Tiền sảnh
+General Ledger,Sổ cái (GL)
+Grand Total,Tổng thanh toán
+Gross Purchase Amount,Nguyên giá
+Guest,Khách lưu trú
+Guest 360 View,Hồ sơ khách 360
+Guest Balance Ledger,Sổ công nợ khách
+Guest Folio,Tài khoản Folio
+Holiday List,Lịch nghỉ lễ
+Hospitality,Khách sạn & Nghỉ dưỡng
+Hospitality Core,Khách sạn & Nghỉ dưỡng
+Hospitality Expense,Chi phí khách sạn
+Hospitality Expense Tax,Thuế chi phí
+Hotel Group Booking,Đặt phòng đoàn
+Hotel Group Booking Room,Phòng trong đoàn
+Hotel Maintenance Request,Yêu cầu bảo trì
+Hotel Reception,Lễ tân
+Hotel Reservation,Đặt phòng
+Hotel Room,Phòng khách sạn
+Hotel Room Type,Hạng phòng
+Housekeeping Board,Bảng buồng phòng
+HR,Nhân sự
+Human Resources,Nhân sự & Tiền lương
+Import,Nhập dữ liệu
+In Progress,Đang thực hiện
+Inactive,Ngưng hoạt động
+Insert Below,Chèn dưới
+Inspected,Đã kiểm tra đạt chuẩn
+Insufficient stock in warehouse,Không đủ số lượng tồn kho trong kho chỉ định
+Integrations,Tích hợp
+Invoice amount mismatch,Số tiền trên hóa đơn không khớp
+Item,Mặt hàng
+Item Attribute,Thuộc tính hàng
+Item Code,Mã hàng
+Item Group,Nhóm hàng
+Item Name,Tên hàng
+Item Price,Bảng giá mặt hàng
+Item Recipe,Định lượng F&B
+Item Variant,Biến thể hàng
+Journal Entry,Bút toán sổ cái
+Leave Allocation,Cấp phép năm
+Leave Application,Đơn xin nghỉ
+Leave Type,Loại phép
+Loading...,Đang tải dữ liệu...
+Lost and Found Item,Đồ thất lạc
+Mandatory fields required,Vui lòng nhập đầy đủ các trường bắt buộc
+Manufacture,Chế biến / Sản xuất
+Master Data,Danh mục dữ liệu gốc
+Material Issue,Xuất kho
+Material Receipt,Nhập kho
+Material Transfer,Chuyển kho
+Missing values,Thiếu giá trị bắt buộc
+Mode of Payment,Hình thức TT
+Move transaction to another folio,Chuyển giao dịch sang Folio khác
+Net Purchase Amount,Giá trị còn lại
+Net Total,Tổng tiền hàng
+New,Tạo mới
+Next,Tiếp theo
+Night Audit,Kiểm toán đêm
+Night audit completed successfully,Đã hoàn tất quy trình kiểm toán đêm thành công
+No available rooms found for selected period,Không còn phòng trống trong khoảng thời gian đã chọn
+No records found,Không tìm thấy bản ghi nào
+No Show,Khách không đến
+Not permitted,Bạn không có quyền thực hiện thao tác này
+Nothing to save,Không có thay đổi nào để lưu
+Notifications,Thông báo
+Occupied Clean,Khách sạch (OC)
+Occupied Dirty,Khách bẩn (OD)
+Open,Đang mở
+Opening balance posted,Đã ghi sổ số dư đầu kỳ
+Opening Invoice Creation Tool,Công cụ nhập số dư công nợ
+Operation successful,Thao tác thành công
+Ordered Qty,Số lượng đang đặt mua
+Out of Order,Hỏng hóc (OOO)
+Out of Service,Tạm ngưng (OOS)
+Outstanding Amount,Số dư còn nợ
+Outstanding balance must be zero before check-out,Số dư nợ Folio phải bằng 0 trước khi trả phòng
+Overdue,Quá hạn thanh toán
+Paid,Đã thanh toán
+Paid Amount,Số tiền đã trả
+Partly Paid,Đã thanh toán một phần
+Payment allocated successfully,Đã phân bổ thanh toán thành công
+Payment Entry,Phiếu thu / chi
+Payroll Entry,Tính lương tháng
+Pending,Chờ duyệt
+Please confirm,Vui lòng xác nhận
+Please select a room before check-in,Vui lòng chọn phòng trước khi nhận phòng
+Please wait...,Vui lòng đợi trong giây lát...
+Previous,Trước đó
+Price List,Bảng giá
+Pricing Rule,Quy tắc giá
+Print,In ấn
+Print Folio Statement,In sao kê chi tiêu Folio
+Processing...,Đang xử lý...
+Profit and Loss Statement,Báo cáo P&L
+Purchase Amount,Nguyên giá
+Purchase Date,Ngày mua
+Purchase Invoice,Hóa đơn mua vào
+Purchase Order,Đơn mua hàng (PO)
+Purchase Receipt,Phiếu nhập mua
+Purchase Taxes and Charges Template,Mẫu thuế mua hàng
+Qty,SL
+Quantity,Số lượng
+Quick Access,Truy cập nhanh
+Quick Stock Balance,Xem nhanh tồn kho
+Quotation,Báo giá
+Rate,Đơn giá
+Recipe Ingredient,Nguyên liệu định lượng
+Refresh,Làm mới
+Rejected,Đã từ chối
+Reports,Báo cáo
+Reservation Routing,Định tuyến đặt phòng
+Reserved,Đã đặt chỗ
+Reserved Qty,Số lượng giữ trước
+Reset,Đặt lại
+Role,Vai trò
+Role Permission Manager,Quản lý phân quyền
+Room Rate Plan,Bảng giá phòng
+Room status updated,Đã cập nhật trạng thái buồng phòng
+Row #{0}: {1},Dòng #{0}: {1}
+Salary Slip,Phiếu lương
+Salary Structure,Cơ cấu lương
+Salary Structure Assignment,Gán bảng lương
+Sales Invoice,Hóa đơn bán ra
+Sales Order,Đơn bán hàng (SO)
+Sales Partner,Đại lý / Đối tác
+Sales Report,Báo cáo bán hàng
+Sales Taxes and Charges Template,Mẫu thuế bán hàng
+Save,Lưu
+Saved,Đã lưu
+Saved successfully,Lưu thành công
+Search,Tìm kiếm
+Select,Chọn
+Select All,Chọn tất cả
+Selling,Bán hàng
+Serial No,Mã Serial
+Settings,Cài đặt
+Shift Assignment,Phân ca làm việc
+Shift Type,Ca làm việc
+Shipping Address,Địa chỉ giao hàng
+Shortcuts,Lối tắt
+Split folio charges,Tách chi phí Folio
+Stock,Kho vận
+Stock Balance,Báo cáo tồn kho
+Stock balance updated successfully,Đã cập nhật số dư tồn kho thành công
+Stock Entry,Phiếu kho
+Stock Ledger,Sổ kho (SLE)
+Stock Reconciliation,Kiểm kê kho
+Stock UOM,ĐVT lưu kho
+Stock Value,Giá trị kho
+Submit,Ghi sổ / Nộp
+Submitted,Đã ghi sổ
+Supplier,Nhà cung cấp
+Supplier Group,Nhóm NCC
+Supplier Quotation,Báo giá NCC
+Supplier Type,Loại NCC
+System Settings,Cài đặt hệ thống
+Tape Chart,Sơ đồ phòng
+Tax Withholding Category,Thuế khấu trừ tại nguồn
+Taxes and Charges,Thuế & Phí
+Territory,Khu vực bán hàng
+Total Debit must be equal to Total Credit,Tổng Nợ phải bằng Tổng Có
+Transaction added to Folio,Đã ghi nhận giao dịch vào tài khoản Folio
+Transactions,Chứng từ giao dịch
+Trial Balance,Cân đối phát sinh
+Unbilled,Chưa lập hóa đơn
+Unit of Measure,ĐVT
+Unpaid,Chưa thanh toán
+Unselect All,Bỏ chọn tất cả
+UOM,ĐVT
+UOM Conversion Factor,Hệ số quy đổi ĐVT
+Upload,Tải lên
+User,Người dùng
+User Permission,Phân quyền theo đối tượng
+Users and Permissions,Người dùng & Phân quyền
+Vacant Clean,Trống sạch (VC)
+Vacant Dirty,Trống bẩn (VD)
+Valuation Rate,Đơn giá vốn
+Value After Depreciation,Giá trị còn lại
+View,Xem
+Warehouse,Kho bãi
+Warehouse Type,Loại kho
+Workflow,Quy trình duyệt
+Write Off Amount,Số tiền xóa nợ

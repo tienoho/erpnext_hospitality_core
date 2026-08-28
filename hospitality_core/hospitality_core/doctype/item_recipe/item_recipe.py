@@ -87,7 +87,7 @@ class ItemRecipe(Document):
 		bom.uom = self.uom
 		bom.is_active = self.is_active
 		bom.is_default = 1
-		bom.company = frappe.defaults.get_defaults().get("company")
+		bom.company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value("Company", {}, "name")
 		
 		# Add ingredients as BOM items
 		for ingredient in self.ingredients:

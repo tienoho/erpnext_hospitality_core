@@ -76,30 +76,49 @@ def create_default_data():
             {"parent_item_group": ["in", ["", None]], "is_group": 1}, "name")
         
         if not root_item_group:
-             # Fallback: get any group
              root_item_group = frappe.db.get_value("Item Group", {"is_group": 1}, "name")
         
+        if not root_item_group:
+            try:
+                root_doc = frappe.get_doc({
+                    "doctype": "Item Group",
+                    "item_group_name": "All Item Groups",
+                    "name": "All Item Groups",
+                    "is_group": 1
+                })
+                root_doc.flags.ignore_links = True
+                root_doc.flags.ignore_mandatory = True
+                root_doc.insert(ignore_permissions=True)
+                root_item_group = "All Item Groups"
+            except Exception:
+                pass
+
         if root_item_group:
             try:
                 frappe.get_doc({
                     "doctype": "Item Group",
                     "item_group_name": "Services",
+                    "name": "Services",
                     "parent_item_group": root_item_group,
                     "is_group": 0
                 }).insert(ignore_permissions=True)
+                target_item_group = "Services"
             except Exception:
-                # If creation fails, fallback to using the root directly
                 target_item_group = root_item_group
         else:
-            # Last resort: grab any item group
-            target_item_group = frappe.db.get_value("Item Group", {}, "name")
+            target_item_group = frappe.db.get_value("Item Group", {}, "name") or "All Item Groups"
             
     for i in items:
         if not frappe.db.exists("Item", i["code"]):
-            item = frappe.new_doc("Item")
-            item.item_code = i["code"]
-            item.item_name = i["name"]
-            item.item_group = target_item_group or "All Item Groups"
-            item.stock_uom = uom
-            item.is_stock_item = 0
-            item.insert(ignore_permissions=True)
+            try:
+                item = frappe.new_doc("Item")
+                item.item_code = i["code"]
+                item.item_name = i["name"]
+                item.item_group = target_item_group
+                item.stock_uom = uom
+                item.is_stock_item = 0
+                item.flags.ignore_links = True
+                item.flags.ignore_mandatory = True
+                item.insert(ignore_permissions=True)
+            except Exception:
+                pass
