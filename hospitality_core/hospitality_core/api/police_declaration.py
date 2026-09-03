@@ -29,26 +29,46 @@ ALLOWED_ROLES = [
 
 def _get_police_settings():
     """
-    Đọc cấu hình động từ Hospitality Police Settings.
-    Nếu chưa thiết lập, tự động lấy thông tin từ Company mặc định của hệ thống.
+    Đọc cấu hình động từ Hospitality Police Settings và ERPNext Company.
+    TUYỆT ĐỐI ZERO HARDCODE: Không gán cứng tên cơ sở, MST hay địa danh.
     """
+    settings = None
     try:
         settings = frappe.get_cached_doc("Hospitality Police Settings")
     except Exception:
-        settings = None
+        pass
 
-    default_company = frappe.db.get_single_value("Global Defaults", "default_company") or "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO"
-    
+    default_company = frappe.db.get_single_value("Global Defaults", "default_company") or frappe.defaults.get_user_default("Company")
+    company_doc = None
+    if default_company:
+        try:
+            company_doc = frappe.get_cached_doc("Company", default_company)
+        except Exception:
+            pass
+
+    company_name = getattr(company_doc, "company_name", None) or default_company or ""
+    company_tax_id = getattr(company_doc, "tax_id", None) or ""
+
+    est_name = (getattr(settings, "establishment_name", None) or "").strip() or company_name
+    est_code = (getattr(settings, "establishment_code", None) or "").strip()
+    police_st = (getattr(settings, "police_station_name", None) or "").strip()
+    police_city = (getattr(settings, "police_city", None) or "").strip()
+    tax_id = (getattr(settings, "tax_id", None) or "").strip() or company_tax_id
+    resort_co = (getattr(settings, "resort_company_name", None) or "").strip() or company_name
+    address = (getattr(settings, "address", None) or "").strip()
+    stay_purpose = (getattr(settings, "default_stay_purpose", None) or "").strip() or _("Du lịch / Nghỉ dưỡng")
+    portal_url = (getattr(settings, "immigration_portal_url", None) or "").strip() or "https://xuatnhapcanh.gov.vn"
+
     return {
-        "establishment_name": (settings.establishment_name if settings and settings.establishment_name else "Tuần Châu Resort Hạ Long"),
-        "establishment_code": (settings.establishment_code if settings and settings.establishment_code else "TCG-QN-01"),
-        "police_station_name": (settings.police_station_name if settings and settings.police_station_name else "Công an Phường Tuần Châu"),
-        "police_city": (settings.police_city if settings and settings.police_city else "Tỉnh Quảng Ninh"),
-        "tax_id": (settings.tax_id if settings and settings.tax_id else "5702169704"),
-        "resort_company_name": (settings.resort_company_name if settings and settings.resort_company_name else default_company),
-        "address": (settings.address if settings and settings.address else "Đảo Tuần Châu, TP. Hạ Long, Tỉnh Quảng Ninh"),
-        "default_stay_purpose": (settings.default_stay_purpose if settings and settings.default_stay_purpose else "Du lịch / Nghỉ dưỡng"),
-        "immigration_portal_url": (settings.immigration_portal_url if settings and settings.immigration_portal_url else "https://quangninh.xuatnhapcanh.gov.vn")
+        "establishment_name": est_name,
+        "establishment_code": est_code,
+        "police_station_name": police_st,
+        "police_city": police_city,
+        "tax_id": tax_id,
+        "resort_company_name": resort_co,
+        "address": address,
+        "default_stay_purpose": stay_purpose,
+        "immigration_portal_url": portal_url
     }
 
 def check_police_declaration_permission():

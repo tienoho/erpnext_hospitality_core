@@ -42,7 +42,7 @@ class MockProvider(BaseEInvoiceProvider):
         return {
             "invoice_number": f"{prefix}-{stamp}",
             "lookup_code": f"{prefix}LOOKUP-{invoice_doc.name}-{stamp}",
-            "tax_authority_code": f"CQT-QN-{stamp}" if is_pos else "",
+            "tax_authority_code": f"CQT-{stamp}" if is_pos else "",
             "raw_response": {"mode": "mock", "payload": payload},
         }
 
@@ -118,10 +118,18 @@ def _build_payload(invoice_doc, settings):
         })
 
     is_pos = bool(getattr(settings, "enable_pos_cash_register", 1))
-    template_code = getattr(settings, "pos_invoice_template", "1C26MNG") if is_pos else "1C26TAA"
+    cur_year = now_datetime().strftime("%y")
+    configured_template = (getattr(settings, "pos_invoice_template", None) or "").strip()
+    template_code = configured_template if configured_template else (f"1M{cur_year}MTT" if is_pos else f"1C{cur_year}TGT")
+
+    tax_code = (getattr(settings, "einvoice_tax_code", None) or "").strip()
+    if not tax_code:
+        default_company = frappe.db.get_single_value("Global Defaults", "default_company")
+        if default_company:
+            tax_code = frappe.db.get_value("Company", default_company, "tax_id") or ""
 
     return {
-        "buyer_tax_code": settings.einvoice_tax_code,
+        "buyer_tax_code": tax_code,
         "customer": invoice_doc.customer_name or invoice_doc.customer,
         "invoice_date": str(invoice_doc.posting_date),
         "currency": invoice_doc.currency,

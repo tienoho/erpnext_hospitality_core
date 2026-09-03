@@ -90,14 +90,31 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
     if not getattr(settings, "enable_vietqr", 1):
         frappe.throw(_("Tính năng thanh toán VietQR chưa được kích hoạt trong Hospitality Accounting Settings."))
 
-    bank_bin = getattr(settings, "vietqr_bank_id", None) or "970415"
-    account_number = getattr(settings, "vietqr_account_number", None)
-    account_name = getattr(settings, "vietqr_account_name", None) or "CONG TY CP NGHI DUONG DAO"
-    template = getattr(settings, "vietqr_template", None) or "compact2"
-    prefix = getattr(settings, "vietqr_content_prefix", None) or "TCG"
+    bank_bin = (getattr(settings, "vietqr_bank_id", None) or "").strip()
+    account_number = (getattr(settings, "vietqr_account_number", None) or "").strip()
+    account_name = (getattr(settings, "vietqr_account_name", None) or "").strip()
+    template = (getattr(settings, "vietqr_template", None) or "").strip() or "compact2"
+    prefix = (getattr(settings, "vietqr_content_prefix", None) or "").strip()
+
+    # Fallback động từ Company mặc định của hệ thống nếu chưa cấu hình tên chủ tài khoản
+    default_company = frappe.db.get_single_value("Global Defaults", "default_company") or frappe.defaults.get_user_default("Company")
+    if not account_name and default_company:
+        account_name = default_company.upper()
+
+    if not prefix:
+        if default_company:
+            prefix = "".join(w[0] for w in default_company.split() if w).upper()[:6]
+        else:
+            prefix = "PAY"
+
+    if not bank_bin:
+        frappe.throw(_("Chưa cấu hình Mã BIN Ngân hàng nhận thanh toán trong Hospitality Accounting Settings."))
 
     if not account_number:
         frappe.throw(_("Chưa cấu hình Số Tài Khoản Thụ Hưởng trong Hospitality Accounting Settings."))
+
+    if not account_name:
+        frappe.throw(_("Chưa cấu hình Tên chủ tài khoản thụ hưởng trong Hospitality Accounting Settings."))
 
     pay_amount = flt(amount or 0)
     room_no = ""
