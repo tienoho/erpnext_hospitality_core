@@ -447,7 +447,7 @@ def run_pos_cancellation_test():
     print("Starting POS Cancellation Fix Verification Test...")
     
     # 1. Setup Data
-    company = frappe.db.get_default("company") or "Edo Heritage Hotel"
+    company = frappe.db.get_default("company") or frappe.defaults.get_user_default("Company") or "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO"
     ts = str(int(time.time()))
     room_number = "101TEST"
     item_code = "TEST_BEER"

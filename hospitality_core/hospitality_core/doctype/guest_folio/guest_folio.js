@@ -65,6 +65,42 @@ frappe.ui.form.on('Guest Folio', {
             }, 'Actions');
         }
 
+        // Button: Issue E-Invoice (Thông tư 78 / Nghị định 123)
+        if (['Open', 'Closed'].includes(frm.doc.status)) {
+            frm.add_custom_button(__('Phát Hành Hóa Đơn Điện Tử'), function () {
+                frappe.confirm(
+                    __('Phát hành Hóa đơn điện tử có mã của cơ quan Thuế cho Folio <b>{0}</b>?', [frm.doc.name]),
+                    function () {
+                        frm.call({
+                            method: 'hospitality_core.hospitality_core.api.einvoice.issue_einvoice_from_folio',
+                            args: {
+                                folio_name: frm.doc.name
+                            },
+                            freeze: true,
+                            freeze_message: __('Đang kết nối cổng Hóa đơn điện tử & Ký số...'),
+                            callback: function (r) {
+                                if (!r.exc && r.message) {
+                                    frappe.msgprint({
+                                        title: __('Hóa Đơn Điện Tử Đã Phát Hành'),
+                                        indicator: 'green',
+                                        message: `
+                                            <div style="padding:10px; line-height:1.6;">
+                                                <p><b>Số hóa đơn:</b> <span class="badge badge-success" style="font-size:14px;">${r.message.einvoice_number}</span></p>
+                                                <p><b>Mã tra cứu:</b> <code>${r.message.einvoice_lookup_code}</code></p>
+                                                <p><b>Hóa đơn bán hàng:</b> <a href="/app/sales-invoice/${r.message.sales_invoice}" target="_blank">${r.message.sales_invoice}</a></p>
+                                                <p style="color:green;">✔ Đã nạp thành công lên hệ thống Hóa đơn điện tử.</p>
+                                            </div>
+                                        `
+                                    });
+                                    frm.reload_doc();
+                                }
+                            }
+                        });
+                    }
+                );
+            }, 'Actions');
+        }
+
         // Button: Move Transactions (Move Bill)
         let can_manage_folio = frappe.user_roles.includes('Frontdesk Supervisor') ||
             frappe.session.user === 'Administrator';
@@ -72,6 +108,10 @@ frappe.ui.form.on('Guest Folio', {
         if (frm.doc.status === 'Open' && can_manage_folio) {
             frm.add_custom_button(__('Move Transactions'), function () {
                 move_transactions_dialog(frm);
+            }, 'Actions');
+
+            frm.add_custom_button(__('Tách Giao Dịch (Split Bill)'), function () {
+                split_transaction_dialog(frm);
             }, 'Actions');
         }
 
@@ -700,6 +740,80 @@ function make_company_debit_entry(frm) {
             });
         }
     };
+
+    d.show();
+}
+
+function split_transaction_dialog(frm) {
+    let splittable = (frm.doc.transactions || [])
+        .filter(t => !t.is_void && !t.is_invoiced && flt(t.amount) > 0)
+        .map(t => ({ label: `${t.posting_date} - ${t.description} (${frappe.format(t.amount, { fieldtype: 'Currency' })})`, value: t.name }));
+
+    if (!splittable.length) {
+        frappe.msgprint(__('Không tìm thấy giao dịch chi phí hợp lệ để tách.'));
+        return;
+    }
+
+    let d = new frappe.ui.Dialog({
+        title: __('Tách Hóa Đơn / Giao Dịch (Split Bill)'),
+        fields: [
+            {
+                fieldname: 'transaction',
+                label: __('Chọn Giao Dịch Cần Tách'),
+                fieldtype: 'Select',
+                options: splittable,
+                reqd: 1,
+                change: function () {
+                    let txn_name = d.get_value('transaction');
+                    let txn = (frm.doc.transactions || []).find(t => t.name === txn_name);
+                    if (txn) {
+                        let half = flt(txn.amount) / 2.0;
+                        d.set_value('amount_1', half);
+                        d.set_value('amount_2', half);
+                    }
+                }
+            },
+            { fieldtype: 'Section Break', label: __('Phần 1 (Giữ lại Folio hiện tại)') },
+            { fieldname: 'amount_1', label: __('Số Tiền Phần 1'), fieldtype: 'Currency', reqd: 1 },
+            { fieldtype: 'Section Break', label: __('Phần 2 (Chuyển sang Folio khác)') },
+            { fieldname: 'amount_2', label: __('Số Tiền Phần 2'), fieldtype: 'Currency', reqd: 1 },
+            {
+                fieldname: 'target_folio',
+                label: __('Folio Nhận Phần 2'),
+                fieldtype: 'Link',
+                options: 'Guest Folio',
+                get_query: () => ({ filters: { status: 'Open', name: ['!=', frm.doc.name] } }),
+                reqd: 1
+            }
+        ],
+        primary_action_label: __('Tách Giao Dịch'),
+        primary_action: function (values) {
+            let splits = [
+                { folio: frm.doc.name, amount: flt(values.amount_1) },
+                { folio: values.target_folio, amount: flt(values.amount_2) }
+            ];
+
+            frappe.call({
+                method: 'hospitality_core.hospitality_core.api.folio_operations.split_transaction',
+                args: {
+                    transaction_name: values.transaction,
+                    splits: splits
+                },
+                freeze: true,
+                freeze_message: __('Đang tách giao dịch và đồng bộ số dư...'),
+                callback: function (r) {
+                    if (!r.exc) {
+                        frappe.show_alert({
+                            message: __('Đã tách giao dịch thành công sang Folio {0}', [values.target_folio]),
+                            indicator: 'green'
+                        });
+                        d.hide();
+                        frm.reload_doc();
+                    }
+                }
+            });
+        }
+    });
 
     d.show();
 }

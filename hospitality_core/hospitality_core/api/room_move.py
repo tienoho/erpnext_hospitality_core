@@ -13,8 +13,10 @@ def process_room_move(reservation_name, new_room):
     5. Update Reservation and Folio.
     """
     
-    if not ("Frontdesk Supervisor" in frappe.get_roles() or frappe.session.user == "Administrator"):
-        frappe.throw(_("Access Denied. Only Frontdesk Supervisors can move rooms."))
+    allowed = ["Frontdesk Supervisor", "Hospitality Manager", "System Manager"]
+    user_roles = frappe.get_roles() if hasattr(frappe, "get_roles") else []
+    if not (any(r in user_roles for r in allowed) or frappe.session.user == "Administrator"):
+        frappe.throw(_("Access Denied. Only Frontdesk Supervisors, Hospitality Managers, and Administrators can move rooms."))
 
     res = frappe.get_doc("Hotel Reservation", reservation_name)
     
@@ -32,8 +34,8 @@ def process_room_move(reservation_name, new_room):
     check_availability(new_room, frappe.utils.nowdate(), res.departure_date, ignore_reservation=res.name)
 
     # 2. Update Statuses
-    # Old Room -> Available (housekeeping can manually mark Dirty if needed)
-    frappe.db.set_value("Hotel Room", old_room, "status", "Available")
+    # Old Room -> Dirty (housekeeping needs to turnover and clean)
+    frappe.db.set_value("Hotel Room", old_room, "status", "Dirty")
     
     # New Room -> Occupied
     frappe.db.set_value("Hotel Room", new_room, "status", "Occupied")

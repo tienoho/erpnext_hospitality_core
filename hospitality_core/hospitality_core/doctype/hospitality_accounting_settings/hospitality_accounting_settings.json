@@ -15,7 +15,14 @@
         "section_break_printing",
         "enable_auto_print",
         "receipt_print_format",
-        "print_copies"
+        "print_copies",
+        "section_break_einvoice",
+        "einvoice_provider",
+        "einvoice_default_vat_rate",
+        "column_break_einvoice",
+        "einvoice_api_endpoint",
+        "einvoice_api_key",
+        "einvoice_tax_code"
     ],
     "fields": [
         {
@@ -99,6 +106,48 @@
             "default": 3,
             "description": "Number of receipt copies to print automatically",
             "depends_on": "enable_auto_print"
+        },
+        {
+            "fieldname": "section_break_einvoice",
+            "fieldtype": "Section Break",
+            "label": "E-Invoice (TT78 / NĐ123)"
+        },
+        {
+            "default": "Mock",
+            "description": "Mock generates a fake lookup code locally for testing the Guest Folio button/UI without a real tax-authority connection. Switch to a real provider once the API Endpoint/Key/Tax Code below are configured.",
+            "fieldname": "einvoice_provider",
+            "fieldtype": "Select",
+            "label": "E-Invoice Provider",
+            "options": "Mock\nVNPT\nViettel\nMISA meInvoice",
+            "reqd": 1
+        },
+        {
+            "default": "8",
+            "fieldname": "einvoice_default_vat_rate",
+            "fieldtype": "Percent",
+            "label": "Default VAT Rate (%)"
+        },
+        {
+            "fieldname": "column_break_einvoice",
+            "fieldtype": "Column Break"
+        },
+        {
+            "depends_on": "eval:doc.einvoice_provider!='Mock'",
+            "fieldname": "einvoice_api_endpoint",
+            "fieldtype": "Data",
+            "label": "API Endpoint"
+        },
+        {
+            "depends_on": "eval:doc.einvoice_provider!='Mock'",
+            "fieldname": "einvoice_api_key",
+            "fieldtype": "Password",
+            "label": "API Key / Token"
+        },
+        {
+            "depends_on": "eval:doc.einvoice_provider!='Mock'",
+            "fieldname": "einvoice_tax_code",
+            "fieldtype": "Data",
+            "label": "Company Tax Code (MST)"
         }
     ],
     "index_web_pages_for_search": 1,

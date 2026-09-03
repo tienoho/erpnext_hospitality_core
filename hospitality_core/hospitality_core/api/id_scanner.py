@@ -108,19 +108,50 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
         result["nationality"] = "Việt Nam"
         result["is_alien"] = 0
 
-        # Trích xuất Họ và tên (không lấy xuống dòng)
+        # 2.1. Ưu tiên giải mã định dạng QR Code CCCD (chuỗi phân cách bởi dấu |)
+        if "|" in text:
+            parts = [p.strip() for p in text.split("|")]
+            if len(parts) >= 3:
+                result["full_name"] = parts[2]
+            if len(parts) >= 4 and len(parts[3]) == 8:
+                d, m, y = parts[3][:2], parts[3][2:4], parts[3][4:]
+                result["date_of_birth"] = f"{y}-{m}-{d}"
+            if len(parts) >= 5:
+                result["gender"] = parts[4]
+            if len(parts) >= 6:
+                result["address"] = parts[5]
+            result["success"] = True
+            result["message"] = "Nhận diện Căn cước công dân (CCCD) thành công từ mã QR."
+            return result
+
+        # 2.2. Bóc tách từ văn bản OCR
         name_match = re.search(r'(?:Họ và tên|Full name|Họ tên)[:\s]*([^\n\r\t]+)', text, re.IGNORECASE)
         if name_match:
             cand_name = name_match.group(1).strip()
             cand_name = re.sub(r'[\/\:\-\.]', '', cand_name).strip()
             result["full_name"] = cand_name
         else:
-            upper_lines = [l.strip() for l in text.split('\n') if l.strip().isupper() and len(l.strip().split()) >= 2]
+            upper_lines = [
+                l.strip() for l in text.split('\n')
+                if l.strip().isupper()
+                and not re.search(r'\d{4,}', l)
+                and '/' not in l
+                and len(l.strip().split()) >= 2
+            ]
             if upper_lines:
                 result["full_name"] = upper_lines[0]
+            else:
+                # Quét chuỗi từ in hoa trong văn bản
+                clean_no_id = re.sub(r'\b0\d{11}\b', '', text)
+                clean_no_dates = re.sub(r'\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}\b', '', clean_no_id)
+                words = re.findall(r'[A-ZÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴ]+', clean_no_dates)
+                stopwords = {'NAM', 'NU', 'VIET', 'NAM', 'CONG', 'HOA', 'XA', 'HOI', 'CHU', 'NGHIA', 'CAN', 'CUOC', 'CONG', 'DAN', 'HA', 'NOI'}
+                name_words = [w for w in words if w not in stopwords]
+                if len(name_words) >= 2:
+                    result["full_name"] = " ".join(name_words)
 
         # Trích xuất Ngày sinh (DD/MM/YYYY)
-        dob_match = re.search(r'(?:Ngày sinh|Date of birth|Sinh ngày)[:\s]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})', text, re.IGNORECASE)
+        dob_match = re.search(r'(?:Ngày sinh|Date of birth|Sinh ngày)[:\s]*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})', text, re.IGNORECASE) or re.search(r'\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})\b', text)
         if dob_match:
             dob_str = dob_match.group(1).replace('.', '/').replace('-', '/')
             parts = dob_str.split('/')

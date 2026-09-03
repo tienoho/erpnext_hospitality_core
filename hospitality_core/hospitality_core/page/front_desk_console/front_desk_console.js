@@ -21,6 +21,26 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
         render_console(wrapper, page);
     });
 
+    page.add_menu_item(__('Scan ID (CCCD/Passport)'), function () {
+        open_id_scanner_dialog();
+    });
+    page.add_menu_item(__('Split Bill'), function () {
+        open_split_bill_dialog();
+    });
+    page.add_menu_item(__('Merge Folio'), function () {
+        open_merge_folio_dialog();
+    });
+
+    page.add_inner_button(__('Quét CCCD / Passport'), function () {
+        open_id_scanner_dialog();
+    });
+    page.add_inner_button(__('Tách Bill'), function () {
+        open_split_bill_dialog();
+    });
+    page.add_inner_button(__('Gộp Folio'), function () {
+        open_merge_folio_dialog();
+    });
+
     // CSS Styling
     $(`<style>
         .fd-stat-card {
@@ -67,6 +87,15 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
     // CORRECTION: Removed 'page' argument from set_route for custom pages
     $(wrapper).find('.layout-main-section').append(`
         <div id="fd-content" style="padding-top: 10px;">
+            <!-- Omni Search -->
+            <div class="row" style="margin-bottom: 15px;">
+                <div class="col-md-8 col-xs-12" style="position: relative;">
+                    <input type="text" id="fd-omni-search" class="form-control"
+                        placeholder="${__('Search by guest name, phone, room, ID number, or OTA booking code...')}">
+                    <div id="fd-omni-results" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#fff; border:1px solid #d1d8dd; border-radius:0 0 6px 6px; max-height:320px; overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,0.1);"></div>
+                </div>
+            </div>
+
             <!-- Quick Actions Row -->
             <div class="row" style="margin-bottom: 20px;">
                 <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('tape-chart')">Tape Chart</a></div>
@@ -75,6 +104,7 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
                 <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('List', 'Hotel Reservation')">Reservations</a></div>
                 <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('query-report', 'House List')">House List</a></div>
                 <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('List', 'Hotel Maintenance Request')">Maintenance</a></div>
+                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('housekeeping-mobile')">Housekeeping Mobile</a></div>
             </div>
 
             <!-- Stats Row -->
@@ -135,6 +165,164 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
     `);
 
     render_console(wrapper, page);
+    setup_omni_search();
+}
+
+function setup_omni_search() {
+    let input = $('#fd-omni-search');
+    let results = $('#fd-omni-results');
+    let debounce_timer = null;
+
+    input.on('input', function () {
+        let query = $(this).val();
+        clearTimeout(debounce_timer);
+        if (!query || query.length < 2) {
+            results.hide().empty();
+            return;
+        }
+        debounce_timer = setTimeout(() => {
+            frappe.call({
+                method: 'hospitality_core.hospitality_core.api.folio_operations.omni_search',
+                args: { query: query },
+                callback: function (r) {
+                    render_omni_results(r.message || []);
+                }
+            });
+        }, 300);
+    });
+
+    $(document).on('click', function (e) {
+        if (!$(e.target).closest('#fd-omni-search, #fd-omni-results').length) {
+            results.hide();
+        }
+    });
+}
+
+function render_omni_results(rows) {
+    let results = $('#fd-omni-results');
+    if (!rows.length) {
+        results.html(`<div class="p-3 text-muted">${__('No matches found.')}</div>`).show();
+        return;
+    }
+    let html = rows.map((r) => `
+        <div class="fd-list-item" style="cursor:pointer;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${r.reservation}')">
+            <div style="flex:1;">
+                <div style="font-weight:600;">${r.guest_name || ''}</div>
+                <div style="font-size:12px; color:#6c757d;">
+                    ${r.room || __('Unassigned')} &middot; ${r.status} &middot; ${r.arrival_date} &rarr; ${r.departure_date}
+                    ${r.external_booking_id ? ' &middot; Ref: ' + r.external_booking_id : ''}
+                </div>
+            </div>
+        </div>`).join('');
+    results.html(html).show();
+}
+
+function open_id_scanner_dialog() {
+    let dialog = new frappe.ui.Dialog({
+        title: __('Scan ID Document (CCCD / Passport)'),
+        fields: [
+            {
+                fieldname: 'raw_text',
+                fieldtype: 'Small Text',
+                label: __('Paste OCR text or MRZ lines'),
+                description: __('Paste the text output from your CCCD/passport scanner or OCR hardware bridge here.'),
+                reqd: 1
+            },
+            { fieldtype: 'Section Break' },
+            { fieldname: 'full_name', fieldtype: 'Data', label: __('Full Name'), read_only: 1 },
+            { fieldname: 'id_number', fieldtype: 'Data', label: __('ID / Passport Number'), read_only: 1 },
+            { fieldtype: 'Column Break' },
+            { fieldname: 'date_of_birth', fieldtype: 'Data', label: __('Date of Birth'), read_only: 1 },
+            { fieldname: 'nationality', fieldtype: 'Data', label: __('Nationality'), read_only: 1 }
+        ],
+        primary_action_label: __('Parse'),
+        primary_action(values) {
+            frappe.call({
+                method: 'hospitality_core.hospitality_core.api.id_scanner.parse_id_document',
+                args: { raw_text: values.raw_text },
+                callback: function (r) {
+                    let res = r.message;
+                    if (!res || !res.success) {
+                        frappe.msgprint({ message: res ? res.message : __('Could not parse document.'), indicator: 'red' });
+                        return;
+                    }
+                    dialog.set_value('full_name', res.full_name);
+                    dialog.set_value('id_number', res.id_number);
+                    dialog.set_value('date_of_birth', res.date_of_birth);
+                    dialog.set_value('nationality', res.nationality);
+                    dialog.set_primary_action(__('Create Guest'), function () {
+                        frappe.new_doc('Guest', {
+                            full_name: res.full_name,
+                            identification_no: res.id_number,
+                            identification_type: res.document_type === 'Passport' ? 'Passport' : 'CCCD'
+                        });
+                        dialog.hide();
+                    });
+                }
+            });
+        }
+    });
+    dialog.show();
+}
+
+function open_split_bill_dialog() {
+    let dialog = new frappe.ui.Dialog({
+        title: __('Split Bill'),
+        fields: [
+            {
+                fieldname: 'transaction', fieldtype: 'Link', options: 'Folio Transaction',
+                label: __('Transaction to Split'), reqd: 1
+            },
+            {
+                fieldname: 'splits', fieldtype: 'Table', label: __('Split Into'),
+                fields: [
+                    { fieldname: 'folio', fieldtype: 'Link', options: 'Guest Folio', in_list_view: 1, label: __('Folio'), reqd: 1 },
+                    { fieldname: 'amount', fieldtype: 'Currency', in_list_view: 1, label: __('Amount'), reqd: 1 }
+                ],
+                data: [{}, {}],
+                get_data: () => dialog.get_value('splits')
+            }
+        ],
+        primary_action_label: __('Split'),
+        primary_action(values) {
+            frappe.call({
+                method: 'hospitality_core.hospitality_core.api.folio_operations.split_transaction',
+                args: { transaction_name: values.transaction, splits: values.splits },
+                freeze: true,
+                callback: function (r) {
+                    if (!r.exc) dialog.hide();
+                }
+            });
+        }
+    });
+    dialog.show();
+}
+
+function open_merge_folio_dialog() {
+    let dialog = new frappe.ui.Dialog({
+        title: __('Merge Folio'),
+        fields: [
+            { fieldname: 'source_folio', fieldtype: 'Link', options: 'Guest Folio', label: __('Source Folio (will be closed)'), reqd: 1 },
+            { fieldname: 'target_folio', fieldtype: 'Link', options: 'Guest Folio', label: __('Target Folio (receives charges)'), reqd: 1 }
+        ],
+        primary_action_label: __('Merge'),
+        primary_action(values) {
+            frappe.confirm(
+                __('This will move all open charges from {0} into {1} and close {0}. Continue?', [values.source_folio, values.target_folio]),
+                function () {
+                    frappe.call({
+                        method: 'hospitality_core.hospitality_core.api.folio_operations.merge_folios',
+                        args: { source_folio: values.source_folio, target_folio: values.target_folio },
+                        freeze: true,
+                        callback: function (r) {
+                            if (!r.exc) dialog.hide();
+                        }
+                    });
+                }
+            );
+        }
+    });
+    dialog.show();
 }
 
 function render_console(wrapper, page) {

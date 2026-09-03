@@ -301,8 +301,8 @@ class HotelReservation(Document):
         # (e.g. from Folio/Room logic) triggering optimistic locking failures during full save.
         self.db_set("status", "Checked Out")
         
-        # 3. Update Room Status to Available
-        frappe.db.set_value("Hotel Room", self.room, "status", "Available")
+        # 3. Update Room Status to Dirty (needs housekeeping turnover cleaning)
+        frappe.db.set_value("Hotel Room", self.room, "status", "Dirty")
 
         # 4. No self.save() needed - db_set handles the status update safely.
 

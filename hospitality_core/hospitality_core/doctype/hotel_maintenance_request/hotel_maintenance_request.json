@@ -17,6 +17,7 @@
         "grand_total_expenses",
         "section_break_1",
         "description",
+        "image",
         "resolution_notes"
     ],
     "fields": [
@@ -76,6 +77,12 @@
             "fieldtype": "Text",
             "label": "Description of Defect",
             "reqd": 1
+        },
+        {
+            "description": "Photo evidence of the defect, captured from the Mobile Housekeeping/Maintenance app.",
+            "fieldname": "image",
+            "fieldtype": "Attach Image",
+            "label": "Photo"
         },
         {
             "fieldname": "resolution_notes",

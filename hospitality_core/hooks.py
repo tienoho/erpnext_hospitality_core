@@ -11,7 +11,8 @@ app_include_js = [
     "/assets/hospitality_core/js/pos_invoice_auto_print.js",
     "/assets/hospitality_core/js/payment_entry_auto_print.js",
     "/assets/hospitality_core/js/pos_payment_control.js",
-    "/assets/hospitality_core/js/keycard_encoder_bridge.js"
+    "/assets/hospitality_core/js/keycard_encoder_bridge.js",
+    "/assets/hospitality_core/js/sales_invoice_einvoice.js"
 ]
 
 app_include_css = [

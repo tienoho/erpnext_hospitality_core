@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "default_hotel_reception",
+  "column_break_1",
+  "webhook_secret",
+  "webhook_url_preview",
+  "section_break_platforms",
+  "enable_agoda",
+  "enable_booking_com",
+  "column_break_platforms",
+  "enable_traveloka",
+  "enable_trip_com"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "When off, incoming OTA webhooks are rejected. Turn on only once the webhook_secret below has been shared with the OTA/channel manager integrator.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "description": "Reservations created from OTA webhooks are opened under this Hotel Reception.",
+   "fieldname": "default_hotel_reception",
+   "fieldtype": "Link",
+   "label": "Default Hotel Reception",
+   "options": "Hotel Reception"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Shared secret the OTA/channel manager must send back on every webhook call (as the `secret` argument) for the request to be accepted.",
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook Secret"
+  },
+  {
+   "fieldname": "webhook_url_preview",
+   "fieldtype": "HTML",
+   "label": "Webhook URL",
+   "options": "<div id='cm-webhook-url-preview' class='text-muted'></div>"
+  },
+  {
+   "fieldname": "section_break_platforms",
+   "fieldtype": "Section Break",
+   "label": "Enabled Platforms"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_agoda",
+   "fieldtype": "Check",
+   "label": "Agoda"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_booking_com",
+   "fieldtype": "Check",
+   "label": "Booking.com"
+  },
+  {
+   "fieldname": "column_break_platforms",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_traveloka",
+   "fieldtype": "Check",
+   "label": "Traveloka"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_trip_com",
+   "fieldtype": "Check",
+   "label": "Trip.com"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hospitality Channel Manager Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,6 +1,17 @@
 import frappe
 from frappe import _
 
+def _get_hotel_company(folio=None):
+    if folio and getattr(folio, "hotel_company", None):
+        return folio.hotel_company
+    default_co = frappe.db.get_single_value("Global Defaults", "default_company")
+    if default_co:
+        return default_co
+    user_co = frappe.defaults.get_user_default("Company")
+    if user_co:
+        return user_co
+    return "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO"
+
 @frappe.whitelist()
 def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
     """
@@ -12,13 +23,12 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
     if amount <= 0:
         frappe.throw(_("Amount must be greater than zero."))
 
-    # Company is always Edo Heritage Hotel
-    COMPANY = "Edo Heritage Hotel"
-
     # 1. Load the Folio
     folio = frappe.get_doc("Guest Folio", folio_name)
     if folio.status not in ("Open", "Closed"):
         frappe.throw(_("Cannot record payment for a folio with status: {0}").format(folio.status))
+
+    COMPANY = _get_hotel_company(folio)
 
     # 2. Resolve Customer (from Guest or Company)
     customer = None
@@ -114,12 +124,12 @@ def issue_folio_refund(folio_name, amount, hotel_reception):
     if amount <= 0:
         frappe.throw(_("Refund amount must be greater than zero."))
 
-    COMPANY = "Edo Heritage Hotel"
-
     # 1. Load the Folio
     folio = frappe.get_doc("Guest Folio", folio_name)
     if folio.status not in ("Open", "Closed"):
         frappe.throw(_("Cannot record refund for a folio with status: {0}").format(folio.status))
+
+    COMPANY = _get_hotel_company(folio)
 
     # Check excess balance
     if folio.outstanding_balance >= -0.01:
@@ -364,8 +374,8 @@ def create_company_folio_payment(folio_name, amount, mode_of_payment, hotel_rece
     customer = folio.company
     company_name = frappe.db.get_value("Customer", customer, "customer_name") or customer
 
-    # Company (hotel) — same constant used throughout the system
-    COMPANY = "Edo Heritage Hotel"
+    # Company (hotel)
+    COMPANY = _get_hotel_company(folio)
 
     # Resolve paid_to account from Mode of Payment
     mop_account = frappe.db.get_value(

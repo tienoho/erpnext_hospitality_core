@@ -31,7 +31,12 @@
         "routing_instructions",
         "amended_from",
         "is_group_guest",
-        "group_booking"
+        "group_booking",
+        "section_break_channel",
+        "booking_source",
+        "column_break_channel",
+        "ota_platform",
+        "external_booking_id"
     ],
     "fields": [
         {
@@ -245,6 +250,39 @@
             "label": "Amended From",
             "no_copy": 1,
             "options": "Hotel Reservation",
+            "read_only": 1
+        },
+        {
+            "fieldname": "section_break_channel",
+            "fieldtype": "Section Break",
+            "label": "Channel & Distribution"
+        },
+        {
+            "default": "Direct",
+            "description": "Used by Tape Chart 2.0 for color-coded source grouping. Set automatically to 'OTA' by the Channel Manager Gateway when a reservation is created from an OTA webhook.",
+            "fieldname": "booking_source",
+            "fieldtype": "Select",
+            "in_filter": 1,
+            "in_standard_filter": 1,
+            "label": "Booking Source",
+            "options": "Direct\nOTA\nCorporate\nGroup\nComplimentary"
+        },
+        {
+            "fieldname": "column_break_channel",
+            "fieldtype": "Column Break"
+        },
+        {
+            "depends_on": "eval:doc.booking_source==\"OTA\"",
+            "fieldname": "ota_platform",
+            "fieldtype": "Select",
+            "label": "OTA Platform",
+            "options": "\nAgoda\nBooking.com\nTraveloka\nTrip.com\nOther"
+        },
+        {
+            "depends_on": "eval:doc.booking_source==\"OTA\"",
+            "fieldname": "external_booking_id",
+            "fieldtype": "Data",
+            "label": "External Booking ID",
             "read_only": 1
         }
     ],
