@@ -8,6 +8,13 @@ class HospitalityAccountingSettings(Document):
     def validate(self):
         self.validate_vietqr_settings()
         self.validate_pos_einvoice_settings()
+        self.validate_vat_rate()
+
+    def validate_vat_rate(self):
+        """Kiểm tra thuế suất GTGT mặc định."""
+        vat = flt(self.einvoice_default_vat_rate)
+        if vat < 0 or vat > 100:
+            frappe.throw(_("Thuế suất GTGT mặc định ({0}%) không hợp lệ (phải từ 0% đến 100%).").format(vat))
 
     def validate_vietqr_settings(self):
         """Kiểm tra tài khoản thụ hưởng VietQR."""
