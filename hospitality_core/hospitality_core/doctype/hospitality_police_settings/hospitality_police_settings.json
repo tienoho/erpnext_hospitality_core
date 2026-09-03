@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-09-03 19:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "establishment_name",
+  "establishment_code",
+  "police_station_name",
+  "police_city",
+  "column_break_1",
+  "tax_id",
+  "resort_company_name",
+  "address",
+  "section_break_xnc",
+  "immigration_portal_url",
+  "default_stay_purpose"
+ ],
+ "fields": [
+  {
+   "default": "Tuần Châu Resort Hạ Long",
+   "fieldname": "establishment_name",
+   "fieldtype": "Data",
+   "label": "Tên Cơ Sở Lưu Trú"
+  },
+  {
+   "default": "TCG-QN-01",
+   "fieldname": "establishment_code",
+   "fieldtype": "Data",
+   "label": "Mã Cơ Sở Lưu Trú (Do Công an cấp)"
+  },
+  {
+   "default": "Công an Phường Tuần Châu",
+   "fieldname": "police_station_name",
+   "fieldtype": "Data",
+   "label": "Công An Phường / Xã Quản Lý"
+  },
+  {
+   "default": "Tỉnh Quảng Ninh",
+   "fieldname": "police_city",
+   "fieldtype": "Data",
+   "label": "Tỉnh / Thành Phố"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "5702169704",
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Mã Số Thuế Doanh Nghiệp"
+  },
+  {
+   "default": "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO",
+   "fieldname": "resort_company_name",
+   "fieldtype": "Data",
+   "label": "Tên Pháp Nhân Doanh Nghiệp"
+  },
+  {
+   "default": "Đảo Tuần Châu, TP. Hạ Long, Tỉnh Quảng Ninh",
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "label": "Địa Chỉ Cơ Sở Lưu Trú"
+  },
+  {
+   "fieldname": "section_break_xnc",
+   "fieldtype": "Section Break",
+   "label": "Cổng Xuất Nhập Cảnh Công An Tỉnh Quảng Ninh"
+  },
+  {
+   "default": "https://quangninh.xuatnhapcanh.gov.vn",
+   "fieldname": "immigration_portal_url",
+   "fieldtype": "Data",
+   "label": "URL Cổng Khai Báo XNC"
+  },
+  {
+   "default": "Du lịch / Nghỉ dưỡng",
+   "fieldname": "default_stay_purpose",
+   "fieldtype": "Select",
+   "label": "Mục Đích Cư Trú Mặc Định",
+   "options": "Du lịch / Nghỉ dưỡng\nCông tác\nHội nghị / Sự kiện\nThăm thân\nKhác"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-03 19:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hospitality Police Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Hospitality Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

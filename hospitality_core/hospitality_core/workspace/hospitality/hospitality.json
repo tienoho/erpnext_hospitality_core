@@ -142,6 +142,36 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Cài đặt Kế toán & VietQR",
+   "link_count": 0,
+   "link_to": "Hospitality Accounting Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cài đặt Biểu phí & Phụ thu",
+   "link_count": 0,
+   "link_to": "Hospitality Surcharge Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cài đặt Công an & XNC",
+   "link_count": 0,
+   "link_to": "Hospitality Police Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Operational Reports",
    "link_count": 8,
    "link_type": "DocType",

@@ -1,0 +1,261 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-09-03 19:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_standard_hours",
+  "standard_checkin_time",
+  "standard_checkout_time",
+  "section_break_early_checkin",
+  "early_tier1_hour",
+  "early_tier1_pct",
+  "column_break_early",
+  "early_tier2_hour",
+  "early_tier2_pct",
+  "early_tier3_pct",
+  "section_break_late_checkout",
+  "late_tier1_hour",
+  "late_tier1_pct",
+  "column_break_late",
+  "late_tier2_hour",
+  "late_tier2_pct",
+  "late_tier3_pct",
+  "section_break_child_bed",
+  "child_free_max_age",
+  "child_surcharge_min_age",
+  "child_surcharge_max_age",
+  "child_surcharge_rate",
+  "column_break_bed",
+  "extra_bed_rate",
+  "section_break_foc",
+  "enable_foc_policy",
+  "rooms_per_foc",
+  "section_break_holiday_weekend",
+  "enable_weekend_surcharge",
+  "weekend_surcharge_pct",
+  "column_break_holiday",
+  "enable_holiday_surcharge",
+  "holiday_surcharge_pct"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_standard_hours",
+   "fieldtype": "Section Break",
+   "label": "Giờ Quy Chuẩn Lưu Trú"
+  },
+  {
+   "default": "14:00:00",
+   "fieldname": "standard_checkin_time",
+   "fieldtype": "Time",
+   "label": "Giờ Nhận Phòng Chuẩn (Standard Check-in)"
+  },
+  {
+   "default": "12:00:00",
+   "fieldname": "standard_checkout_time",
+   "fieldtype": "Time",
+   "label": "Giờ Trả Phòng Chuẩn (Standard Check-out)"
+  },
+  {
+   "fieldname": "section_break_early_checkin",
+   "fieldtype": "Section Break",
+   "label": "Bậc Phụ Thu Nhận Phòng Sớm (Early Check-in)"
+  },
+  {
+   "default": "06:00:00",
+   "fieldname": "early_tier1_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 1 (Trước giờ này)"
+  },
+  {
+   "default": "100",
+   "fieldname": "early_tier1_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 1 (%)"
+  },
+  {
+   "fieldname": "column_break_early",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "09:00:00",
+   "fieldname": "early_tier2_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 2 (Từ Bậc 1 đến)"
+  },
+  {
+   "default": "50",
+   "fieldname": "early_tier2_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 2 (%)"
+  },
+  {
+   "default": "30",
+   "fieldname": "early_tier3_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 3 (Từ Bậc 2 đến Giờ Chuẩn) (%)"
+  },
+  {
+   "fieldname": "section_break_late_checkout",
+   "fieldtype": "Section Break",
+   "label": "Bậc Phụ Thu Trả Phòng Muộn (Late Check-out)"
+  },
+  {
+   "default": "15:00:00",
+   "fieldname": "late_tier1_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 1 (Từ Giờ Chuẩn đến)"
+  },
+  {
+   "default": "30",
+   "fieldname": "late_tier1_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 1 (%)"
+  },
+  {
+   "fieldname": "column_break_late",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "18:00:00",
+   "fieldname": "late_tier2_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 2 (Từ Bậc 1 đến)"
+  },
+  {
+   "default": "50",
+   "fieldname": "late_tier2_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 2 (%)"
+  },
+  {
+   "default": "100",
+   "fieldname": "late_tier3_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 3 (Sau Bậc 2) (%)"
+  },
+  {
+   "fieldname": "section_break_child_bed",
+   "fieldtype": "Section Break",
+   "label": "Phụ Thu Trẻ Em & Giường Phụ"
+  },
+  {
+   "default": "5",
+   "fieldname": "child_free_max_age",
+   "fieldtype": "Int",
+   "label": "Độ Tuổi Tối Đa Miễn Phí (Tuổi)"
+  },
+  {
+   "default": "6",
+   "fieldname": "child_surcharge_min_age",
+   "fieldtype": "Int",
+   "label": "Độ Tuổi Phụ Thu Từ (Tuổi)"
+  },
+  {
+   "default": "11",
+   "fieldname": "child_surcharge_max_age",
+   "fieldtype": "Int",
+   "label": "Độ Tuổi Phụ Thu Đến (Tuổi)"
+  },
+  {
+   "default": "200000",
+   "fieldname": "child_surcharge_rate",
+   "fieldtype": "Currency",
+   "label": "Đơn Giá Phụ Thu Trẻ Em (VND/Trẻ/Ngày)"
+  },
+  {
+   "fieldname": "column_break_bed",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "500000",
+   "fieldname": "extra_bed_rate",
+   "fieldtype": "Currency",
+   "label": "Đơn Giá Giường Phụ / Người Thứ 3 (VND/Đêm)"
+  },
+  {
+   "fieldname": "section_break_foc",
+   "fieldtype": "Section Break",
+   "label": "Chính Sách Phòng FOC Hướng Dẫn Viên"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_foc_policy",
+   "fieldtype": "Check",
+   "label": "Bật Chính Sách Tặng Phòng FOC Cho Đoàn"
+  },
+  {
+   "default": "15",
+   "fieldname": "rooms_per_foc",
+   "fieldtype": "Int",
+   "label": "Số Phòng Trả Tiền Để Tặng 1 Phòng FOC"
+  },
+  {
+   "fieldname": "section_break_holiday_weekend",
+   "fieldtype": "Section Break",
+   "label": "Phụ Thu Ngày Lễ Tết & Cuối Tuần (Peak Surcharges)"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_weekend_surcharge",
+   "fieldtype": "Check",
+   "label": "Bật Phụ Thu Cuối Tuần (Thứ 6 & Thứ 7)"
+  },
+  {
+   "default": "0",
+   "depends_on": "enable_weekend_surcharge",
+   "fieldname": "weekend_surcharge_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Cuối Tuần (%)"
+  },
+  {
+   "fieldname": "column_break_holiday",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_holiday_surcharge",
+   "fieldtype": "Check",
+   "label": "Bật Phụ Thu Ngày Lễ Tết (ERPNext Holiday List)"
+  },
+  {
+   "default": "0",
+   "depends_on": "enable_holiday_surcharge",
+   "fieldname": "holiday_surcharge_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Ngày Lễ Tết (%)"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-03 19:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hospitality Surcharge Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Hospitality Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

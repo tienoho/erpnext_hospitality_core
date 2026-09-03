@@ -216,8 +216,32 @@
    "icon": "settings",
    "indent": 0,
    "keep_closed": 0,
-   "label": "Cài đặt Kế toán Khách sạn",
+   "label": "Cài đặt Kế toán & VietQR",
    "link_to": "Hospitality Accounting Settings",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "icon": "clock",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Cài đặt Biểu phí & Phụ thu",
+   "link_to": "Hospitality Surcharge Settings",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 0,
+   "icon": "shield",
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Cài đặt Công an & XNC",
+   "link_to": "Hospitality Police Settings",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"

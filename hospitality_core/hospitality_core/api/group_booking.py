@@ -66,6 +66,22 @@ def mass_check_in(group_booking):
     """
     # Get group doc to check for master folio
     group_doc = frappe.get_doc("Hotel Group Booking", group_booking)
+
+    # 0. Kiểm tra hạn mức tín dụng của Đại lý lữ hành trước khi Check-in
+    if group_doc.master_payer:
+        from hospitality_core.hospitality_core.api.city_ledger import get_agent_credit_status
+        credit_info = get_agent_credit_status(group_doc.master_payer)
+        if credit_info.get("status_level") == "RED":
+            frappe.throw(
+                _("Đại lý <b>{0}</b> đã vượt trần tín dụng!<br>"
+                  "Hạn mức: {1} | Dư nợ hiện tại: {2} (Đã dùng {3}%)<br>"
+                  "Vui lòng thanh toán hoặc yêu cầu Kế toán trưởng bảo lãnh trước khi nhận phòng đoàn.").format(
+                    credit_info.get("customer_name"),
+                    credit_info.get("formatted_credit_limit"),
+                    credit_info.get("formatted_outstanding"),
+                    credit_info.get("usage_pct")
+                )
+            )
     
     # Get all reservations linked to this group
     reservations = frappe.get_all("Hotel Reservation", 

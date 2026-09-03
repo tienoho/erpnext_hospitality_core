@@ -16,6 +16,10 @@
         "folio",
         "arrival_date",
         "departure_date",
+        "children_count",
+        "extra_bed_count",
+        "actual_checkin_time",
+        "actual_checkout_time",
         "arriving_from",
         "departing_to",
         "is_alien",
@@ -129,6 +133,28 @@
             "in_list_view": 1,
             "label": "Departure Date",
             "reqd": 1
+        },
+        {
+            "default": "0",
+            "fieldname": "children_count",
+            "fieldtype": "Int",
+            "label": "Số lượng Trẻ em"
+        },
+        {
+            "default": "0",
+            "fieldname": "extra_bed_count",
+            "fieldtype": "Int",
+            "label": "Số Giường phụ (Extra Bed)"
+        },
+        {
+            "fieldname": "actual_checkin_time",
+            "fieldtype": "Time",
+            "label": "Giờ Nhận phòng Thực tế"
+        },
+        {
+            "fieldname": "actual_checkout_time",
+            "fieldtype": "Time",
+            "label": "Giờ Trả phòng Thực tế"
         },
         {
             "fieldname": "arriving_from",

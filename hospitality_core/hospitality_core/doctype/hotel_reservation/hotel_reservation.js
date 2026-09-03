@@ -36,31 +36,130 @@ frappe.ui.form.on('Hotel Reservation', {
         // Add Workflow Buttons
         if (!frm.is_new()) {
 
-            // CHECK IN BUTTON
+            // CHECK IN BUTTON WITH SURCHARGE DETECTION
             if (frm.doc.status === 'Reserved') {
                 frm.add_custom_button(__('Check In'), function () {
-                    frappe.confirm(
-                        'Are you sure you want to Check In this guest?',
-                        function () {
-                            frm.call({
-                                method: 'check_in_guest',
-                                args: {
-                                    name: frm.doc.name
-                                },
-                                freeze: true,
-                                callback: function (r) {
-                                    if (!r.exc) {
-                                        frappe.msgprint('Guest Checked In Successfully');
-                                        frm.reload_doc();
+                    // Kiểm tra phụ thu nhận phòng sớm
+                    frappe.call({
+                        method: 'hospitality_core.hospitality_core.api.surcharge_engine.calculate_checkin_surcharge',
+                        args: { reservation_name: frm.doc.name },
+                        callback: function (res) {
+                            let sur = res.message;
+                            if (sur && sur.applicable) {
+                                let d = new frappe.ui.Dialog({
+                                    title: __('⏰ Phát Hiện Nhận Phòng Sớm (Early Check-in)'),
+                                    fields: [
+                                        {
+                                            fieldname: 'info_html',
+                                            fieldtype: 'HTML',
+                                            options: `
+                                                <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                                                    <div style="font-size: 14px; color: #92400e; margin-bottom: 8px;">
+                                                        Khách đến nhận phòng lúc <b>${sur.checkin_time}</b> (Trước giờ quy chuẩn).
+                                                    </div>
+                                                    <div style="font-size: 13px; color: #451a03; line-height: 1.6;">
+                                                        • Bậc phụ thu: <b>${sur.tier_label}</b><br>
+                                                        • Giá phòng gốc: <b>${format_currency(sur.base_rate)}</b><br>
+                                                        • Mức phụ thu dự kiến: <b style="color: #e11d48; font-size: 16px;">${sur.formatted_amount}</b>
+                                                    </div>
+                                                </div>
+                                            `
+                                        }
+                                    ],
+                                    primary_action_label: __('✔ Áp Dụng Phụ Thu & Check In'),
+                                    primary_action: function () {
+                                        d.hide();
+                                        frappe.dom.freeze(__('Đang áp dụng phụ thu và Check In...'));
+                                        frappe.call({
+                                            method: 'hospitality_core.hospitality_core.api.surcharge_engine.apply_surcharge_to_folio',
+                                            args: {
+                                                reservation_name: frm.doc.name,
+                                                surcharge_type: 'Early Check-in',
+                                                amount: sur.amount,
+                                                description: sur.description
+                                            },
+                                            callback: function () {
+                                                frm.call({
+                                                    method: 'check_in_guest',
+                                                    args: { name: frm.doc.name },
+                                                    callback: function () {
+                                                        frappe.dom.unfreeze();
+                                                        frappe.msgprint(__('Đã nhận phòng và ghi nhận phụ thu vào Folio.'));
+                                                        frm.reload_doc();
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    },
+                                    secondary_action_label: __('Miễn Phụ Thu & Check In')
+                                });
+                                d.set_secondary_action(function () {
+                                    d.hide();
+                                    frappe.prompt([
+                                        {
+                                            label: __('Lý do miễn phụ thu nhận sớm (Ghi nhận kiểm toán)'),
+                                            fieldname: 'reason',
+                                            fieldtype: 'Select',
+                                            options: '\nKhách VIP / Thân thiết\nBan Giám Đốc phê duyệt\nLỗi buồng phòng / Bù đắp trải nghiệm\nTheo hợp đồng đại lý lữ hành\nKhác',
+                                            reqd: 1
+                                        },
+                                        {
+                                            label: __('Ghi chú chi tiết'),
+                                            fieldname: 'note',
+                                            fieldtype: 'Small Text'
+                                        }
+                                    ], function (vals) {
+                                        frappe.call({
+                                            method: 'frappe.desk.form.utils.add_comment',
+                                            args: {
+                                                reference_doctype: 'Hotel Reservation',
+                                                reference_name: frm.doc.name,
+                                                content: `<b>[KIỂM TOÁN LỄ TÂN] Miễn phụ thu nhận phòng sớm:</b> ${vals.reason} - ${vals.note || ''}`,
+                                                comment_email: frappe.session.user,
+                                                comment_by: frappe.session.user_fullname
+                                            }
+                                        });
+                                        frm.call({
+                                            method: 'check_in_guest',
+                                            args: { name: frm.doc.name },
+                                            freeze: true,
+                                            callback: function (r) {
+                                                if (!r.exc) {
+                                                    frappe.show_alert({
+                                                        message: __('Guest Checked In Successfully (Đã ghi nhận lý do miễn phụ thu).'),
+                                                        indicator: 'green'
+                                                    });
+                                                    frm.reload_doc();
+                                                }
+                                            }
+                                        });
+                                    }, __('Xác Nhận Miễn Phụ Thu Nhận Phòng Sớm'), __('Xác Nhận & Check In'));
+                                });
+                                d.show();
+                            } else {
+                                frappe.confirm(
+                                    'Are you sure you want to Check In this guest?',
+                                    function () {
+                                        frm.call({
+                                            method: 'check_in_guest',
+                                            args: { name: frm.doc.name },
+                                            freeze: true,
+                                            callback: function (r) {
+                                                if (!r.exc) {
+                                                    frappe.msgprint('Guest Checked In Successfully');
+                                                    frm.reload_doc();
+                                                }
+                                            }
+                                        });
                                     }
-                                }
-                            });
+                                );
+                            }
                         }
-                    );
+                    });
                 }).addClass("btn-primary");
             }
 
-            // NEW CHECK OUT BUTTON (Primary Action)
+            // NEW CHECK OUT BUTTON (Primary Action WITH SURCHARGE DETECTION)
             if (frm.doc.status === 'Checked In') {
                 frm.page.set_primary_action(__('Check Out'), function () {
                     // Pre-check Departure Date
@@ -73,31 +172,124 @@ frappe.ui.form.on('Hotel Reservation', {
                         return;
                     }
 
-                    // Nice Confirmation Dialog
-                    frappe.warn(
-                        'Confirm Checkout',
-                        `Are you sure you want to Check Out <b>${frm.doc.guest}</b> from Room <b>${frm.doc.room}</b>?<br><br>This will close the folio and mark the room as Available.`,
-                        function () {
-                            frm.call({
-                                method: 'check_out_guest',
-                                args: {
-                                    name: frm.doc.name
-                                },
-                                freeze: true,
-                                freeze_message: __('Processing Checkout...'),
-                                callback: function (r) {
-                                    if (!r.exc) {
-                                        frappe.show_alert({
-                                            message: __('Guest Checked Out Successfully'),
-                                            indicator: 'green'
+                    // Kiểm tra phụ thu trả phòng muộn
+                    frappe.call({
+                        method: 'hospitality_core.hospitality_core.api.surcharge_engine.calculate_checkout_surcharge',
+                        args: { reservation_name: frm.doc.name },
+                        callback: function (res) {
+                            let sur = res.message;
+                            if (sur && sur.applicable) {
+                                let d = new frappe.ui.Dialog({
+                                    title: __('⏰ Phát Hiện Trả Phòng Muộn (Late Check-out)'),
+                                    fields: [
+                                        {
+                                            fieldname: 'info_html',
+                                            fieldtype: 'HTML',
+                                            options: `
+                                                <div style="background: #fff1f2; border: 1px solid #ffe4e6; border-radius: 8px; padding: 14px; margin-bottom: 12px;">
+                                                    <div style="font-size: 14px; color: #9f1239; margin-bottom: 8px;">
+                                                        Khách trả phòng lúc <b>${sur.checkout_time}</b> (Sau giờ quy chuẩn).
+                                                    </div>
+                                                    <div style="font-size: 13px; color: #4c0519; line-height: 1.6;">
+                                                        • Bậc phụ thu: <b>${sur.tier_label}</b><br>
+                                                        • Giá phòng gốc: <b>${format_currency(sur.base_rate)}</b><br>
+                                                        • Mức phụ thu dự kiến: <b style="color: #e11d48; font-size: 16px;">${sur.formatted_amount}</b>
+                                                    </div>
+                                                </div>
+                                            `
+                                        }
+                                    ],
+                                    primary_action_label: __('✔ Áp Dụng Phụ Thu & Check Out'),
+                                    primary_action: function () {
+                                        d.hide();
+                                        frappe.dom.freeze(__('Đang áp dụng phụ thu và Check Out...'));
+                                        frappe.call({
+                                            method: 'hospitality_core.hospitality_core.api.surcharge_engine.apply_surcharge_to_folio',
+                                            args: {
+                                                reservation_name: frm.doc.name,
+                                                surcharge_type: 'Late Check-out',
+                                                amount: sur.amount,
+                                                description: sur.description
+                                            },
+                                            callback: function () {
+                                                frm.call({
+                                                    method: 'check_out_guest',
+                                                    args: { name: frm.doc.name },
+                                                    callback: function () {
+                                                        frappe.dom.unfreeze();
+                                                        frappe.msgprint(__('Đã trả phòng và ghi nhận phụ thu vào Folio.'));
+                                                        frm.reload_doc();
+                                                    }
+                                                });
+                                            }
                                         });
-                                        frm.reload_doc();
+                                    },
+                                    secondary_action_label: __('Miễn Phụ Thu & Check Out')
+                                });
+                                d.set_secondary_action(function () {
+                                    d.hide();
+                                    frappe.prompt([
+                                        {
+                                            label: __('Lý do miễn phụ thu trả muộn (Ghi nhận kiểm toán)'),
+                                            fieldname: 'reason',
+                                            fieldtype: 'Select',
+                                            options: '\nKhách VIP / Thân thiết\nBan Giám Đốc phê duyệt\nLỗi buồng phòng / Bù đắp trải nghiệm\nTheo hợp đồng đại lý lữ hành\nKhác',
+                                            reqd: 1
+                                        },
+                                        {
+                                            label: __('Ghi chú chi tiết'),
+                                            fieldname: 'note',
+                                            fieldtype: 'Small Text'
+                                        }
+                                    ], function (vals) {
+                                        frappe.call({
+                                            method: 'frappe.desk.form.utils.add_comment',
+                                            args: {
+                                                reference_doctype: 'Hotel Reservation',
+                                                reference_name: frm.doc.name,
+                                                content: `<b>[KIỂM TOÁN LỄ TÂN] Miễn phụ thu trả phòng muộn:</b> ${vals.reason} - ${vals.note || ''}`,
+                                                comment_email: frappe.session.user,
+                                                comment_by: frappe.session.user_fullname
+                                            }
+                                        });
+                                        frm.call({
+                                            method: 'check_out_guest',
+                                            args: { name: frm.doc.name },
+                                            freeze: true,
+                                            callback: function (r) {
+                                                if (!r.exc) {
+                                                    frappe.show_alert({
+                                                        message: __('Guest Checked Out Successfully (Đã ghi nhận lý do miễn phụ thu).'),
+                                                        indicator: 'green'
+                                                    });
+                                                    frm.reload_doc();
+                                                }
+                                            }
+                                        });
+                                    }, __('Xác Nhận Miễn Phụ Thu Trả Phòng Muộn'), __('Xác Nhận & Check Out'));
+                                });
+                                d.show();
+                            } else {
+                                frappe.warn(
+                                    'Confirm Checkout',
+                                    `Are you sure you want to Check Out <b>${frm.doc.guest}</b> from Room <b>${frm.doc.room}</b>?<br><br>This will close the folio and mark the room as Available.`,
+                                    function () {
+                                        frm.call({
+                                            method: 'check_out_guest',
+                                            args: { name: frm.doc.name },
+                                            freeze: true,
+                                            callback: function (r) {
+                                                if (!r.exc) {
+                                                    frappe.msgprint('Guest Checked Out Successfully');
+                                                    frm.reload_doc();
+                                                }
+                                            }
+                                        });
                                     }
-                                }
-                            });
-                        },
-                        'Check Out'
-                    );
+                                );
+                            }
+                        }
+                    });
                 });
             }
 

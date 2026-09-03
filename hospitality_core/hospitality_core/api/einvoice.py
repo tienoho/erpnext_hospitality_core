@@ -37,9 +37,12 @@ class MockProvider(BaseEInvoiceProvider):
 
     def issue(self, invoice_doc, payload):
         stamp = now_datetime().strftime("%y%m%d%H%M%S")
+        is_pos = payload.get("is_cash_register", False)
+        prefix = "MTT" if is_pos else "MOCK"
         return {
-            "invoice_number": f"MOCK-{stamp}",
-            "lookup_code": f"MOCKLOOKUP-{invoice_doc.name}-{stamp}",
+            "invoice_number": f"{prefix}-{stamp}",
+            "lookup_code": f"{prefix}LOOKUP-{invoice_doc.name}-{stamp}",
+            "tax_authority_code": f"CQT-QN-{stamp}" if is_pos else "",
             "raw_response": {"mode": "mock", "payload": payload},
         }
 
@@ -102,10 +105,8 @@ def _get_provider():
 def _build_payload(invoice_doc, settings):
     """
     Buckets invoice items into tax categories using the flat default VAT
-    rate configured in settings. Real providers will eventually need
-    per-line tax-category codes (accommodation vs F&B vs service charge);
-    that mapping is intentionally left simple here since it only matters
-    once a live provider is wired in.
+    rate configured in settings. Supports both regular E-Invoices and
+    POS Cash Register E-Invoices (Khởi tạo từ máy tính tiền có mã CQT).
     """
     lines = []
     for item in invoice_doc.items:
@@ -116,12 +117,17 @@ def _build_payload(invoice_doc, settings):
             "amount": flt(item.amount),
         })
 
+    is_pos = bool(getattr(settings, "enable_pos_cash_register", 1))
+    template_code = getattr(settings, "pos_invoice_template", "1C26MNG") if is_pos else "1C26TAA"
+
     return {
         "buyer_tax_code": settings.einvoice_tax_code,
         "customer": invoice_doc.customer_name or invoice_doc.customer,
         "invoice_date": str(invoice_doc.posting_date),
         "currency": invoice_doc.currency,
         "vat_rate": flt(settings.einvoice_default_vat_rate or 8),
+        "is_cash_register": is_pos,
+        "invoice_template": template_code,
         "lines": lines,
         "grand_total": flt(invoice_doc.grand_total),
     }

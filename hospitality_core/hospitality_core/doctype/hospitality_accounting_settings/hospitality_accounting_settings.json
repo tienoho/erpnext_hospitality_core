@@ -22,7 +22,17 @@
         "column_break_einvoice",
         "einvoice_api_endpoint",
         "einvoice_api_key",
-        "einvoice_tax_code"
+        "einvoice_tax_code",
+        "enable_pos_cash_register",
+        "pos_invoice_template",
+        "section_break_vietqr",
+        "enable_vietqr",
+        "vietqr_bank_id",
+        "vietqr_account_number",
+        "vietqr_account_name",
+        "column_break_vietqr",
+        "vietqr_template",
+        "vietqr_content_prefix"
     ],
     "fields": [
         {
@@ -148,6 +158,71 @@
             "fieldname": "einvoice_tax_code",
             "fieldtype": "Data",
             "label": "Company Tax Code (MST)"
+        },
+        {
+            "default": "1",
+            "fieldname": "enable_pos_cash_register",
+            "fieldtype": "Check",
+            "label": "Enable POS Cash Register E-Invoice (Mã CQT)"
+        },
+        {
+            "default": "1C26MNG",
+            "depends_on": "enable_pos_cash_register",
+            "fieldname": "pos_invoice_template",
+            "fieldtype": "Data",
+            "label": "POS Cash Register Invoice Template (Ký hiệu mẫu)"
+        },
+        {
+            "fieldname": "section_break_vietqr",
+            "fieldtype": "Section Break",
+            "label": "Cấu hình Thanh toán VietQR (NAPAS 247)"
+        },
+        {
+            "default": "1",
+            "fieldname": "enable_vietqr",
+            "fieldtype": "Check",
+            "label": "Bật Thanh toán VietQR Động"
+        },
+        {
+            "default": "970415",
+            "depends_on": "enable_vietqr",
+            "description": "VietinBank (970415), MBBank (970422), Vietcombank (970436), BIDV (970418), Techcombank (970407)...",
+            "fieldname": "vietqr_bank_id",
+            "fieldtype": "Select",
+            "label": "Mã Ngân hàng Thụ hưởng (BIN)",
+            "options": "970415\n970422\n970436\n970418\n970407\n970405\n970423\n970416\n970432\n970441"
+        },
+        {
+            "depends_on": "enable_vietqr",
+            "fieldname": "vietqr_account_number",
+            "fieldtype": "Data",
+            "label": "Số Tài khoản Thụ hưởng"
+        },
+        {
+            "depends_on": "enable_vietqr",
+            "fieldname": "vietqr_account_name",
+            "fieldtype": "Data",
+            "label": "Tên Chủ Tài khoản (In hoa không dấu)"
+        },
+        {
+            "fieldname": "column_break_vietqr",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "compact2",
+            "depends_on": "enable_vietqr",
+            "fieldname": "vietqr_template",
+            "fieldtype": "Select",
+            "label": "Giao diện Mẫu VietQR",
+            "options": "compact2\nqr_only\nprint\ncompact"
+        },
+        {
+            "default": "TCG",
+            "depends_on": "enable_vietqr",
+            "description": "Tiền tố nội dung chuyển khoản, ví dụ: TCG 101 FOL-00123",
+            "fieldname": "vietqr_content_prefix",
+            "fieldtype": "Data",
+            "label": "Tiền tố Nội dung Chuyển khoản"
         }
     ],
     "index_web_pages_for_search": 1,

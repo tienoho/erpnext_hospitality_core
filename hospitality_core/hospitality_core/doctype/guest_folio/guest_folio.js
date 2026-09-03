@@ -18,6 +18,20 @@ frappe.ui.form.on('Guest Folio', {
             }, 'Actions');
         }
 
+        // Button: Quét VietQR 1-Chạm
+        if (!frm.doc.is_company_master && frm.doc.status === 'Open' && frm.doc.outstanding_balance > 0) {
+            frm.add_custom_button(__('⚡ Quét VietQR'), function () {
+                show_vietqr_dialog(frm);
+            }, 'Actions');
+        }
+
+        // Button: Tách Bill Đoàn Lữ Hành (Preview & Confirm)
+        if (frm.doc.status === 'Open') {
+            frm.add_custom_button(__('🔀 Tách Bill Đoàn Tour'), function () {
+                show_split_tour_dialog(frm);
+            }, 'Actions');
+        }
+
         // Button: Issue Refund
         let can_issue_refund = true;
 
@@ -816,4 +830,231 @@ function split_transaction_dialog(frm) {
     });
 
     d.show();
+}
+
+function show_vietqr_dialog(frm) {
+    if (flt(frm.doc.outstanding_balance) <= 0.01) {
+        frappe.msgprint({
+            title: __('Số Dư Folio'),
+            message: __('Folio này hiện không còn dư nợ cần thanh toán (Dư nợ: <b>{0}</b>).', [format_currency(frm.doc.outstanding_balance || 0)]),
+            indicator: 'orange'
+        });
+        return;
+    }
+
+    frappe.dom.freeze(__('Đang tạo mã VietQR chuẩn NAPAS 247...'));
+    frappe.call({
+        method: 'hospitality_core.hospitality_core.api.vietqr_bridge.generate_vietqr_payload',
+        args: {
+            folio_name: frm.doc.name
+        },
+        callback: function (r) {
+            frappe.dom.unfreeze();
+            if (!r.exc && r.message) {
+                let data = r.message;
+                let d = new frappe.ui.Dialog({
+                    title: __('⚡ Thanh Toán VietQR NAPAS 247 - Phòng {0}', [data.room || frm.doc.room || '']),
+                    size: 'large',
+                    fields: [
+                        {
+                            fieldname: 'qr_html',
+                            fieldtype: 'HTML',
+                            options: `
+                                <div style="display: flex; gap: 24px; align-items: center; justify-content: center; padding: 10px 0;">
+                                    <div style="text-align: center; background: #fff; padding: 12px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+                                        <img src="${data.vietqr_image_url}" alt="VietQR" style="max-width: 280px; height: auto; border-radius: 8px;" />
+                                        <div style="font-size: 11px; color: #64748b; margin-top: 6px;">Quét bằng mọi App Ngân hàng & Ví điện tử</div>
+                                    </div>
+                                    <div style="flex: 1; max-width: 340px;">
+                                        <div style="background: #f8fafc; border-radius: 10px; padding: 16px; border: 1px solid #e2e8f0;">
+                                            <div style="margin-bottom: 12px;">
+                                                <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600;">Số tiền thanh toán</div>
+                                                <div style="font-size: 22px; font-weight: 800; color: #0284c7;">${data.formatted_amount}</div>
+                                            </div>
+                                            <div style="margin-bottom: 10px;">
+                                                <div style="font-size: 11px; color: #64748b;">Số tài khoản thụ hưởng (Click để chép)</div>
+                                                <div style="font-size: 15px; font-weight: 700; color: #1e293b; font-family: monospace; cursor: pointer;" onclick="navigator.clipboard.writeText('${data.account_number}'); frappe.show_alert({message: __('Đã sao chép Số tài khoản!'), indicator: 'green'});">
+                                                    ${data.account_number} <i class="fa fa-copy text-primary" style="margin-left: 6px;"></i>
+                                                </div>
+                                            </div>
+                                            <div style="margin-bottom: 10px;">
+                                                <div style="font-size: 11px; color: #64748b;">Chủ tài khoản</div>
+                                                <div style="font-size: 13px; font-weight: 600; color: #1e293b;">${data.account_name}</div>
+                                            </div>
+                                            <div style="margin-bottom: 6px;">
+                                                <div style="font-size: 11px; color: #64748b;">Nội dung chuyển khoản (Click để chép)</div>
+                                                <div style="font-size: 13px; font-weight: 700; color: #e11d48; font-family: monospace; background: #fff1f2; padding: 4px 8px; border-radius: 6px; display: inline-block; cursor: pointer;" onclick="navigator.clipboard.writeText('${data.description}'); frappe.show_alert({message: __('Đã sao chép Nội dung CK!'), indicator: 'green'});">
+                                                    ${data.description} <i class="fa fa-copy text-danger" style="margin-left: 6px;"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `
+                        }
+                    ],
+                    primary_action_label: __('✔ Xác nhận Đã Nhận Tiền'),
+                    primary_action: function () {
+                        d.hide();
+                        frappe.confirm(
+                            __('Xác nhận khách đã chuyển khoản thành công số tiền <b>{0}</b> vào tài khoản ngân hàng?<br><br>Hành động này sẽ tạo <b>Payment Entry</b> và cập nhật số dư vào Folio.', [data.formatted_amount]),
+                            function () {
+                                // Mở dialog chọn quầy lễ tân
+                                frappe.prompt([
+                                    {
+                                        label: __('Quầy Thu Ngân / Lễ Tân'),
+                                        fieldname: 'hotel_reception',
+                                        fieldtype: 'Link',
+                                        options: 'Hotel Reception',
+                                        reqd: 1,
+                                        default: frm.doc.hotel_reception || ''
+                                    }
+                                ], function (vals) {
+                                    frappe.dom.freeze(__('Đang hạch toán thanh toán chuyển khoản...'));
+                                    frappe.call({
+                                        method: 'hospitality_core.hospitality_core.api.payment_bridge.create_folio_payment',
+                                        args: {
+                                            folio_name: frm.doc.name,
+                                            amount: data.amount,
+                                            mode_of_payment: 'Bank Transfer',
+                                            hotel_reception: vals.hotel_reception
+                                        },
+                                        callback: function (res) {
+                                            frappe.dom.unfreeze();
+                                            if (!res.exc) {
+                                                frappe.show_alert({
+                                                    message: __('Đã ghi nhận thanh toán VietQR thành công ({0})', [data.formatted_amount]),
+                                                    indicator: 'green'
+                                                });
+                                                frm.reload_doc();
+                                            }
+                                        }
+                                    });
+                                }, __('Xác Nhận Hạch Toán VietQR'), __('Lưu Thanh Toán'));
+                            }
+                        );
+                    }
+                });
+                d.show();
+            }
+        }
+    });
+}
+
+function show_split_tour_dialog(frm) {
+    frappe.dom.freeze(__('Đang phân tích dữ liệu phòng và dịch vụ đoàn...'));
+    frappe.call({
+        method: 'hospitality_core.hospitality_core.api.folio_operations.get_split_tour_preview',
+        args: {
+            folio_name: frm.doc.name
+        },
+        callback: function (r) {
+            frappe.dom.unfreeze();
+            if (!r.exc && r.message) {
+                let data = r.message;
+                let inc_rows_html = data.incidental_charges.map(t => `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 6px;"><input type="checkbox" class="split-incidental-check" value="${t.name}" checked /></td>
+                        <td style="padding: 6px; font-size: 12px;"><b>${t.description}</b></td>
+                        <td style="padding: 6px; font-size: 12px; text-align: right; color: #e11d48; font-weight: 600;">${t.formatted_amount}</td>
+                    </tr>
+                `).join('');
+
+                let room_rows_html = data.room_charges.map(t => `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 6px; font-size: 12px;"><b>${t.description}</b></td>
+                        <td style="padding: 6px; font-size: 12px; text-align: right; color: #0284c7; font-weight: 600;">${t.formatted_amount}</td>
+                    </tr>
+                `).join('');
+
+                let d = new frappe.ui.Dialog({
+                    title: __('🔀 Tách Bill Đoàn Lữ Hành (Preview & Confirm) - {0}', [frm.doc.name]),
+                    size: 'large',
+                    fields: [
+                        {
+                            fieldname: 'preview_html',
+                            fieldtype: 'HTML',
+                            options: `
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                    <!-- Cột 1: Tiền phòng (Master Folio) -->
+                                    <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px;">
+                                        <div style="font-weight: 700; color: #0369a1; margin-bottom: 8px; font-size: 13px;">
+                                            🏨 TIỀN PHÒNG (GIỮ LẠI MASTER FOLIO)
+                                        </div>
+                                        <div style="max-height: 200px; overflow-y: auto;">
+                                            <table style="width: 100%; border-collapse: collapse;">
+                                                <thead><tr style="border-bottom: 2px solid #cbd5e1; font-size: 11px; color: #64748b;"><th style="text-align: left; padding: 4px;">Dịch vụ</th><th style="text-align: right; padding: 4px;">Số tiền</th></tr></thead>
+                                                <tbody>${room_rows_html || '<tr><td colspan="2" style="text-align:center; padding:10px; color:#94a3b8;">Không có giao dịch tiền phòng</td></tr>'}</tbody>
+                                            </table>
+                                        </div>
+                                        <div style="margin-top: 8px; text-align: right; font-weight: 800; color: #0284c7; border-top: 1px dashed #93c5fd; padding-top: 6px;">
+                                            Tổng tiền phòng: ${data.formatted_room_total}
+                                        </div>
+                                    </div>
+
+                                    <!-- Cột 2: Dịch vụ cá nhân (Chuyển sang Sub-Folio) -->
+                                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 12px;">
+                                        <div style="font-weight: 700; color: #be123c; margin-bottom: 8px; font-size: 13px;">
+                                            ☕ DỊCH VỤ CÁ NHÂN (CHUYỂN SANG SUB-FOLIO)
+                                        </div>
+                                        <div style="max-height: 200px; overflow-y: auto;">
+                                            <table style="width: 100%; border-collapse: collapse;">
+                                                <thead><tr style="border-bottom: 2px solid #cbd5e1; font-size: 11px; color: #64748b;"><th style="width: 30px;">Chọn</th><th style="text-align: left; padding: 4px;">Chi phí phát sinh</th><th style="text-align: right; padding: 4px;">Số tiền</th></tr></thead>
+                                                <tbody>${inc_rows_html || '<tr><td colspan="3" style="text-align:center; padding:10px; color:#94a3b8;">Không có chi phí phát sinh</td></tr>'}</tbody>
+                                            </table>
+                                        </div>
+                                        <div style="margin-top: 8px; text-align: right; font-weight: 800; color: #e11d48; border-top: 1px dashed #fda4af; padding-top: 6px;">
+                                            Tổng dịch vụ: ${data.formatted_incidental_total}
+                                        </div>
+                                    </div>
+                                </div>
+                            `
+                        },
+                        {
+                            fieldname: 'target_folio',
+                            label: __('Folio Nhận Chi Phí Cá Nhân (Sub-Folio)'),
+                            fieldtype: 'Link',
+                            options: 'Guest Folio',
+                            get_query: () => ({ filters: { status: 'Open', name: ['!=', frm.doc.name] } }),
+                            reqd: 1
+                        }
+                    ],
+                    primary_action_label: __('🔀 Xác Nhận Tách Sang Sub-Folio'),
+                    primary_action: function (vals) {
+                        let selected_txns = [];
+                        d.$wrapper.find('.split-incidental-check:checked').each(function () {
+                            selected_txns.push($(this).val());
+                        });
+
+                        if (selected_txns.length === 0) {
+                            frappe.msgprint(__('Vui lòng tích chọn ít nhất 1 giao dịch dịch vụ để chuyển.'));
+                            return;
+                        }
+
+                        frappe.dom.freeze(__('Đang chuyển giao dịch sang Sub-Folio...'));
+                        frappe.call({
+                            method: 'hospitality_core.hospitality_core.api.folio_operations.execute_split_tour_folio',
+                            args: {
+                                source_folio: frm.doc.name,
+                                target_folio: vals.target_folio,
+                                move_txns: selected_txns
+                            },
+                            callback: function (res) {
+                                frappe.dom.unfreeze();
+                                if (!res.exc) {
+                                    d.hide();
+                                    frappe.show_alert({
+                                        message: res.message.message,
+                                        indicator: 'green'
+                                    });
+                                    frm.reload_doc();
+                                }
+                            }
+                        });
+                    }
+                });
+                d.show();
+            }
+        }
+    });
 }

@@ -158,3 +158,98 @@ def omni_search(query):
         as_dict=True,
     )
     return results
+
+
+@frappe.whitelist()
+def get_split_tour_preview(folio_name):
+    """
+    Phân tích tự động các giao dịch trên Folio thành 2 nhóm phục vụ Lễ tân đối soát:
+    - Nhóm 1: Tiền phòng (Accommodation) -> Giữ lại Master Folio cho Đại lý/Công ty thanh toán.
+    - Nhóm 2: Dịch vụ cá nhân (Minibar, Nhà hàng, Giặt là, Spa) -> Chuyển sang Sub-Folio cho Khách tự trả.
+    """
+    folio = frappe.get_doc("Guest Folio", folio_name)
+    
+    room_charges = []
+    incidental_charges = []
+
+    room_total = 0.0
+    incidental_total = 0.0
+
+    for t in folio.transactions:
+        if t.is_void or t.is_invoiced:
+            continue
+
+        item_code = (t.item or "").upper()
+        desc = (t.description or "").lower()
+        amt = flt(t.amount)
+
+        # Tiêu chí nhận diện tiền phòng
+        is_room = (
+            item_code in ("ROOM-RENT", "ROOM_CHARGE", "ACCOMMODATION") or
+            "room rent" in desc or
+            "tiền phòng" in desc or
+            "phòng" in desc
+        )
+
+        row_data = {
+            "name": t.name,
+            "posting_date": str(t.posting_date),
+            "item": t.item,
+            "description": t.description,
+            "amount": amt,
+            "formatted_amount": frappe.format(amt, {"fieldtype": "Currency"}),
+            "bill_to": t.bill_to
+        }
+
+        if is_room:
+            room_charges.append(row_data)
+            room_total += amt
+        else:
+            incidental_charges.append(row_data)
+            incidental_total += amt
+
+    return {
+        "folio": folio_name,
+        "guest": folio.guest,
+        "room": folio.room,
+        "company": folio.company,
+        "room_charges": room_charges,
+        "room_total": room_total,
+        "formatted_room_total": frappe.format(room_total, {"fieldtype": "Currency"}),
+        "incidental_charges": incidental_charges,
+        "incidental_total": incidental_total,
+        "formatted_incidental_total": frappe.format(incidental_total, {"fieldtype": "Currency"}),
+        "grand_total": room_total + incidental_total,
+        "formatted_grand_total": frappe.format(room_total + incidental_total, {"fieldtype": "Currency"})
+    }
+
+
+@frappe.whitelist()
+def execute_split_tour_folio(source_folio, target_folio, move_txns):
+    """
+    Thi hành chuyển các giao dịch dịch vụ cá nhân đã chọn từ Master Folio sang Sub-Folio.
+    Tái sử dụng hàm move_transactions() chuẩn có audit trail của hệ thống.
+    """
+    _check_supervisor()
+
+    if isinstance(move_txns, str):
+        import json
+        move_txns = json.loads(move_txns)
+
+    if not move_txns:
+        frappe.throw(_("Vui lòng chọn ít nhất một giao dịch dịch vụ để chuyển."))
+
+    if source_folio == target_folio:
+        frappe.throw(_("Folio nguồn và Folio đích không được trùng nhau."))
+
+    from hospitality_core.hospitality_core.api.folio import move_transactions
+    move_transactions(move_txns, target_folio)
+
+    return {
+        "success": True,
+        "moved_count": len(move_txns),
+        "source_folio": source_folio,
+        "target_folio": target_folio,
+        "message": _("Đã tách thành công {0} giao dịch dịch vụ sang Folio {1}.").format(len(move_txns), target_folio)
+    }
+

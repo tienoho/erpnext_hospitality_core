@@ -12,6 +12,7 @@ class HotelReservation(Document):
             self.company = None
 
         self.validate_dates()
+        self.validate_occupancy_counts()
         
         self.sync_room_type_with_room()
 
@@ -30,6 +31,20 @@ class HotelReservation(Document):
     def validate_dates(self):
         if getdate(self.arrival_date) >= getdate(self.departure_date):
             frappe.throw(_("Departure Date must be after Arrival Date."))
+
+    def validate_occupancy_counts(self):
+        children = int(self.children_count or 0)
+        extra_beds = int(self.extra_bed_count or 0)
+
+        if children < 0:
+            frappe.throw(_("Số lượng trẻ em không thể là số âm."))
+        if children > 15:
+            frappe.throw(_("Số lượng trẻ em trong 1 phòng không được vượt quá 15 bé."))
+
+        if extra_beds < 0:
+            frappe.throw(_("Số lượng giường phụ (Extra Bed) không thể là số âm."))
+        if extra_beds > 4:
+            frappe.throw(_("Số lượng giường phụ trong 1 phòng tối đa là 4 giường."))
 
     def sync_room_type_with_room(self):
         if not self.room:

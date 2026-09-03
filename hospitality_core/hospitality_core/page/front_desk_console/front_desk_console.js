@@ -30,9 +30,28 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
     page.add_menu_item(__('Merge Folio'), function () {
         open_merge_folio_dialog();
     });
+    page.add_menu_item(__('Xuất Excel Khai Báo XNC Quốc Tế (XLSX)'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report_xlsx?target_date=${cur_date}`);
+    });
+    page.add_menu_item(__('Xuất Excel Khai Báo Tạm Trú Toàn Đoàn (XLSX)'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_police_declaration_xlsx?target_date=${cur_date}`);
+    });
 
+    page.add_inner_button(__('⚡ Tạo VietQR Nhanh'), function () {
+        open_quick_vietqr_dialog();
+    });
     page.add_inner_button(__('Quét CCCD / Passport'), function () {
         open_id_scanner_dialog();
+    });
+    page.add_inner_button(__('📊 Xuất Excel XNC (XLSX)'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report_xlsx?target_date=${cur_date}`);
+    });
+    page.add_inner_button(__('📋 Xuất File CSV XNC'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report?target_date=${cur_date}`);
     });
     page.add_inner_button(__('Tách Bill'), function () {
         open_split_bill_dialog();
@@ -423,4 +442,93 @@ function render_departures(data) {
         });
     }
     $('#list-departures').html(html);
+}
+
+function open_quick_vietqr_dialog() {
+    let d = new frappe.ui.Dialog({
+        title: __('⚡ Tạo Mã VietQR Nhanh Cho Khách'),
+        fields: [
+            {
+                label: __('Guest Folio'),
+                fieldname: 'folio',
+                fieldtype: 'Link',
+                options: 'Guest Folio',
+                get_query: () => ({ filters: { status: 'Open' } }),
+                reqd: 1,
+                change: function () {
+                    let val = d.get_value('folio');
+                    if (val) {
+                        frappe.db.get_value('Guest Folio', val, ['outstanding_balance', 'room'], (r) => {
+                            if (r) {
+                                d.set_value('amount', r.outstanding_balance > 0 ? r.outstanding_balance : 0);
+                                d.set_value('room', r.room || '');
+                            }
+                        });
+                    }
+                }
+            },
+            {
+                label: __('Số Phòng'),
+                fieldname: 'room',
+                fieldtype: 'Data',
+                read_only: 1
+            },
+            {
+                label: __('Số Tiền Thanh Toán (VND)'),
+                fieldname: 'amount',
+                fieldtype: 'Currency',
+                reqd: 1
+            }
+        ],
+        primary_action_label: __('Hiển Thị Mã VietQR'),
+        primary_action: function (vals) {
+            let amt = flt(vals.amount);
+            if (amt <= 0) {
+                frappe.msgprint({
+                    title: __('Số Tiền Không Hợp Lệ'),
+                    message: __('Số tiền thanh toán phải lớn hơn 0 VND. Vui lòng nhập lại số tiền hợp lệ.'),
+                    indicator: 'orange'
+                });
+                return;
+            }
+
+            frappe.call({
+                method: 'hospitality_core.hospitality_core.api.vietqr_bridge.generate_vietqr_payload',
+                args: {
+                    folio_name: vals.folio,
+                    amount: amt
+                },
+                callback: function (r) {
+                    if (!r.exc && r.message) {
+                        d.hide();
+                        let data = r.message;
+                        let qr_d = new frappe.ui.Dialog({
+                            title: __('⚡ Quét VietQR NAPAS 247 - Phòng {0}', [data.room || '']),
+                            fields: [
+                                {
+                                    fieldname: 'qr_html',
+                                    fieldtype: 'HTML',
+                                    options: `
+                                        <div style="text-align: center; padding: 10px;">
+                                            <img src="${data.vietqr_image_url}" style="max-width: 260px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" />
+                                            <div style="font-size: 20px; font-weight: 800; color: #0284c7; margin-top: 10px;">${data.formatted_amount}</div>
+                                            <div style="font-size: 13px; color: #475569; margin-top: 6px; cursor: pointer;" onclick="navigator.clipboard.writeText('${data.account_number}'); frappe.show_alert({message: __('Đã sao chép STK!'), indicator: 'green'});">
+                                                STK: <b>${data.account_number}</b> (${data.account_name}) <i class="fa fa-copy text-primary" style="margin-left: 4px;"></i>
+                                            </div>
+                                            <div style="font-size: 12px; color: #e11d48; margin-top: 6px; cursor: pointer;" onclick="navigator.clipboard.writeText('${data.description}'); frappe.show_alert({message: __('Đã sao chép Nội dung CK!'), indicator: 'green'});">
+                                                Nội dung: <b>${data.description}</b> <i class="fa fa-copy text-danger" style="margin-left: 4px;"></i>
+                                            </div>
+                                        </div>
+                                    `
+                                }
+                            ],
+                            primary_action_label: __('Đóng')
+                        });
+                        qr_d.show();
+                    }
+                }
+            });
+        }
+    });
+    d.show();
 }
