@@ -9,6 +9,21 @@ import frappe
 from frappe import _
 from frappe.utils import flt, cstr
 import urllib.parse
+import unicodedata
+import re
+
+
+def remove_vietnamese_accents(input_str: str) -> str:
+    """
+    Chuyển đổi chuỗi có dấu tiếng Việt sang ký tự ASCII thuần không dấu.
+    Đảm bảo 100% tương thích với tiêu chuẩn mã hóa EMVCo và các ứng dụng Mobile Banking.
+    """
+    if not input_str:
+        return ""
+    s = unicodedata.normalize('NFD', str(input_str))
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+    s = s.replace('đ', 'd').replace('Đ', 'D')
+    return s
 
 
 def crc16_ccitt(data_bytes: bytes) -> str:
@@ -67,8 +82,8 @@ def build_emvco_vietqr(bank_bin: str, account_number: str, amount: float = 0, de
 
     # 6. Additional Data Field Template (Tag 62)
     if description:
-        # Giới hạn nội dung không dấu để tương thích tốt với mọi App ngân hàng
-        clean_desc = urllib.parse.quote_plus(description).replace("+", " ")[:25]
+        # Chuẩn hóa nội dung không dấu, chỉ gồm chữ cái và số, tối đa 25 ký tự chuẩn EMVCo
+        clean_desc = re.sub(r'[^A-Za-z0-9 ]', '', remove_vietnamese_accents(description))[:25].strip()
         sub_desc = _format_tlv("08", clean_desc)
         qr_payload += _format_tlv("62", sub_desc)
 
@@ -130,8 +145,12 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
     if not description:
         description = f"{prefix} THANHTOAN".strip()
 
+    # Chuẩn hóa tên chủ tài khoản và nội dung chuyển khoản không dấu
+    account_name = remove_vietnamese_accents(account_name).upper().strip()
+    clean_desc = remove_vietnamese_accents(description).strip()
+
     # Sinh link ảnh VietQR Cloud (chuẩn NAPAS QuickLink)
-    clean_desc_url = urllib.parse.quote(description)
+    clean_desc_url = urllib.parse.quote(clean_desc)
     clean_name_url = urllib.parse.quote(account_name)
     vietqr_url = f"https://api.vietqr.io/image/{bank_bin}-{account_number}-{template}.jpg?amount={int(round(pay_amount))}&addInfo={clean_desc_url}&accountName={clean_name_url}"
 
@@ -140,7 +159,7 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
         bank_bin=bank_bin,
         account_number=account_number,
         amount=pay_amount,
-        description=description,
+        description=clean_desc,
         account_name=account_name
     )
 
