@@ -157,6 +157,19 @@ def issue_einvoice(sales_invoice):
             sales_invoice, invoice_doc.get("einvoice_number")
         ))
 
+    # Ưu tiên ủy quyền (delegate) xử lý sang App chuyên biệt erpnext_vietnam_einvoice nếu có
+    try:
+        from vietnam_einvoice.vietnam_einvoice.api.einvoice_core import issue_einvoice as vn_issue_einvoice
+        vn_result = vn_issue_einvoice(invoice_name=sales_invoice, doctype="Sales Invoice")
+        if vn_result and vn_result.get("success"):
+            return {
+                "einvoice_status": "Issued",
+                "einvoice_number": vn_result.get("invoice_number"),
+                "einvoice_lookup_code": vn_result.get("lookup_code"),
+            }
+    except Exception:
+        pass
+
     provider, settings = _get_provider()
     payload = _build_payload(invoice_doc, settings)
 
