@@ -133,6 +133,9 @@ def apply_foc_to_reservation(group_booking_name, reservation_name):
     """
     Áp dụng chính sách phòng FOC (Miễn phí) cho phòng của Hướng dẫn viên.
     """
+    if not frappe.has_permission("Hotel Reservation", "write"):
+        frappe.throw(_("Bạn không có quyền chỉnh sửa hoặc áp dụng FOC cho Đặt phòng này."), frappe.PermissionError)
+
     calc = calculate_group_foc_rooms(group_booking_name)
     if not calc.get("policy_enabled"):
         frappe.throw(_("Chính sách phòng FOC đang bị tắt trong Hospitality Surcharge Settings."))

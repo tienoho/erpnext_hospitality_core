@@ -245,6 +245,18 @@
             "role": "System Manager",
             "share": 1,
             "write": 1
+        },
+        {
+            "create": 1,
+            "read": 1,
+            "role": "Accounts Manager",
+            "write": 1
+        },
+        {
+            "create": 1,
+            "read": 1,
+            "role": "Hospitality Manager",
+            "write": 1
         }
     ],
     "sort_field": "modified",
