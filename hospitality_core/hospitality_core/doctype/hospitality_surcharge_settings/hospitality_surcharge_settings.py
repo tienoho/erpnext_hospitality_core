@@ -13,6 +13,13 @@ class HospitalitySurchargeSettings(Document):
 
     def validate_hours(self):
         """Kiểm tra tính hợp lý của các mốc giờ quy chuẩn."""
+        self.standard_checkin_time = self.standard_checkin_time or "14:00:00"
+        self.standard_checkout_time = self.standard_checkout_time or "12:00:00"
+        self.early_tier1_hour = self.early_tier1_hour or "06:00:00"
+        self.early_tier2_hour = self.early_tier2_hour or "09:00:00"
+        self.late_tier1_hour = self.late_tier1_hour or "15:00:00"
+        self.late_tier2_hour = self.late_tier2_hour or "18:00:00"
+
         t_cin = get_time(self.standard_checkin_time)
         t_cout = get_time(self.standard_checkout_time)
         t_early1 = get_time(self.early_tier1_hour)
