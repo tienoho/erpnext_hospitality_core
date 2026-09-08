@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt, formatdate, getdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
 	columns = get_columns(filters)
@@ -61,10 +62,14 @@ def get_data(filters):
 		JOIN `tabGuest Folio` gf ON ft.parent = gf.name
 		JOIN `tabHotel Reservation` res ON gf.reservation = res.name
 		JOIN `tabHotel Room` room ON res.room = room.room_number
-		WHERE 
+		WHERE
 			ft.posting_date BETWEEN %s AND %s
 			AND ft.is_void = 0
 			AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+			AND COALESCE(ft.mirror_source, '') = ''
+			AND ft.reference_doctype != 'Folio Transaction'
+			AND gf.is_company_master = 0
+			AND NOT EXISTS (SELECT 1 FROM `tabHotel Group Booking` hgb WHERE hgb.master_folio = gf.name)
 			AND gf.docstatus < 2
 	"""
 	
@@ -72,9 +77,15 @@ def get_data(filters):
 	if reception_filter:
 		revenue_query += " AND room.hotel_reception = %s"
 		rev_params.append(reception_filter)
-		
+
+	# Lọc theo property được phép xem — xem report_scope.py để biết lý do.
+	allowed_properties = allowed_properties_for_report()
+	if allowed_properties is not None:
+		revenue_query += " AND ft.property IN %s"
+		rev_params.append(allowed_properties or [""])
+
 	revenue_query += " GROUP BY res.room, room.room_type, room.hotel_reception"
-	
+
 	revenue_data = frappe.db.sql(revenue_query, tuple(rev_params), as_dict=1)
 
 	# 2. Fetch Expense Data
@@ -96,7 +107,11 @@ def get_data(filters):
 	if reception_filter:
 		expense_query += " AND hotel_reception = %s"
 		exp_params.append(reception_filter)
-	
+
+	if allowed_properties is not None:
+		expense_query += " AND property IN %s"
+		exp_params.append(allowed_properties or [""])
+
 	expense_query += " GROUP BY maintenance_request, hotel_reception"
 	
 	expense_raw = frappe.db.sql(expense_query, tuple(exp_params), as_dict=1)

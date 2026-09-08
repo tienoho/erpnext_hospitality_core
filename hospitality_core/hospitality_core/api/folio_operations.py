@@ -36,6 +36,21 @@ def split_transaction(transaction_name, splits):
         frappe.throw(_("Cannot split a voided transaction."))
     if original.is_invoiced:
         frappe.throw(_("Cannot split an already invoiced transaction."))
+    # Tính năng này (từng dùng để tách 1 hóa đơn ăn uống chung cho nhiều khách)
+    # void bản gốc bằng frappe.db.set_value() trực tiếp — bỏ qua hoàn toàn
+    # validate()/on_trash() của Folio Transaction, nên KHÔNG hề biết tới các
+    # dòng con (giảm giá/điều chỉnh LOS, qua pricing_origin) hay bản mirror
+    # (qua mirror_source) mà engine tính giá phòng mới tạo ra. Nếu áp dụng cho
+    # 1 charge ROOM-RENT do rate plan quản lý, các dòng con/mirror liên quan sẽ
+    # bị MỒ CÔI (không bị void theo) — folio gốc/Master Folio vẫn còn giảm giá
+    # hoặc bản sao của 1 charge đã "biến mất", làm sai số dư. Chặn hẳn các
+    # giao dịch có căn cứ giá — dùng void_pricing_charge() (financial_control.py)
+    # nếu cần hủy/điều chỉnh tiền phòng.
+    if original.get('pricing_details') or original.get('pricing_origin') or original.get('mirror_source'):
+        frappe.throw(_(
+            "Không thể tách (split) giao dịch tiền phòng do hệ thống tính giá quản lý (có căn cứ giá hoặc liên "
+            "kết mirror). Hãy dùng chức năng hủy tiền phòng (Void Pricing Charge) chuyên dụng nếu cần điều chỉnh."
+        ))
 
     total_split = sum(flt(s.get("amount")) for s in splits)
     if abs(total_split - flt(original.amount)) > 0.01:
@@ -129,6 +144,14 @@ def omni_search(query):
     Front Desk omni-search: looks up guests / reservations by name, phone,
     room number, ID number (CCCD/passport), or OTA booking reference.
     """
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — bất kỳ user đã đăng nhập nào (kể cả
+    # không thuộc vai trò lễ tân) cũng tra cứu được tên/SĐT/số CCCD-hộ chiếu
+    # của khách đang lưu trú/đã đặt phòng — lộ PII. Yêu cầu tối thiểu quyền
+    # đọc Hotel Reservation (không giới hạn riêng Supervisor, vì đây là công
+    # cụ tra cứu hàng ngày của lễ tân thường).
+    if not frappe.has_permission("Hotel Reservation", "read"):
+        frappe.throw(_("Not permitted to search reservations."), frappe.PermissionError)
+
     query = (query or "").strip()
     if not query or len(query) < 2:
         return []
@@ -167,8 +190,17 @@ def get_split_tour_preview(folio_name):
     - Nhóm 1: Tiền phòng (Accommodation) -> Giữ lại Master Folio cho Đại lý/Công ty thanh toán.
     - Nhóm 2: Dịch vụ cá nhân (Minibar, Nhà hàng, Giặt là, Spa) -> Chuyển sang Sub-Folio cho Khách tự trả.
     """
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — cùng lớp lỗi với debug_folio_totals()
+    # (đã fix) — lộ toàn bộ chi tiết từng giao dịch (tiền phòng lẫn dịch vụ,
+    # kèm bill_to) của BẤT KỲ Guest Folio nào cho bất kỳ user đã đăng nhập.
+    if not frappe.has_permission("Guest Folio", "read", doc=folio_name):
+        frappe.throw(_("Not permitted to view Folio {0}.").format(folio_name), frappe.PermissionError)
+
+    from hospitality_core.hospitality_core.api.night_audit import get_room_rent_item_codes
+
     folio = frappe.get_doc("Guest Folio", folio_name)
-    
+    room_rent_items = set(get_room_rent_item_codes())
+
     room_charges = []
     incidental_charges = []
 
@@ -179,17 +211,13 @@ def get_split_tour_preview(folio_name):
         if t.is_void or t.is_invoiced:
             continue
 
-        item_code = (t.item or "").upper()
-        desc = (t.description or "").lower()
         amt = flt(t.amount)
 
-        # Tiêu chí nhận diện tiền phòng
-        is_room = (
-            item_code in ("ROOM-RENT", "ROOM_CHARGE", "ACCOMMODATION") or
-            "room rent" in desc or
-            "tiền phòng" in desc or
-            "phòng" in desc
-        )
+        # Tiêu chí nhận diện tiền phòng: dùng chung danh sách Item động với Night
+        # Audit (item_code='ROOM-RENT' hoặc item_group='Accommodation') thay vì tự
+        # suy đoán qua chuỗi mô tả, vốn có thể khớp nhầm các phụ thu/dịch vụ khác
+        # có chữ "phòng" trong mô tả (ví dụ phụ thu check-in sớm/check-out muộn).
+        is_room = t.item in room_rent_items
 
         row_data = {
             "name": t.name,

@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import nowdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -41,12 +42,20 @@ def execute(filters=None):
         WHERE
             res.departure_date = %(target_date)s
             AND res.status = 'Checked Out'
+            {property_condition}
         ORDER BY
             res.modified ASC
     """
-    
-    # Note: We use TIME(res.modified) as proxy for checkout time because 
-    # the Reservation is submitted/modified upon checkout. 
-    
-    data = frappe.db.sql(sql, {"target_date": target_date}, as_dict=True)
+
+    # Note: We use TIME(res.modified) as proxy for checkout time because
+    # the Reservation is submitted/modified upon checkout.
+
+    params = {"target_date": target_date}
+    allowed_properties = allowed_properties_for_report()
+    property_condition = ""
+    if allowed_properties is not None:
+        property_condition = "AND res.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
+    data = frappe.db.sql(sql.format(property_condition=property_condition), params, as_dict=True)
     return columns, data

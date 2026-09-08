@@ -10,6 +10,19 @@
 
 frappe.provide('frappe.hospitality');
 
+// Base palette first, then extend with evenly-spaced HSL hues so charts with
+// more categories than the base palette don't silently reuse colors.
+function get_chart_colors(count) {
+    const base = ['#6366f1', '#a855f7', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#06b6d4'];
+    if (count <= base.length) return base;
+    const colors = base.slice();
+    for (let i = base.length; i < count; i++) {
+        const hue = Math.round((360 * i) / count);
+        colors.push(`hsl(${hue}, 65%, 55%)`);
+    }
+    return colors;
+}
+
 frappe.hospitality.FinalAnalyticsV13 = class {
     constructor() {
         this.fromDate = null;
@@ -44,12 +57,18 @@ frappe.hospitality.FinalAnalyticsV13 = class {
     }
 
     setup_observer() {
-        const observer = new MutationObserver(() => {
+        this.observer = new MutationObserver(() => {
             if (this.is_analytics_page() && !$('#hos-v13-controls-inner').length) {
                 this.inject_ui();
             }
         });
-        observer.observe(document.body, { childList: true, subtree: true });
+        this.observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    destroy() {
+        if (this.observer) {
+            this.observer.disconnect();
+        }
     }
 
     inject_ui() {
@@ -136,7 +155,7 @@ frappe.hospitality.FinalAnalyticsV13 = class {
                             data: data,
                             type: chart.type,
                             height: 250,
-                            colors: ['#6366f1', '#a855f7', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#06b6d4']
+                            colors: get_chart_colors(data.labels.length)
                         };
 
                         if (!isCircle) {
@@ -161,6 +180,9 @@ frappe.hospitality.FinalAnalyticsV13 = class {
 // Global Boot
 $(document).on('page-change', () => {
     setTimeout(() => {
+        if (window.hospitality_v13_manager) {
+            window.hospitality_v13_manager.destroy();
+        }
         window.hospitality_v13_manager = new frappe.hospitality.FinalAnalyticsV13();
     }, 1000);
 });

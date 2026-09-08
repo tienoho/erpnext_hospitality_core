@@ -38,6 +38,18 @@ frappe.pages['availability-tool'].on_page_load = function (wrapper) {
         </div>
     `);
 
+    // Ủy quyền sự kiện click 1 lần cho toàn bộ khung chứa thẻ phòng — an toàn
+    // với mọi lần render_matrix_grid()/render_table_view() ghi đè lại HTML bên
+    // trong (không cần bind lại), và không nhúng dữ liệu tự do vào onclick.
+    $(wrapper).find('#avail-rooms-section').on('click', '[data-quick-create], [data-reservation]', function () {
+        let $el = $(this);
+        if ($el.data('quick-create')) {
+            quick_create_reservation($el.data('room'), $el.data('room-type'));
+        } else if ($el.data('reservation')) {
+            open_room_reservation($el.data('reservation'));
+        }
+    });
+
     // Inject CSS
     $(`<style>
         .room-card-box {
@@ -144,6 +156,13 @@ function load_availability(wrapper, page) {
 
     let start = Array.isArray(dates) ? dates[0] : dates.split(' to ')[0];
     let end = Array.isArray(dates) ? (dates[1] || start) : (dates.split(' to ')[1] || start);
+
+    // A single picked day must still cover that one night in the exclusive
+    // `arrival_date < end AND departure_date > start` overlap query below —
+    // otherwise a reservation arriving exactly on `start` is invisible.
+    if (end === start) {
+        end = frappe.datetime.add_days(start, 1);
+    }
 
     _avail_state.start_date = start;
     _avail_state.end_date = end;
@@ -412,40 +431,64 @@ function render_matrix_grid(rooms) {
             let card_class = 'room-card-avail';
             let badge_bg = '#27ae60';
             let status_text = __('Trống');
-            let click_action = `quick_create_reservation('${r.room}', '${r.room_type}')`;
+            // Dùng data-* attribute + event delegation (bind_room_card_clicks)
+            // thay vì nhúng thẳng chuỗi tự do (r.details chứa tên khách — docname
+            // của Guest chính là họ tên gõ tay, autoname="format:{full_name}",
+            // không có ràng buộc ký tự) vào thuộc tính onclick — tránh vừa lỗi vỡ
+            // HTML khi tên có dấu nháy đơn, vừa rủi ro stored-XSS nếu tên khách
+            // chứa markup.
+            let click_reservation = '';
             let tooltip = __('Bấm để tạo Đặt Phòng ngay');
+            let quick_create = r.status === 'Available';
 
             if (r.status === 'Occupied') {
                 card_class = 'room-card-occ';
                 badge_bg = '#f39c12';
                 status_text = __('Đang ở');
-                click_action = `open_room_reservation('${r.details}')`;
+                click_reservation = r.reservation || '';
                 tooltip = r.details || __('Đang có khách ở');
             } else if (r.status === 'Reserved') {
                 card_class = 'room-card-res';
                 badge_bg = '#2980b9';
                 status_text = __('Giữ chỗ');
-                click_action = `open_room_reservation('${r.details}')`;
+                click_reservation = r.reservation || '';
                 tooltip = r.details || __('Đã đặt trước');
             } else if (r.status === 'Out of Order') {
                 card_class = 'room-card-ooo';
                 badge_bg = '#e74c3c';
                 status_text = __('Bảo trì');
-                click_action = ``;
                 tooltip = __('Phòng đang sửa chữa/bảo trì');
+            } else if (r.status === 'Conflict') {
+                // Trùng đặt phòng — trước đây rơi vào nhánh mặc định và hiển
+                // thị y hệt phòng Trống (xanh lá), vô tình che mất chính cảnh
+                // báo trùng đặt phòng mà check_availability_counts() cố tình
+                // tính toán và trả về.
+                card_class = 'room-card-ooo';
+                badge_bg = '#c0392b';
+                status_text = __('⚠ Trùng đặt');
+                tooltip = r.details || __('Phòng bị đặt trùng — cần xử lý thủ công');
+            } else if (r.status === 'Dirty' || r.status === 'Cleaning') {
+                card_class = 'room-card-ooo';
+                badge_bg = '#e67e22';
+                status_text = r.status === 'Dirty' ? __('Chưa dọn') : __('Đang dọn');
+                tooltip = __('Chưa sẵn sàng bán — chờ buồng phòng bàn giao');
             }
 
             html += `
-                <div class="room-card-box ${card_class}" onclick="${click_action}" title="${tooltip}">
+                <div class="room-card-box ${card_class}" data-room="${frappe.utils.escape_html(r.room || '')}"
+                     data-room-type="${frappe.utils.escape_html(r.room_type || '')}"
+                     data-reservation="${frappe.utils.escape_html(click_reservation)}"
+                     data-quick-create="${quick_create ? '1' : '0'}"
+                     title="${frappe.utils.escape_html(tooltip)}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:18px; font-weight:700; color:#1f272e;">${r.room_number || r.room}</span>
+                        <span style="font-size:18px; font-weight:700; color:#1f272e;">${frappe.utils.escape_html(r.room_number || r.room || '')}</span>
                         <span style="background:${badge_bg}; color:#fff; font-size:9px; font-weight:600; padding:2px 6px; border-radius:10px;">${status_text}</span>
                     </div>
                     <div style="font-size:11px; color:#6c757d; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:4px;">
-                        ${r.status === 'Available' ? `<span style="color:#27ae60; font-weight:600;"><i class="fa fa-plus-circle"></i> ${__('Đặt phòng')}</span>` : (r.details || '-')}
+                        ${r.status === 'Available' ? `<span style="color:#27ae60; font-weight:600;"><i class="fa fa-plus-circle"></i> ${__('Đặt phòng')}</span>` : frappe.utils.escape_html(r.details || '-')}
                     </div>
                     <div style="font-size:10px; color:#8d99a6; text-align:right; margin-top:4px;">
-                        ${r.floor || ''}
+                        ${frappe.utils.escape_html(r.floor || '')}
                     </div>
                 </div>
             `;
@@ -490,29 +533,32 @@ function render_table_view(rooms) {
         if (r.status === 'Occupied') { badge_bg = '#f39c12'; status_text = __('Đang ở'); }
         if (r.status === 'Reserved') { badge_bg = '#2980b9'; status_text = __('Giữ chỗ'); }
         if (r.status === 'Out of Order') { badge_bg = '#e74c3c'; status_text = __('Bảo trì'); }
+        if (r.status === 'Conflict') { badge_bg = '#c0392b'; status_text = __('⚠ Trùng đặt'); }
+        if (r.status === 'Dirty') { badge_bg = '#e67e22'; status_text = __('Chưa dọn'); }
+        if (r.status === 'Cleaning') { badge_bg = '#e67e22'; status_text = __('Đang dọn'); }
 
         let action_btn = '';
         if (r.status === 'Available') {
-            action_btn = `<button class="btn btn-xs btn-primary" onclick="quick_create_reservation('${r.room}', '${r.room_type}')">
+            action_btn = `<button class="btn btn-xs btn-primary" data-room="${frappe.utils.escape_html(r.room || '')}" data-room-type="${frappe.utils.escape_html(r.room_type || '')}" data-quick-create="1">
                 <i class="fa fa-plus"></i> ${__('Đặt phòng')}
             </button>`;
         } else if (r.details) {
-            action_btn = `<button class="btn btn-xs btn-default" onclick="open_room_reservation('${r.details}')">
+            action_btn = `<button class="btn btn-xs btn-default" data-reservation="${frappe.utils.escape_html(r.reservation || '')}">
                 <i class="fa fa-eye"></i> ${__('Chi tiết')}
             </button>`;
         }
 
         html += `
             <tr>
-                <td><b>${r.room_number || r.room}</b></td>
-                <td>${r.room_type}</td>
-                <td>${r.floor || '-'}</td>
+                <td><b>${frappe.utils.escape_html(r.room_number || r.room || '')}</b></td>
+                <td>${frappe.utils.escape_html(r.room_type || '')}</td>
+                <td>${frappe.utils.escape_html(r.floor || '-')}</td>
                 <td style="text-align:center;">
                     <span style="background:${badge_bg}; color:#fff; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600;">
                         ${status_text}
                     </span>
                 </td>
-                <td><small class="text-muted">${r.details || '-'}</small></td>
+                <td><small class="text-muted">${frappe.utils.escape_html(r.details || '-')}</small></td>
                 <td style="text-align:center;">${action_btn}</td>
             </tr>
         `;
@@ -533,13 +579,15 @@ window.quick_create_reservation = function (room, room_type) {
     });
 };
 
-// Open Existing Reservation from Occupied/Reserved Room Card
-window.open_room_reservation = function (details) {
-    if (!details) return;
-    let match = details.match(/RES-[0-9]+/);
-    if (match) {
-        frappe.set_route('Form', 'Hotel Reservation', match[0]);
-    } else {
+// Open Existing Reservation from Occupied/Reserved Room Card. Takes the real
+// Hotel Reservation docname directly (server now sends it as its own
+// `reservation` field) — no longer regex-parsed out of a free-text display
+// string, which was both fragile (depended on the naming series literally
+// containing "RES-<digits>") and unsafe to interpolate into markup.
+window.open_room_reservation = function (reservation_name) {
+    if (!reservation_name) {
         frappe.set_route('List', 'Hotel Reservation');
+        return;
     }
+    frappe.set_route('Form', 'Hotel Reservation', reservation_name);
 };

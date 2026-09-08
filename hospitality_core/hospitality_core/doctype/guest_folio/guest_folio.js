@@ -230,12 +230,18 @@ frappe.ui.form.on('Folio Transaction', {
 });
 
 function move_transactions_dialog(frm) {
-    // Filter valid transactions (not void, not invoiced)
-    let valid_txns = frm.doc.transactions.filter(t => !t.is_void && !t.is_invoiced).map(t => {
-        return { label: `${t.posting_date}: ${t.description} (${t.amount})`, value: t.name }
+    // Filter valid transactions (not void, not invoiced).
+    // Frappe's MultiSelect control stores/validates the visible LABEL text itself
+    // (not a separate value), so the label must be unique per row — embed the
+    // transaction name in it and reverse-map it back on submit.
+    let label_to_name = {};
+    let option_labels = frm.doc.transactions.filter(t => !t.is_void && !t.is_invoiced).map(t => {
+        let label = `${t.posting_date}: ${t.description} (${t.amount}) [${t.name}]`;
+        label_to_name[label] = t.name;
+        return label;
     });
 
-    if (valid_txns.length === 0) {
+    if (option_labels.length === 0) {
         frappe.msgprint("No movable transactions found.");
         return;
     }
@@ -246,8 +252,8 @@ function move_transactions_dialog(frm) {
             {
                 label: 'Select Transactions',
                 fieldname: 'transactions',
-                fieldtype: 'MultiSelect', // Or Table MultiSelect depending on version
-                options: valid_txns,
+                fieldtype: 'MultiSelect',
+                options: option_labels,
                 reqd: 1,
                 description: 'Ctrl+Click to select multiple'
             },
@@ -269,10 +275,17 @@ function move_transactions_dialog(frm) {
         ],
         primary_action_label: 'Move',
         primary_action: function (values) {
-            // MultiSelect returns array of values or comma separated string
-            let txn_list = values.transactions;
-            if (typeof txn_list === 'string') {
-                txn_list = txn_list.split(',').map(s => s.trim());
+            // MultiSelect returns the selected LABELS (array or comma separated
+            // string) — resolve each back to its real Folio Transaction name.
+            let selected_labels = values.transactions;
+            if (typeof selected_labels === 'string') {
+                selected_labels = selected_labels.split(',').map(s => s.trim());
+            }
+            let txn_list = selected_labels.map(label => label_to_name[label]).filter(Boolean);
+
+            if (!txn_list.length) {
+                frappe.msgprint(__("Could not identify the selected transactions. Please try again."));
+                return;
             }
 
             frappe.call({
@@ -319,7 +332,7 @@ function void_transaction_dialog(frm) {
         let type_tag = '';
         if (t.reference_doctype === 'POS Invoice') type_tag = ' [POS]';
         else if (t.reference_doctype === 'Payment Entry') type_tag = ' [Payment]';
-        let label = `${t.posting_date} - ${t.description} (${t.amount})${type_tag}`;
+        let label = `${t.posting_date} - ${t.description} (${t.amount})${type_tag} [${t.name}]`;
         label_to_name[label] = t.name;
         return label;
     });
@@ -833,6 +846,11 @@ function split_transaction_dialog(frm) {
 }
 
 function show_vietqr_dialog(frm) {
+    if (frm.__vietqr_in_progress) {
+        frappe.msgprint(__('Một giao dịch VietQR đang chờ xác nhận. Vui lòng hoàn tất hoặc hủy trước khi mở lại.'));
+        return;
+    }
+
     if (flt(frm.doc.outstanding_balance) <= 0.01) {
         frappe.msgprint({
             title: __('Số Dư Folio'),
@@ -896,6 +914,7 @@ function show_vietqr_dialog(frm) {
                     primary_action_label: __('✔ Xác nhận Đã Nhận Tiền'),
                     primary_action: function () {
                         d.hide();
+                        frm.__vietqr_in_progress = true;
                         frappe.confirm(
                             __('Xác nhận khách đã chuyển khoản thành công số tiền <b>{0}</b> vào tài khoản ngân hàng?<br><br>Hành động này sẽ tạo <b>Payment Entry</b> và cập nhật số dư vào Folio.', [data.formatted_amount]),
                             function () {
@@ -921,6 +940,7 @@ function show_vietqr_dialog(frm) {
                                         },
                                         callback: function (res) {
                                             frappe.dom.unfreeze();
+                                            frm.__vietqr_in_progress = false;
                                             if (!res.exc) {
                                                 frappe.show_alert({
                                                     message: __('Đã ghi nhận thanh toán VietQR thành công ({0})', [data.formatted_amount]),
@@ -931,6 +951,10 @@ function show_vietqr_dialog(frm) {
                                         }
                                     });
                                 }, __('Xác Nhận Hạch Toán VietQR'), __('Lưu Thanh Toán'));
+                            },
+                            function () {
+                                // Người dùng bấm "Không" ở bước xác nhận
+                                frm.__vietqr_in_progress = false;
                             }
                         );
                     }

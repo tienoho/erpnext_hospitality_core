@@ -3,6 +3,7 @@
 
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
 	columns = get_columns()
@@ -40,6 +41,25 @@ def get_data(filters):
 
 	data = []
 
+	# Lọc theo property được phép xem — xem report_scope.py để biết lý do
+	# (frappe.db.count()/frappe.db.sql() đều là truy vấn cấp thấp, KHÔNG tự
+	# áp dụng permission_query_conditions như get_list). Payment Entry không
+	# có field "property" như các doctype của riêng app này — dùng
+	# "hospitality_property" (custom field do migrations/property_v2.py tạo).
+	allowed_properties = allowed_properties_for_report()
+	res_property_sql = ""
+	ft_property_sql = ""
+	pe_property_sql = ""
+	exp_property_sql = ""
+	property_params = ()
+	if allowed_properties is not None:
+		props = tuple(allowed_properties or [""])
+		res_property_sql = "AND property IN %s"
+		ft_property_sql = "AND ft.property IN %s"
+		pe_property_sql = "AND hospitality_property IN %s"
+		exp_property_sql = "AND property IN %s"
+		property_params = (props,)
+
 	# 1. New Check-ins
 	check_in_filters = {
 		"arrival_date": report_date,
@@ -47,6 +67,8 @@ def get_data(filters):
 	}
 	if reception:
 		check_in_filters["hotel_reception"] = reception
+	if allowed_properties is not None:
+		check_in_filters["property"] = ["in", allowed_properties or [""]]
 	check_ins = frappe.db.count("Hotel Reservation", check_in_filters)
 	
 	# Refine Check-in query: Actually status could be 'Checked In' or 'Checked Out' if they left same day, 
@@ -64,22 +86,24 @@ def get_data(filters):
 	# 2. Retained (Stay-overs)
 	# Guests who arrived BEFORE today and depart AFTER today.
 	if reception:
-		retained = frappe.db.sql("""
+		retained = frappe.db.sql(f"""
 			SELECT count(name) FROM `tabHotel Reservation`
 			WHERE
 				arrival_date < %s
 				AND departure_date > %s
 				AND hotel_reception = %s
 				AND status IN ('Checked In', 'Checked Out')
-		""", (report_date, report_date, reception))[0][0]
+				{res_property_sql}
+		""", (report_date, report_date, reception) + property_params)[0][0]
 	else:
-		retained = frappe.db.sql("""
+		retained = frappe.db.sql(f"""
 			SELECT count(name) FROM `tabHotel Reservation`
 			WHERE
 				arrival_date < %s
 				AND departure_date > %s
 				AND status IN ('Checked In', 'Checked Out')
-		""", (report_date, report_date))[0][0]
+				{res_property_sql}
+		""", (report_date, report_date) + property_params)[0][0]
 
 	data.append({
 		"metric": "Retained Guests",
@@ -94,6 +118,8 @@ def get_data(filters):
 	}
 	if reception:
 		departure_filters["hotel_reception"] = reception
+	if allowed_properties is not None:
+		departure_filters["property"] = ["in", allowed_properties or [""]]
 	top_departures = frappe.db.count("Hotel Reservation", departure_filters)
 
 	data.append({
@@ -105,7 +131,7 @@ def get_data(filters):
 	# 4. Sales Consumption
 	# Sum of Folio Transactions posted on this date, linked to guests in this reception.
 	if reception:
-		sales_consumption = frappe.db.sql("""
+		sales_consumption = frappe.db.sql(f"""
 			SELECT SUM(ft.amount)
 			FROM `tabFolio Transaction` ft
 			JOIN `tabGuest Folio` gf ON ft.parent = gf.name
@@ -115,9 +141,12 @@ def get_data(filters):
 				AND ft.is_void = 0
 				AND gf.docstatus < 2
 				AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
-		""", (report_date, reception))[0][0] or 0.0
+				AND COALESCE(ft.mirror_source, '') = ''
+				AND ft.reference_doctype != 'Folio Transaction'
+				{ft_property_sql}
+		""", (report_date, reception) + property_params)[0][0] or 0.0
 	else:
-		sales_consumption = frappe.db.sql("""
+		sales_consumption = frappe.db.sql(f"""
 			SELECT SUM(ft.amount)
 			FROM `tabFolio Transaction` ft
 			JOIN `tabGuest Folio` gf ON ft.parent = gf.name
@@ -126,7 +155,10 @@ def get_data(filters):
 				AND ft.is_void = 0
 				AND gf.docstatus < 2
 				AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
-		""", (report_date,))[0][0] or 0.0
+				AND COALESCE(ft.mirror_source, '') = ''
+				AND ft.reference_doctype != 'Folio Transaction'
+				{ft_property_sql}
+		""", (report_date,) + property_params)[0][0] or 0.0
 
 	data.append({
 		"metric": "Sales Consumption (Gross)",
@@ -163,22 +195,24 @@ def get_data(filters):
 	# 5. Payment
 	# Sum of Payment Entries for this reception on this date.
 	if reception:
-		payments = frappe.db.sql("""
+		payments = frappe.db.sql(f"""
 			SELECT SUM(paid_amount)
 			FROM `tabPayment Entry`
 			WHERE
 				posting_date = %s
 				AND hotel_reception = %s
 				AND docstatus = 1
-		""", (report_date, reception))[0][0] or 0.0
+				{pe_property_sql}
+		""", (report_date, reception) + property_params)[0][0] or 0.0
 	else:
-		payments = frappe.db.sql("""
+		payments = frappe.db.sql(f"""
 			SELECT SUM(paid_amount)
 			FROM `tabPayment Entry`
 			WHERE
 				posting_date = %s
 				AND docstatus = 1
-		""", (report_date,))[0][0] or 0.0
+				{pe_property_sql}
+		""", (report_date,) + property_params)[0][0] or 0.0
 
 	data.append({
 		"metric": "Total Payments",
@@ -194,6 +228,8 @@ def get_data(filters):
 	}
 	if reception:
 		room_filters["hotel_reception"] = reception
+	if allowed_properties is not None:
+		room_filters["property"] = ["in", allowed_properties or [""]]
 	total_rooms = frappe.db.count("Hotel Room", room_filters)
 
 	occupancy_pct = 0.0
@@ -210,24 +246,26 @@ def get_data(filters):
 
 	# 7. Expenses
 	if reception:
-		expenses_by_cat = frappe.db.sql("""
+		expenses_by_cat = frappe.db.sql(f"""
 			SELECT expense_category, SUM(grand_total) as amount
 			FROM `tabHospitality Expense`
 			WHERE
 				expense_date = %s
 				AND hotel_reception = %s
 				AND docstatus = 1
+				{exp_property_sql}
 			GROUP BY expense_category
-		""", (report_date, reception), as_dict=1)
+		""", (report_date, reception) + property_params, as_dict=1)
 	else:
-		expenses_by_cat = frappe.db.sql("""
+		expenses_by_cat = frappe.db.sql(f"""
 			SELECT expense_category, SUM(grand_total) as amount
 			FROM `tabHospitality Expense`
 			WHERE
 				expense_date = %s
 				AND docstatus = 1
+				{exp_property_sql}
 			GROUP BY expense_category
-		""", (report_date,), as_dict=1)
+		""", (report_date,) + property_params, as_dict=1)
 
 	total_expenses = sum(e.amount for e in expenses_by_cat)
 	company_currency = frappe.get_cached_value('Company', frappe.defaults.get_user_default("Company"), "default_currency")

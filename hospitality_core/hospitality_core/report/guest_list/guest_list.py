@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import nowdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 
 def execute(filters=None):
@@ -34,6 +35,11 @@ def get_data(filters):
     if filters.get("room_type"):
         conditions += " AND res.room_type = %(room_type)s"
         params["room_type"] = filters.get("room_type")
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND res.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
 
     rows = frappe.db.sql(
         """
@@ -84,6 +90,9 @@ def _get_billing_label(row):
 @frappe.whitelist(allow_guest=False)
 def print_guest_list(hotel_reception=None, room_type=None):
     """Render and return the Guest List print format as an HTML page."""
+    if not frappe.has_permission("Hotel Reservation", "read"):
+        frappe.throw(_("Not authorized to view the guest list."), frappe.PermissionError)
+
     filters = {}
     if hotel_reception:
         filters["hotel_reception"] = hotel_reception

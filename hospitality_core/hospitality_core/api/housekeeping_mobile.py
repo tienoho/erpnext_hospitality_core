@@ -1,6 +1,33 @@
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate
+from frappe.utils import flt, nowdate, now_datetime
+
+
+def log_room_status_change(room, previous_status, new_status):
+	"""
+	Ghi lại lịch sử chuyển trạng thái phòng — trước đây cả `set_room_status()`
+	(Housekeeping Board desktop) và `update_room_status()` (PWA di động) đều
+	dùng `frappe.db.set_value()` để ghi thẳng, không để lại dấu vết ai đã dọn
+	phòng nào lúc nào — không có cách nào xây báo cáo năng suất buồng phòng
+	theo nhân viên từ dữ liệu cũ. Dùng chung 1 hàm cho cả 2 luồng để tránh
+	lệch logic ghi log giữa desktop và mobile.
+	"""
+	if previous_status == new_status:
+		return
+	try:
+		frappe.get_doc({
+			"doctype": "Housekeeping Room Status Log",
+			"room": room,
+			"room_type": frappe.db.get_value("Hotel Room", room, "room_type"),
+			"previous_status": previous_status,
+			"new_status": new_status,
+			"changed_by": frappe.session.user,
+			"changed_on": now_datetime(),
+		}).insert(ignore_permissions=True)
+	except Exception:
+		# Không để lỗi ghi log làm hỏng thao tác đổi trạng thái phòng thật —
+		# đây chỉ là dữ liệu phục vụ báo cáo, không phải nghiệp vụ chính.
+		frappe.log_error(frappe.get_traceback(), "Housekeeping Room Status Log Write Error")
 
 
 @frappe.whitelist()
@@ -48,12 +75,25 @@ def update_room_status(room, status):
     if status not in valid_statuses:
         frappe.throw(_("Invalid status: {0}").format(status))
 
+    # TRƯỚC ĐÂY: thiếu khóa row so với housekeeping_view.py's set_room_status()
+    # (bản desktop) — cùng 1 fix chống race điều kiện đã áp dụng ở đó (khóa
+    # dòng Hotel Room trước khi kiểm tra "còn khách checked-in không") không
+    # được mang sang PWA mobile này — 1 đường khác dẫn tới CÙNG 1 dữ liệu mà
+    # bị bỏ sót fix. Nhân viên buồng phòng bấm "Đã dọn xong" trên điện thoại
+    # đúng lúc lễ tân check-in khách vào phòng đó: câu exists-check có thể
+    # chạy TRƯỚC KHI transaction check-in commit xong, khiến phòng bị ghi đè
+    # về "Available"/"Inspected" dù khách vừa nhận phòng thật — phòng có
+    # khách hiện ra như đang trống, có thể bị bán/gán cho khách khác.
+    frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room)
+
     if status in ("Available", "Inspected"):
         active_res = frappe.db.exists("Hotel Reservation", {"room": room, "status": "Checked In"})
         if active_res:
             status = "Occupied"
 
+    previous_status = frappe.db.get_value("Hotel Room", room, "status")
     frappe.db.set_value("Hotel Room", room, "status", status)
+    log_room_status_change(room, previous_status, status)
     return status
 
 
@@ -63,6 +103,9 @@ def log_minibar_consumption(room, items):
     Posts minibar consumption directly onto the guest's open Folio for the
     given room. `items` is a list of {item, qty, amount}.
     """
+    if not frappe.has_permission("Guest Folio", "write"):
+        frappe.throw(_("Not authorized to post minibar charges."), frappe.PermissionError)
+
     if isinstance(items, str):
         import json
         items = json.loads(items)
@@ -115,6 +158,9 @@ def log_minibar_consumption(room, items):
 
 @frappe.whitelist()
 def create_lost_and_found_report(item_name, found_location, finder=None):
+    if not frappe.has_permission("Lost and Found Item", "create"):
+        frappe.throw(_("Not authorized to log a Lost and Found report"), frappe.PermissionError)
+
     doc = frappe.get_doc({
         "doctype": "Lost and Found Item",
         "item_name": item_name,
@@ -129,6 +175,9 @@ def create_lost_and_found_report(item_name, found_location, finder=None):
 
 @frappe.whitelist()
 def report_maintenance_issue(room, issue_type, description, image=None):
+    if not frappe.has_permission("Hotel Maintenance Request", "create"):
+        frappe.throw(_("Not authorized to report a maintenance issue"), frappe.PermissionError)
+
     doc = frappe.get_doc({
         "doctype": "Hotel Maintenance Request",
         "room": room,

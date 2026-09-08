@@ -1,0 +1,82 @@
+{
+ "doctype": "DocType",
+ "name": "Guest Interaction",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "guest",
+  "property",
+  "reservation",
+  "subject",
+  "details",
+  "assigned_to",
+  "status"
+ ],
+ "fields": [
+  {
+   "fieldname": "guest",
+   "label": "Guest",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest"
+  },
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "reservation",
+   "label": "Reservation",
+   "fieldtype": "Link",
+   "options": "Hotel Reservation"
+  },
+  {
+   "fieldname": "subject",
+   "label": "Subject",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "details",
+   "label": "Details",
+   "fieldtype": "Text"
+  },
+  {
+   "fieldname": "assigned_to",
+   "label": "Assigned To",
+   "fieldtype": "Link",
+   "options": "User"
+  },
+  {
+   "fieldname": "status",
+   "label": "Status",
+   "fieldtype": "Select",
+   "default": "Open",
+   "options": "Open\nIn Progress\nResolved"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ]
+}

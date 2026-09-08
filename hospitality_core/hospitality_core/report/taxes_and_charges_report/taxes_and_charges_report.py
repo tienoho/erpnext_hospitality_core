@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     columns = get_columns()
@@ -83,25 +84,36 @@ def get_data(filters):
         return []
 
     conditions = []
+    params = list(tax_accounts)
     if filters.get("from_date"):
-        conditions.append(f"posting_date >= '{filters.get('from_date')}'")
+        conditions.append("posting_date >= %s")
+        params.append(filters.get("from_date"))
     if filters.get("to_date"):
-        conditions.append(f"posting_date <= '{filters.get('to_date')}'")
-    
+        conditions.append("posting_date <= %s")
+        params.append(filters.get("to_date"))
+
+    # GL Entry nhận field hospitality_property qua cơ chế Accounting Dimension
+    # (make_dimension_in_accounting_doctypes, migrations/property_v2.py) —
+    # KHÔNG phải "không có cách nào lọc" như đánh giá ban đầu.
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions.append("hospitality_property IN %s")
+        params.append(tuple(allowed_properties or [""]))
+
     where_clause = " AND ".join(conditions) if conditions else "1=1"
 
     gl_entries = frappe.db.sql(f"""
-        SELECT 
+        SELECT
             posting_date, voucher_type, voucher_no, remarks, account, credit, debit
-        FROM 
+        FROM
             `tabGL Entry`
-        WHERE 
+        WHERE
             account IN ({', '.join(['%s']*len(tax_accounts))})
             AND {where_clause}
             AND is_cancelled = 0
-        ORDER BY 
+        ORDER BY
             posting_date DESC, voucher_no DESC
-    """, tuple(tax_accounts), as_dict=1)
+    """, tuple(params), as_dict=1)
 
     data = []
     

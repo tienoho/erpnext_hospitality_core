@@ -5,6 +5,13 @@ from frappe.utils import flt
 
 class HospitalityExpense(Document):
 	def validate(self):
+		# TRƯỚC ĐÂY: không kiểm tra dấu của amount — 1 chi phí ÂM (gõ nhầm dấu
+		# trừ, hoặc cố ý) sẽ đi thẳng qua create_expense_gl_entries() và làm
+		# LỆCH các biểu đồ Doanh thu-Chi phí/Biên lợi nhuận gộp/Phân tích chi
+		# phí trên dashboard (dashboard_data.py) theo hướng thổi phồng lợi
+		# nhuận một cách âm thầm, không có cảnh báo nào.
+		if flt(self.amount) < 0:
+			frappe.throw(_("Số tiền chi phí (Amount) không thể là số âm."))
 		self.set_account_details()
 		self.calculate_taxes()
 		self.calculate_totals()

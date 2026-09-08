@@ -32,12 +32,30 @@ def process_composite_items_in_invoice(doc, method=None):
 	# Get composite items from invoice
 	composite_items = []
 	for item in doc.items:
-		if frappe.db.get_value("Item", item.item_code, "is_composite_item"):
-			composite_items.append(item)
-	
+		item_flags = frappe.db.get_value("Item", item.item_code, ["is_composite_item", "is_stock_item"], as_dict=True)
+		if not item_flags or not item_flags.is_composite_item:
+			continue
+		if item_flags.is_stock_item and not is_cancel:
+			# TRƯỚC ĐÂY: không kiểm tra is_stock_item — 1 Item vừa
+			# is_composite_item=1 vừa is_stock_item=1 (checkbox
+			# "is_stock_item==0" trên form chỉ là gợi ý ẩn/hiện phía client,
+			# KHÔNG chặn được ở server — bulk edit/Data Import/API vẫn có
+			# thể tạo ra tổ hợp này) sẽ bị trừ kho HAI LẦN cho cùng 1 lần
+			# bán: 1 lần chính nó qua Stock Ledger chuẩn (ERPNext core tự
+			# làm lúc on_submit() vì stock.py's enable_stock_update_for_pos_invoice
+			# đã set update_stock=1 từ before_validate), 1 lần nữa qua
+			# nguyên liệu composite ở đây — âm thầm lệch tồn kho không ai
+			# phát hiện. Chặn rõ ràng thay vì âm thầm trừ trùng.
+			frappe.throw(_(
+				"Item {0} được đánh dấu VỪA LÀ composite item VỪA LÀ stock item — sẽ bị trừ kho HAI LẦN mỗi "
+				"lần bán (1 lần chính nó, 1 lần qua nguyên liệu composite). Composite item phải có Is Stock "
+				"Item = 0. Vui lòng sửa Item Master trước khi xuất hóa đơn."
+			).format(item.item_code))
+		composite_items.append(item)
+
 	if not composite_items:
 		return
-	
+
 	# Process each composite item
 	for item in composite_items:
 		try:
@@ -52,6 +70,7 @@ def process_composite_items_in_invoice(doc, method=None):
 					warehouse=item.warehouse,
 					invoice_ref=doc.name,
 					invoice_type=doc.doctype,
+					company=doc.company,
 					posting_date=doc.posting_date,
 					posting_time=doc.posting_time
 				)
@@ -80,29 +99,45 @@ def is_consolidated_pos_sales_invoice(doc):
 	return any(item.get("pos_invoice") for item in doc.get("items", []))
 
 
-def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref, 
-										 invoice_type, posting_date=None, posting_time=None):
+def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref,
+										 invoice_type, company=None, posting_date=None, posting_time=None):
 	"""
 	Create Stock Entry for consuming ingredients based on BOM.
-	
+
 	Args:
 		item_code: Composite item code
 		qty: Quantity of composite item sold
 		warehouse: Warehouse to deduct from
 		invoice_ref: Reference to invoice for tracking
 		invoice_type: Type of invoice (POS Invoice or Sales Invoice)
+		company: Company of the invoice being processed
 		posting_date: Date of posting
 		posting_time: Time of posting
-	
+
 	Returns:
 		Stock Entry document
 	"""
+	# TRƯỚC ĐÂY: không có guard nào chống chạy trùng — nếu hook on_submit vô
+	# tình chạy 2 lần cho cùng hóa đơn/dòng item (retry job nền, hoặc code
+	# khác vô tình gọi lại doc.run_method("on_submit")), nguyên liệu bị trừ
+	# kho 2 LẦN cho 1 lần bán thật, không có lỗi/cảnh báo nào. Kiểm tra đã có
+	# Stock Entry hợp lệ (chưa hủy) cho đúng (invoice_ref, item_code) này
+	# chưa trước khi tạo mới — reverse_ingredient_consumption() đã dùng đúng
+	# 2 field này để tìm & hủy, nên dùng lại y hệt filter ở đây cho nhất quán.
+	existing = frappe.get_all("Stock Entry", filters={
+		"custom_source_invoice": invoice_ref,
+		"custom_composite_item": item_code,
+		"docstatus": 1
+	}, pluck="name")
+	if existing:
+		return frappe.get_doc("Stock Entry", existing[0])
+
 	# Handle returns (negative quantity)
 	is_return = qty < 0
 	abs_qty = abs(qty)
-	
-	# Get the recipe (BOM)
-	bom = get_active_bom(item_code)
+
+	# Get the recipe (BOM) — đúng company của hóa đơn đang xử lý
+	bom = get_active_bom(item_code, company)
 	if not bom:
 		frappe.throw(_("No active recipe found for item {0}").format(item_code))
 	
@@ -114,14 +149,22 @@ def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref,
 	
 	# Create Stock Entry
 	stock_entry = frappe.new_doc("Stock Entry")
-	stock_entry.company = frappe.defaults.get_defaults().get("company")
+	# TRƯỚC ĐÂY: luôn dùng company mặc định TOÀN CỤC của user hiện tại thay
+	# vì company của CHÍNH hóa đơn — với 1 công ty duy nhất trên site hiện
+	# tại thì luôn khớp nhau nên không lộ ra, nhưng ngay khi 1 property có
+	# operating_company KHÁC company mặc định toàn cục (Property v2), Stock
+	# Entry sẽ mang company SAI so với warehouse của nó (warehouse thuộc
+	# company của hóa đơn) — ERPNext core sẽ từ chối lưu do company không
+	# khớp warehouse, khiến MỌI hóa đơn có composite item ở property đó thất
+	# bại ngay khi submit.
+	stock_entry.company = company or frappe.defaults.get_defaults().get("company")
 	
 	if is_return:
 		stock_entry.stock_entry_type = "Material Receipt"
 		stock_entry.purpose = "Material Receipt"
 	else:
 		# Only validate availability if we are consuming
-		validate_ingredient_availability(ingredients, warehouse)
+		validate_ingredient_availability(ingredients, warehouse, posting_date, posting_time)
 		stock_entry.stock_entry_type = "Material Consumption for Manufacture"
 		stock_entry.purpose = "Material Consumption for Manufacture"
 	
@@ -178,7 +221,11 @@ def reverse_ingredient_consumption(invoice_doc, item):
 		pluck="name"
 	)
 	
-	# Cancel all related stock entries
+	# Cancel all related stock entries. Re-raise (after logging) instead of
+	# swallowing the error, so the caller's existing handler blocks the POS
+	# Invoice cancellation the same way it already blocks a failed submit —
+	# otherwise the invoice/folio charge gets reversed while the ingredient
+	# stock silently stays consumed, with no visible error anywhere.
 	for entry_name in stock_entries:
 		try:
 			stock_entry = frappe.get_doc("Stock Entry", entry_name)
@@ -188,36 +235,73 @@ def reverse_ingredient_consumption(invoice_doc, item):
 				message=f"Error cancelling stock entry {entry_name}: {str(e)}",
 				title="Stock Entry Cancellation Error"
 			)
+			raise
 
 
-def get_active_bom(item_code):
+def get_active_bom(item_code, company=None):
 	"""
-	Get the active BOM for a composite item.
-	
+	Get the active BOM for a composite item, matching `company` when given.
+
+	TRƯỚC ĐÂY: luôn trả về ĐÚNG 1 BOM (Item Recipe.bom hoặc default_bom),
+	bất kể company nào đang xử lý hóa đơn — an toàn khi site chỉ có 1
+	company, nhưng khi 2 property thuộc 2 company KHÁC NHAU cùng bán 1
+	composite item, BOM mặc định (thuộc company A) bị dùng nhầm cho hóa đơn
+	của company B — ERPNext sẽ từ chối Stock Entry vì company không khớp
+	company của warehouse. BOM đã có sẵn field `company` (không cần thêm
+	field mới) — tra trực tiếp theo (item, company); nếu company đó CHƯA có
+	BOM riêng, tự tạo 1 bản sao từ đúng công thức nguyên liệu của Item
+	Recipe (không tự bịa công thức khác).
+
 	Args:
 		item_code: Item code
-		
+		company: Company of the invoice being processed (None = hành vi cũ,
+			dùng cho các nơi gọi không có ngữ cảnh company, VD
+			get_available_to_make()).
+
 	Returns:
 		BOM name or None
 	"""
+	if company:
+		existing = frappe.db.get_value(
+			"BOM",
+			filters={"item": item_code, "company": company, "is_active": 1, "docstatus": 1},
+			fieldname="name",
+			order_by="creation desc"
+		)
+		if existing:
+			return existing
+
 	# Try to get from Item Recipe first
 	recipe = frappe.db.get_value("Item Recipe", item_code, "bom")
 	if recipe:
-		return recipe
-	
+		if not company:
+			return recipe
+		recipe_company = frappe.db.get_value("BOM", recipe, "company")
+		if recipe_company == company:
+			return recipe
+		# BOM mặc định của Item Recipe thuộc CÔNG TY KHÁC — tự tạo bản sao
+		# đúng company này từ cùng công thức nguyên liệu, thay vì dùng nhầm
+		# BOM sai company (hoặc bỏ cuộc, chặn đứng cả hóa đơn).
+		recipe_doc = frappe.get_doc("Item Recipe", item_code)
+		return recipe_doc.create_bom(company=company)
+
 	# Fallback to default BOM from Item
 	bom = frappe.db.get_value("Item", item_code, "default_bom")
 	if bom:
-		return bom
-	
-	# Find any active BOM for this item
+		if not company or frappe.db.get_value("BOM", bom, "company") == company:
+			return bom
+
+	# Find any active BOM for this item (matching company if given)
+	bom_filters = {"item": item_code, "is_active": 1, "docstatus": 1}
+	if company:
+		bom_filters["company"] = company
 	bom = frappe.db.get_value(
 		"BOM",
-		filters={"item": item_code, "is_active": 1, "docstatus": 1},
+		filters=bom_filters,
 		fieldname="name",
 		order_by="creation desc"
 	)
-	
+
 	return bom
 
 
@@ -251,21 +335,27 @@ def get_bom_ingredients(bom_name, qty_multiplier):
 	return ingredients
 
 
-def validate_ingredient_availability(ingredients, warehouse):
+def validate_ingredient_availability(ingredients, warehouse, posting_date=None, posting_time=None):
 	"""
 	Validate that sufficient ingredients exist before sale.
-	
+
 	Args:
 		ingredients: List of ingredient dicts
 		warehouse: Warehouse to check
-		
+		posting_date/posting_time: thời điểm của hóa đơn đang xử lý — TRƯỚC
+			ĐÂY không truyền, get_stock_balance() mặc định lấy tồn kho tại
+			THỜI ĐIỂM HIỆN TẠI (nowdate()/nowtime()) bất kể hóa đơn ghi lùi
+			ngày (posting_date trong quá khứ) hay không, có thể duyệt nhầm
+			1 hóa đơn ghi lùi ngày dựa trên tồn kho SAU NÀY (đã được nhập
+			thêm) thay vì tồn kho THẬT tại đúng thời điểm hóa đơn đó.
+
 	Raises:
 		frappe.ValidationError if insufficient stock
 	"""
 	insufficient_items = []
-	
+
 	for ingredient in ingredients:
-		available_qty = get_available_qty(ingredient["item_code"], warehouse)
+		available_qty = get_available_qty(ingredient["item_code"], warehouse, posting_date, posting_time)
 		
 		if available_qty < ingredient["qty"]:
 			insufficient_items.append({
@@ -286,20 +376,25 @@ def validate_ingredient_availability(ingredients, warehouse):
 		frappe.throw(error_msg, title=_("Insufficient Stock"))
 
 
-def get_available_qty(item_code, warehouse):
+def get_available_qty(item_code, warehouse, posting_date=None, posting_time=None):
 	"""
 	Get available quantity of an item in warehouse.
-	
+
 	Args:
 		item_code: Item code
 		warehouse: Warehouse name
-		
+		posting_date/posting_time: nếu bỏ trống, get_stock_balance() mặc
+			định lấy tồn kho tại THỜI ĐIỂM HIỆN TẠI — chỉ truyền khi cần
+			tồn kho đúng tại 1 thời điểm cụ thể trong quá khứ (hóa đơn ghi
+			lùi ngày), KHÔNG truyền cho các mục đích kiểm tra "còn bao
+			nhiêu NGAY BÂY GIỜ" (VD get_available_to_make()).
+
 	Returns:
 		Float: Available quantity
 	"""
 	from erpnext.stock.utils import get_stock_balance
-	
-	return get_stock_balance(item_code, warehouse)
+
+	return get_stock_balance(item_code, warehouse, posting_date, posting_time)
 
 
 @frappe.whitelist()
@@ -315,6 +410,9 @@ def get_available_to_make(item_code, warehouse=None):
 	Returns:
 		Dict with quantity and details
 	"""
+	if not frappe.has_permission("Item", "read", doc=item_code):
+		frappe.throw(_("Không có quyền xem thông tin Item {0}.").format(item_code), frappe.PermissionError)
+
 	# Check if item is composite
 	is_composite = frappe.db.get_value("Item", item_code, "is_composite_item")
 	if not is_composite:

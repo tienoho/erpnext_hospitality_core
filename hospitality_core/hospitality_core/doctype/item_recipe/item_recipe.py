@@ -32,6 +32,28 @@ class ItemRecipe(Document):
 		# Check for circular reference (item cannot be its own ingredient)
 		if self.item in ingredient_items:
 			frappe.throw(_("Item {0} cannot be an ingredient of itself").format(self.item))
+
+		self.validate_no_transitive_circular_reference(ingredient_items)
+
+	def validate_no_transitive_circular_reference(self, ingredient_items):
+		"""Walk each ingredient's own recipe (if any) to catch multi-hop cycles,
+		e.g. A's recipe uses B, and B's recipe uses A back."""
+		visited = set()
+		stack = list(ingredient_items)
+		while stack:
+			current = stack.pop()
+			if current == self.item:
+				frappe.throw(_("Circular recipe reference detected: {0} indirectly includes itself as an ingredient").format(self.item))
+			if current in visited:
+				continue
+			visited.add(current)
+			sub_recipe = frappe.db.get_value("Item Recipe", {"item": current}, "name")
+			if sub_recipe:
+				stack.extend(
+					d.ingredient_item for d in frappe.get_all(
+						"Recipe Ingredient", filters={"parent": sub_recipe}, fields=["ingredient_item"]
+					)
+				)
 	
 	def calculate_stock_quantities(self):
 		"""Calculate stock quantities for ingredients"""
@@ -78,17 +100,48 @@ class ItemRecipe(Document):
 		else:
 			# Create new BOM
 			self.create_bom()
-	
-	def create_bom(self):
-		"""Create a new BOM for this recipe"""
+
+	def create_bom(self, company=None):
+		"""
+		Create a new BOM for this recipe.
+
+		TRƯỚC ĐÂY: luôn dùng company MẶC ĐỊNH TOÀN CỤC — an toàn khi site chỉ
+		có 1 company, nhưng 1 BOM DUY NHẤT không thể phục vụ đúng nhiều
+		company cùng bán 1 composite item (BOM thuộc ĐÚNG 1 company theo
+		thiết kế gốc của ERPNext). `company` giờ có thể truyền vào để tạo
+		BOM cho 1 company CỤ THỂ (dùng bởi composite_item_utils.py's
+		get_active_bom() khi công ty của hóa đơn khác company của BOM mặc
+		định) — chỉ cập nhật self.bom (BOM "mặc định" hiển thị trên form)
+		khi tạo cho company mặc định ban đầu, không ghi đè khi tạo bản sao
+		cho company khác.
+		"""
+		default_company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value("Company", {}, "name")
+		target_company = company or default_company
+
 		bom = frappe.new_doc("BOM")
 		bom.item = self.item
 		bom.quantity = self.quantity
 		bom.uom = self.uom
 		bom.is_active = self.is_active
-		bom.is_default = 1
-		bom.company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value("Global Defaults", "default_company") or frappe.db.get_value("Company", {}, "name")
-		
+		# Chỉ đặt is_default=1 cho BOM của company MẶC ĐỊNH (không xác minh
+		# được liệu ERPNext tự giới hạn "mặc định duy nhất" theo (item,
+		# company) hay chỉ theo item — nếu là vế sau, tạo thêm 1 BOM
+		# is_default=1 cho company khác có thể vô tình đổi Item.default_bom/
+		# is_default của BOM company gốc, ảnh hưởng các luồng khác không
+		# liên quan (VD get_available_to_make() gọi không kèm company).
+		# get_active_bom() tự tra theo (item, company) trực tiếp, không dựa
+		# vào is_default, nên không cần field này = 1 cho bản sao company
+		# khác vẫn hoạt động đúng.
+		bom.is_default = 1 if target_company == default_company else 0
+		bom.company = target_company
+		# TRƯỚC ĐÂY: không set currency tường minh — BOM.currency là field
+		# bắt buộc nhưng Frappe chỉ tự điền từ default TOÀN SITE (Global
+		# Defaults.default_currency, gắn với company MẶC ĐỊNH), không phải
+		# theo company của CHÍNH BOM này. Với BOM tạo cho company KHÁC
+		# company mặc định (dùng tiền tệ khác), BOM sẽ âm thầm mang SAI tiền
+		# tệ (theo company mặc định) thay vì tiền tệ thật của company đó.
+		bom.currency = frappe.get_cached_value('Company', target_company, 'default_currency')
+
 		# Add ingredients as BOM items
 		for ingredient in self.ingredients:
 			bom.append("items", {
@@ -99,12 +152,35 @@ class ItemRecipe(Document):
 				"stock_uom": ingredient.stock_uom,
 				"rate": frappe.db.get_value("Item", ingredient.ingredient_item, "valuation_rate") or 0
 			})
-		
+
 		bom.insert(ignore_permissions=True)
 		bom.submit()
-		
-		# Store BOM reference
-		self.db_set("bom", bom.name, update_modified=False)
+
+		# TRƯỚC ĐÂY: tin rằng is_default=0 lúc insert là đủ để tránh
+		# manage_default_bom() promote nhầm — đọc trực tiếp
+		# erpnext/manufacturing/doctype/bom/bom.py xác nhận có 1 khe hẹp:
+		# nếu tại thời điểm CHÍNH XÁC lúc submit, item này KHÔNG CÒN bất kỳ
+		# BOM active+submitted nào khác (VD đang giữa lúc update_bom() hủy
+		# BOM cũ để tạo bản mới), manage_default_bom() sẽ TỰ ĐỘNG promote
+		# BOM company khác này thành is_default=1 VÀ ghi đè Item.default_bom
+		# — bất kể company nào. Kiểm tra lại NGAY SAU submit; nếu lỡ bị
+		# promote sai company, tự sửa lại thay vì để sai âm thầm.
+		if target_company != default_company:
+			bom.reload()
+			if bom.is_default:
+				frappe.db.set_value('BOM', bom.name, 'is_default', 0)
+				default_bom_for_item = frappe.get_all('BOM',
+					filters={'item': self.item, 'company': default_company, 'is_active': 1, 'docstatus': 1},
+					order_by='creation desc', limit=1, pluck='name')
+				frappe.db.set_value('Item', self.item, 'default_bom', default_bom_for_item[0] if default_bom_for_item else None)
+
+		# Store BOM reference — chỉ khi đây là BOM cho company mặc định (BOM
+		# "chính" hiển thị trên form Item Recipe); BOM tạo riêng cho company
+		# khác được tra cứu trực tiếp qua BOM.item+BOM.company, không cần
+		# lưu thêm field nào trên Item Recipe.
+		if not company or company == default_company:
+			self.db_set("bom", bom.name, update_modified=False)
+		return bom.name
 	
 	def update_bom(self):
 		"""Update existing BOM"""

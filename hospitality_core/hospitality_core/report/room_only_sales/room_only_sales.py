@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 
 def execute(filters=None):
@@ -43,6 +44,11 @@ def get_data(filters):
 		conditions.append("res.hotel_reception = %(hotel_reception)s")
 		params["hotel_reception"] = filters.get("hotel_reception")
 
+	allowed_properties = allowed_properties_for_report()
+	if allowed_properties is not None:
+		conditions.append("res.property IN %(_properties)s")
+		params["_properties"] = allowed_properties or [""]
+
 	where_clause = (" AND " + " AND ".join(conditions)) if conditions else ""
 
 	rows = frappe.db.sql(
@@ -54,7 +60,7 @@ def get_data(filters):
 			res.name AS reservation,
 			res.folio,
 			SUM(CASE WHEN ft.item = 'ROOM-RENT' AND ft.amount > 0 THEN ft.amount ELSE 0 END) AS room_rent,
-			ABS(SUM(CASE WHEN ft.item IN ('DISCOUNT', 'COMPLIMENTARY') AND ft.amount < 0 THEN ft.amount ELSE 0 END)) AS discount
+			-SUM(CASE WHEN ft.item IN ('DISCOUNT', 'COMPLIMENTARY') THEN ft.amount ELSE 0 END) AS discount
 		FROM `tabHotel Reservation` res
 		INNER JOIN `tabGuest Folio` gf ON gf.name = res.folio
 		INNER JOIN `tabFolio Transaction` ft ON ft.parent = gf.name
@@ -62,6 +68,15 @@ def get_data(filters):
 		WHERE
 			ft.is_void = 0
 			AND ft.item IN ('ROOM-RENT', 'DISCOUNT', 'COMPLIMENTARY')
+			AND COALESCE(ft.mirror_source, '') = ''
+			AND ft.reference_doctype != 'Folio Transaction'
+			-- Loại "Master Payer Reservation" của đặt đoàn (luôn neo vào 1
+			-- Hotel Room loại 'Virtual', xem hotel_group_booking.py's
+			-- create_master_payer_reservation()) — vì báo cáo này JOIN THẲNG
+			-- từ Hotel Reservation qua res.folio, dòng "ảo" này CŨNG có
+			-- res.folio trỏ tới Master Folio của đoàn, nên các giao dịch đã
+			-- mirror sang đó sẽ bị tính lần 2 dưới tên phòng ảo nếu không loại.
+			AND res.room_type != 'Virtual'
 			{where_clause}
 		GROUP BY
 			res.name, res.room, res.room_type, g.full_name, res.guest, res.folio

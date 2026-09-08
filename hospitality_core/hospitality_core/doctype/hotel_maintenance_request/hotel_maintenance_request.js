@@ -1,6 +1,6 @@
 frappe.ui.form.on('Hotel Maintenance Request', {
     refresh: function (frm) {
-        if (frm.doc.status !== 'Cancelled') {
+        if (frm.doc.status !== 'Cancelled' && !frm.is_new()) {
             frm.add_custom_button(__('Log Expense'), function () {
                 frappe.model.with_doctype('Hospitality Expense', function () {
                     let expense = frappe.model.get_new_doc('Hospitality Expense');

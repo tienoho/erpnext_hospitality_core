@@ -29,6 +29,8 @@ function render_housekeeping_board(wrapper) {
                     else if (room.status === 'Occupied') card_color = 'border-primary';
                     else if (room.status === 'Available') card_color = 'border-success'; // Clean
                     else if (room.status === 'Out of Order') card_color = 'border-secondary';
+                    else if (room.status === 'Cleaning') card_color = 'border-warning';
+                    else if (room.status === 'Inspected') card_color = 'border-info';
 
                     let html = `
                     <div class="col-xs-6 col-sm-4 col-md-3 col-lg-2" style="padding: 10px;">
@@ -60,6 +62,11 @@ function get_action_buttons(room) {
     } else if (room.status === 'Occupied') {
         // Allow marking occupied rooms as dirty (for daily service)
         return `<button class="btn btn-warning btn-xs btn-block" onclick="update_room_status('${room.name}', 'Dirty')">Mark Dirty</button>`;
+    } else if (room.status === 'Cleaning' || room.status === 'Inspected') {
+        // Housekeeping Mobile drives rooms through Dirty -> Cleaning -> Inspected
+        // -> Available; without this branch a room stuck at either intermediate
+        // step showed "Locked" with no way to progress or correct it here.
+        return `<button class="btn btn-success btn-xs btn-block" onclick="update_room_status('${room.name}', 'Available')">Mark Clean</button>`;
     } else {
         return `<small class="text-muted">Locked</small>`;
     }

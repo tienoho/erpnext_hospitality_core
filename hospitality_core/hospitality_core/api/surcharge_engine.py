@@ -56,15 +56,10 @@ def get_surcharge_rules():
     }
 
 
-def _get_base_room_rate(res):
-    """
-    Tái sử dụng hàm get_rate() của night_audit để lấy giá phòng theo ngày.
-    """
-    from hospitality_core.hospitality_core.api.night_audit import get_rate
-    rate_plan = res.rate_plan
-    room_type = res.room_type
-    date = res.arrival_date or nowdate()
-    return flt(get_rate(rate_plan, room_type, date))
+def _get_base_room_rate(res, target_date=None):
+    """Phụ thu tính trên giá trước LOS của ngày phát sinh, theo căn cứ giá đã lưu."""
+    from hospitality_core.hospitality_core.api.rate_plan import quote_reservation
+    return quote_reservation(res, target_date or nowdate(), apply_los=False, apply_manual=False)['base_rate']
 
 
 @frappe.whitelist()
@@ -73,6 +68,7 @@ def calculate_checkin_surcharge(reservation_name, checkin_time=None):
     Tính phụ thu nhận phòng sớm (Early Check-in) theo cấu hình động.
     """
     res = frappe.get_doc("Hotel Reservation", reservation_name)
+    res.check_permission("read")
     conf = _get_surcharge_settings()
 
     if not checkin_time:
@@ -125,6 +121,7 @@ def calculate_checkout_surcharge(reservation_name, checkout_time=None):
     Tính phụ thu trả phòng muộn (Late Check-out) theo cấu hình động.
     """
     res = frappe.get_doc("Hotel Reservation", reservation_name)
+    res.check_permission("read")
     conf = _get_surcharge_settings()
 
     if not checkout_time:
@@ -172,15 +169,30 @@ def calculate_checkout_surcharge(reservation_name, checkout_time=None):
 
 
 @frappe.whitelist()
-def apply_surcharge_to_folio(reservation_name, surcharge_type, amount, description=None):
+def apply_surcharge_to_folio(reservation_name, surcharge_type, amount=None, description=None):
     """
     Ghi nhận phụ thu vào Guest Folio tương ứng thông qua Folio Transaction.
+    Số tiền luôn được tính lại ở server theo thời điểm áp dụng thực tế — tham số
+    `amount` do client gửi (nếu có) chỉ được dùng để đối chiếu cảnh báo, không
+    được tin tưởng trực tiếp, để tránh phụ thu bị lệch tier hoặc bị giả mạo.
     """
     res = frappe.get_doc("Hotel Reservation", reservation_name)
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — hàm này GHI TIỀN THẬT vào Folio bất
+    # kỳ đặt phòng nào, bất kỳ user đã đăng nhập nào cũng gọi được (dù insert
+    # dùng ignore_permissions=True bên dưới, hàm không hề tự kiểm tra trước).
+    res.check_permission("write")
     if not res.folio:
         frappe.throw(_("Đặt phòng này chưa có Guest Folio."))
 
-    fee = flt(amount)
+    if surcharge_type == "Early Check-in":
+        calc = calculate_checkin_surcharge(reservation_name)
+    else:
+        calc = calculate_checkout_surcharge(reservation_name)
+
+    if not calc.get("applicable"):
+        frappe.throw(calc.get("reason") or _("Không áp dụng phụ thu tại thời điểm hiện tại."))
+
+    fee = flt(calc.get("amount"))
     if fee <= 0:
         return {"success": False, "message": _("Số tiền phụ thu phải lớn hơn 0.")}
 
@@ -190,6 +202,27 @@ def apply_surcharge_to_folio(reservation_name, surcharge_type, amount, descripti
     item_code = "SURCHARGE-EARLY" if surcharge_type == "Early Check-in" else "SURCHARGE-LATE"
     if not description:
         description = f"Phụ thu {surcharge_type} phòng {res.room}"
+
+    # Chốt chặn trùng lặp: chỉ mirror_to_company_folio()/mirror_to_group_folio()
+    # trong folio.py có kiểm tra "đã ghi chưa", còn hàm này thì không — nếu
+    # frm.call('check_in_guest') phía client bị lỗi mạng SAU KHI
+    # apply_surcharge_to_folio() đã thành công, người dùng gọi lại toàn bộ quy
+    # trình (dialog phụ thu hiện lại) sẽ ghi phụ thu này một lần nữa.
+    existing = frappe.db.exists("Folio Transaction", {
+        "parent": res.folio,
+        "item": item_code,
+        "is_void": 0
+    })
+    if existing:
+        return {
+            "success": True,
+            "folio": res.folio,
+            "transaction": existing,
+            "amount": fee,
+            "message": _("Phụ thu {0} đã được ghi nhận trước đó vào Folio {1} (giao dịch {2}), không tạo lại.").format(
+                surcharge_type, res.folio, existing
+            )
+        }
 
     txn = frappe.get_doc({
         "doctype": "Folio Transaction",
@@ -204,9 +237,18 @@ def apply_surcharge_to_folio(reservation_name, surcharge_type, amount, descripti
         "bill_to": "Guest",
         "is_void": 0
     })
+    # flags.hospitality_service=True — TRƯỚC ĐÂY thiếu: property_scope.py's
+    # validate_document() bắt buộc 1 trong 3 flag nguồn gốc
+    # (hospitality_service/from_rate_plan/from_folio_mirror) cho MỌI Folio
+    # Transaction của folio đã cutover Property v2, nếu không sẽ throw. Thiếu
+    # flag này nghĩa là TOÀN BỘ tính năng phụ thu check-in sớm/check-out muộn
+    # sẽ ngừng hoạt động hoàn toàn (throw ngay) ngay khi property đầu tiên
+    # kích hoạt Property v2 — không phải lỗi tính sai, mà là TÍNH NĂNG CHẾT
+    # HẲN.
+    txn.flags.hospitality_service = True
     txn.insert(ignore_permissions=True)
 
-    sync_folio_balance(res.folio)
+    sync_folio_balance(frappe.get_doc("Guest Folio", res.folio))
 
     return {
         "success": True,

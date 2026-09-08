@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import add_days, flt, getdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 # ─── Protein item name keywords (case-insensitive LIKE match) ─────────────────
 PROTEIN_KEYWORDS = ["Goatmeat", "Catfish", "Turkey", "Chicken", "Beef"]
@@ -27,27 +28,28 @@ def execute(filters=None):
 
     date = filters["date"]
     closing_entry_names = _get_closing_entry_names(date)
+    allowed_properties = allowed_properties_for_report()
 
     # ── 1. Accommodation ──────────────────────────────────────────────────────
     accommodation = _get_room_rent_total(date)
 
     # ── 2–10. POS Item category sales ─────────────────────────────────────────
-    drinks            = _get_item_group_total(closing_entry_names, DRINKS_GROUP)
-    food_no_protein   = _get_food_without_proteins(closing_entry_names)
-    goatmeat          = _get_protein_total(closing_entry_names, "Goatmeat")
-    catfish           = _get_protein_total(closing_entry_names, "Catfish")
-    turkey            = _get_protein_total(closing_entry_names, "Turkey")
-    chicken           = _get_protein_total(closing_entry_names, "Chicken")
-    beef              = _get_protein_total(closing_entry_names, "Beef")
+    drinks            = _get_item_group_total(closing_entry_names, DRINKS_GROUP, allowed_properties)
+    food_no_protein   = _get_food_without_proteins(closing_entry_names, allowed_properties)
+    goatmeat          = _get_protein_total(closing_entry_names, "Goatmeat", allowed_properties)
+    catfish           = _get_protein_total(closing_entry_names, "Catfish", allowed_properties)
+    turkey            = _get_protein_total(closing_entry_names, "Turkey", allowed_properties)
+    chicken           = _get_protein_total(closing_entry_names, "Chicken", allowed_properties)
+    beef              = _get_protein_total(closing_entry_names, "Beef", allowed_properties)
     total_proteins    = goatmeat + catfish + turkey + chicken + beef
     food_with_protein = food_no_protein + total_proteins
 
     # ── 11–15. Other POS categories ───────────────────────────────────────────
-    gym               = _get_item_group_total(closing_entry_names, GYM_GROUP)
-    laundry           = _get_item_group_total(closing_entry_names, LAUNDRY_GROUP)
-    swimming          = _get_item_group_total(closing_entry_names, SWIMMING_GROUP)
-    photoshoot        = _get_item_group_total(closing_entry_names, PHOTOSHOOT_GROUP)
-    tray_charge       = _get_item_name_total(closing_entry_names, TRAY_CHARGE_NAME)
+    gym               = _get_item_group_total(closing_entry_names, GYM_GROUP, allowed_properties)
+    laundry           = _get_item_group_total(closing_entry_names, LAUNDRY_GROUP, allowed_properties)
+    swimming          = _get_item_group_total(closing_entry_names, SWIMMING_GROUP, allowed_properties)
+    photoshoot        = _get_item_group_total(closing_entry_names, PHOTOSHOOT_GROUP, allowed_properties)
+    tray_charge       = _get_item_name_total(closing_entry_names, TRAY_CHARGE_NAME, allowed_properties)
 
     total_sales = (
         accommodation + drinks + food_with_protein +
@@ -100,17 +102,32 @@ def execute(filters=None):
 
 def _get_closing_entry_names(date):
     """
-    Returns names of POS Closing Entries submitted on date+1
-    (i.e., closing entries for the given business day).
+    Trả về các POS Closing Entry có ca đóng (period_start_date/period_end_date)
+    giao với ngày kinh doanh `date`.
+
+    TRƯỚC ĐÂY: giả định MỌI ca đóng POS đều được submit vào NGÀY HÔM SAU
+    (posting_date = date+1) — đúng với outlet phục vụ khuya (nhà hàng/bar
+    đóng ca sau nửa đêm), nhưng SAI với outlet đóng ca sớm cùng ngày (VD
+    cửa hàng lưu niệm/spa đóng trước nửa đêm, posting_date = date) — closing
+    entry của outlet đó bị RỚT HOÀN TOÀN khỏi báo cáo (không tính cho ngày
+    nào cả, vì ngày `date+1` của NÓ cũng không khớp query của báo cáo
+    `date+1`, do posting_date thật của nó là `date`, không phải `date+1`).
+    Đồng thời còn gây đếm trùng ở "ngày biên" giữa 2 báo cáo liền kề nếu 2
+    outlet khác nhau đóng ca cùng lúc quanh nửa đêm. Dùng đúng khoảng thời
+    gian THẬT của ca (period_start_date/period_end_date, Datetime) giao với
+    cửa sổ [date 00:00, date+1 00:00) — không phụ thuộc outlet đóng ca sớm
+    hay muộn, không đếm trùng vì mỗi ca chỉ giao với ĐÚNG 1 ngày kinh doanh.
     """
-    closing_date = add_days(getdate(date), 1)
+    window_start = getdate(date)
+    window_end = add_days(window_start, 1)
     rows = frappe.db.sql(
         """
         SELECT name FROM `tabPOS Closing Entry`
         WHERE docstatus = 1
-          AND posting_date = %(closing_date)s
+          AND period_start_date < %(window_end)s
+          AND period_end_date > %(window_start)s
         """,
-        {"closing_date": closing_date},
+        {"window_start": window_start, "window_end": window_end},
         as_dict=True,
     )
     return [r.name for r in rows] if rows else []
@@ -128,12 +145,17 @@ def _get_room_rent_total(date):
     return flt(sales_rows[-1]["amount"]) if sales_rows else 0.0
 
 
-def _get_item_group_total(closing_entry_names, item_group):
+def _get_item_group_total(closing_entry_names, item_group, allowed_properties=None):
     """Sum POS invoice item amounts for a specific item group across closing entries."""
     if not closing_entry_names:
         return 0.0
+    params = {"names": tuple(closing_entry_names), "group": item_group}
+    property_condition = ""
+    if allowed_properties is not None:
+        property_condition = "AND pi.hospitality_property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
     result = frappe.db.sql(
-        """
+        f"""
         SELECT COALESCE(SUM(pii.amount), 0) AS total
         FROM `tabPOS Invoice Reference` pir
         INNER JOIN `tabPOS Invoice` pi ON pi.name = pir.pos_invoice
@@ -142,19 +164,25 @@ def _get_item_group_total(closing_entry_names, item_group):
         WHERE pir.parent IN %(names)s
           AND pi.docstatus = 1
           AND COALESCE(it.item_group, '') = %(group)s
+          {property_condition}
         """,
-        {"names": tuple(closing_entry_names), "group": item_group},
+        params,
         as_dict=True,
     )
     return flt(result[0].total) if result else 0.0
 
 
-def _get_protein_total(closing_entry_names, keyword):
+def _get_protein_total(closing_entry_names, keyword, allowed_properties=None):
     """Sum POS invoice item amounts where item_name contains the protein keyword."""
     if not closing_entry_names:
         return 0.0
+    params = {"names": tuple(closing_entry_names), "keyword": f"%{keyword}%"}
+    property_condition = ""
+    if allowed_properties is not None:
+        property_condition = "AND pi.hospitality_property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
     result = frappe.db.sql(
-        """
+        f"""
         SELECT COALESCE(SUM(pii.amount), 0) AS total
         FROM `tabPOS Invoice Reference` pir
         INNER JOIN `tabPOS Invoice` pi ON pi.name = pir.pos_invoice
@@ -162,14 +190,15 @@ def _get_protein_total(closing_entry_names, keyword):
         WHERE pir.parent IN %(names)s
           AND pi.docstatus = 1
           AND pii.item_name LIKE %(keyword)s
+          {property_condition}
         """,
-        {"names": tuple(closing_entry_names), "keyword": f"%{keyword}%"},
+        params,
         as_dict=True,
     )
     return flt(result[0].total) if result else 0.0
 
 
-def _get_food_without_proteins(closing_entry_names):
+def _get_food_without_proteins(closing_entry_names, allowed_properties=None):
     """
     Sum items in the Food item group that do NOT match any protein keyword.
     """
@@ -183,6 +212,10 @@ def _get_food_without_proteins(closing_entry_names):
     params = {"names": tuple(closing_entry_names), "group": FOOD_GROUP}
     for i, kw in enumerate(PROTEIN_KEYWORDS):
         params[f"protein_{i}"] = f"%{kw}%"
+    property_condition = ""
+    if allowed_properties is not None:
+        property_condition = "AND pi.hospitality_property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
 
     result = frappe.db.sql(
         f"""
@@ -195,6 +228,7 @@ def _get_food_without_proteins(closing_entry_names):
           AND pi.docstatus = 1
           AND COALESCE(it.item_group, '') = %(group)s
           AND {protein_conditions}
+          {property_condition}
         """,
         params,
         as_dict=True,
@@ -202,12 +236,17 @@ def _get_food_without_proteins(closing_entry_names):
     return flt(result[0].total) if result else 0.0
 
 
-def _get_item_name_total(closing_entry_names, item_name_keyword):
+def _get_item_name_total(closing_entry_names, item_name_keyword, allowed_properties=None):
     """Sum items whose item_name contains the given keyword (e.g. 'Tray Charge')."""
     if not closing_entry_names:
         return 0.0
+    params = {"names": tuple(closing_entry_names), "keyword": f"%{item_name_keyword}%"}
+    property_condition = ""
+    if allowed_properties is not None:
+        property_condition = "AND pi.hospitality_property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
     result = frappe.db.sql(
-        """
+        f"""
         SELECT COALESCE(SUM(pii.amount), 0) AS total
         FROM `tabPOS Invoice Reference` pir
         INNER JOIN `tabPOS Invoice` pi ON pi.name = pir.pos_invoice
@@ -215,8 +254,9 @@ def _get_item_name_total(closing_entry_names, item_name_keyword):
         WHERE pir.parent IN %(names)s
           AND pi.docstatus = 1
           AND pii.item_name LIKE %(keyword)s
+          {property_condition}
         """,
-        {"names": tuple(closing_entry_names), "keyword": f"%{item_name_keyword}%"},
+        params,
         as_dict=True,
     )
     return flt(result[0].total) if result else 0.0

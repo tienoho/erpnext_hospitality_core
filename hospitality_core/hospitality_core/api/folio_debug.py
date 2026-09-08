@@ -1,10 +1,14 @@
 import frappe
+from frappe import _
 
 @frappe.whitelist()
 def debug_folio_totals(folio_name):
     """
     Diagnostic tool to see raw SQL vs field values.
     """
+    if not frappe.has_permission("Guest Folio", "read", doc=folio_name):
+        frappe.throw(_("Not permitted to view Folio {0}.").format(folio_name), frappe.PermissionError)
+
     # 1. Try to find the exact table name
     table_name = "tabFolio Transaction"
     

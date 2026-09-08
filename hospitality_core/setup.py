@@ -6,6 +6,8 @@ def after_install():
     create_custom_fields()
     create_default_data()
     enable_vietnamese_language()
+    from hospitality_core.migrations.property_v2 import execute
+    execute()
 
 def enable_vietnamese_language():
     if frappe.db.exists("Language", "vi"):

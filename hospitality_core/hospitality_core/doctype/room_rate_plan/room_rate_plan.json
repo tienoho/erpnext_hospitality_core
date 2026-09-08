@@ -8,11 +8,14 @@
  "field_order": [
   "plan_name",
   "room_type",
-  "rate",
-  "column_break_1",
-  "valid_from",
-  "valid_to",
-  "active"
+  "active",
+  "section_break_seasons",
+  "seasons",
+  "section_break_los",
+  "los_discounts",
+  "property",
+  "operating_company",
+  "currency"
  ],
  "fields": [
   {
@@ -30,32 +33,55 @@
    "reqd": 1
   },
   {
-   "fieldname": "rate",
-   "fieldtype": "Currency",
-   "label": "Rate (Per Night)",
-   "reqd": 1
-  },
-  {
-   "fieldname": "column_break_1",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "valid_from",
-   "fieldtype": "Date",
-   "label": "Valid From",
-   "reqd": 1
-  },
-  {
-   "fieldname": "valid_to",
-   "fieldtype": "Date",
-   "label": "Valid To",
-   "reqd": 1
-  },
-  {
    "default": "1",
    "fieldname": "active",
    "fieldtype": "Check",
    "label": "Active"
+  },
+  {
+   "fieldname": "section_break_seasons",
+   "fieldtype": "Section Break",
+   "label": "Giá Theo Mùa Vụ & Cuối Tuần",
+   "description": "Mỗi dòng là 1 khoảng ngày (mùa vụ) với giá ngày thường/cuối tuần riêng. Ngày KHÔNG rơi vào mùa vụ nào sẽ tự dùng Default Rate của Hotel Room Type."
+  },
+  {
+   "fieldname": "seasons",
+   "fieldtype": "Table",
+   "label": "Mùa Vụ",
+   "options": "Room Rate Plan Season"
+  },
+  {
+   "fieldname": "section_break_los",
+   "fieldtype": "Section Break",
+   "label": "Giảm Giá Theo Số Đêm Lưu Trú (Length of Stay)",
+   "collapsible": 1,
+   "description": "Áp dụng bậc giảm giá theo TỔNG số đêm của cả kỳ lưu trú (không phải riêng từng đêm) — bậc có Số Đêm Tối Thiểu cao nhất mà vẫn <= tổng số đêm sẽ được áp dụng."
+  },
+  {
+   "fieldname": "los_discounts",
+   "fieldtype": "Table",
+   "label": "Bậc Giảm Giá LOS",
+   "options": "Room Rate Plan LOS Discount"
+  },
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency"
   }
  ],
  "index_web_pages_for_search": 1,

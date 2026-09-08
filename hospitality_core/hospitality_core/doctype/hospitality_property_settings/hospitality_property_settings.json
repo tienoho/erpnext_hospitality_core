@@ -1,0 +1,541 @@
+{
+ "doctype": "DocType",
+ "name": "Hospitality Property Settings",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "field:property",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "warehouse",
+  "pos_profile",
+  "default_reception",
+  "bank_account",
+  "tax_template",
+  "section_break_standard_hours",
+  "standard_checkin_time",
+  "standard_checkout_time",
+  "section_break_early_checkin",
+  "early_tier1_hour",
+  "early_tier1_pct",
+  "column_break_early",
+  "early_tier2_hour",
+  "early_tier2_pct",
+  "early_tier3_pct",
+  "section_break_late_checkout",
+  "late_tier1_hour",
+  "late_tier1_pct",
+  "column_break_late",
+  "late_tier2_hour",
+  "late_tier2_pct",
+  "late_tier3_pct",
+  "section_break_child_bed",
+  "child_free_max_age",
+  "child_surcharge_min_age",
+  "child_surcharge_max_age",
+  "child_surcharge_rate",
+  "column_break_bed",
+  "extra_bed_rate",
+  "section_break_foc",
+  "enable_foc_policy",
+  "rooms_per_foc",
+  "section_break_holiday_weekend",
+  "enable_weekend_surcharge",
+  "weekend_surcharge_pct",
+  "column_break_holiday",
+  "enable_holiday_surcharge",
+  "holiday_surcharge_pct",
+  "establishment_name",
+  "establishment_code",
+  "police_station_name",
+  "police_city",
+  "column_break_1",
+  "tax_id",
+  "resort_company_name",
+  "address",
+  "section_break_xnc",
+  "immigration_portal_url",
+  "default_stay_purpose",
+  "section_break_printing",
+  "enable_auto_print",
+  "receipt_print_format",
+  "print_copies",
+  "section_break_einvoice",
+  "einvoice_provider",
+  "einvoice_default_vat_rate",
+  "column_break_einvoice",
+  "einvoice_api_endpoint",
+  "einvoice_api_key",
+  "einvoice_tax_code",
+  "enable_pos_cash_register",
+  "pos_invoice_template",
+  "section_break_vietqr",
+  "enable_vietqr",
+  "vietqr_bank_id",
+  "vietqr_account_number",
+  "vietqr_account_name",
+  "column_break_vietqr",
+  "vietqr_template",
+  "vietqr_content_prefix"
+ ],
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "unique": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Currency"
+  },
+  {
+   "fieldname": "warehouse",
+   "label": "Warehouse",
+   "fieldtype": "Link",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "pos_profile",
+   "label": "Pos Profile",
+   "fieldtype": "Link",
+   "options": "POS Profile"
+  },
+  {
+   "fieldname": "default_reception",
+   "label": "Default Reception",
+   "fieldtype": "Link",
+   "options": "Hotel Reception"
+  },
+  {
+   "fieldname": "bank_account",
+   "label": "Bank Account",
+   "fieldtype": "Link",
+   "options": "Bank Account"
+  },
+  {
+   "fieldname": "tax_template",
+   "label": "Tax Template",
+   "fieldtype": "Link",
+   "options": "Sales Taxes and Charges Template"
+  },
+  {
+   "fieldname": "section_break_standard_hours",
+   "fieldtype": "Section Break",
+   "label": "Giờ Quy Chuẩn Lưu Trú"
+  },
+  {
+   "default": "14:00:00",
+   "fieldname": "standard_checkin_time",
+   "fieldtype": "Time",
+   "label": "Giờ Nhận Phòng Chuẩn (Standard Check-in)"
+  },
+  {
+   "default": "12:00:00",
+   "fieldname": "standard_checkout_time",
+   "fieldtype": "Time",
+   "label": "Giờ Trả Phòng Chuẩn (Standard Check-out)"
+  },
+  {
+   "fieldname": "section_break_early_checkin",
+   "fieldtype": "Section Break",
+   "label": "Bậc Phụ Thu Nhận Phòng Sớm (Early Check-in)"
+  },
+  {
+   "default": "06:00:00",
+   "fieldname": "early_tier1_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 1 (Trước giờ này)"
+  },
+  {
+   "default": "100",
+   "fieldname": "early_tier1_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 1 (%)"
+  },
+  {
+   "fieldname": "column_break_early",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "09:00:00",
+   "fieldname": "early_tier2_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 2 (Từ Bậc 1 đến)"
+  },
+  {
+   "default": "50",
+   "fieldname": "early_tier2_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 2 (%)"
+  },
+  {
+   "default": "30",
+   "fieldname": "early_tier3_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 3 (Từ Bậc 2 đến Giờ Chuẩn) (%)"
+  },
+  {
+   "fieldname": "section_break_late_checkout",
+   "fieldtype": "Section Break",
+   "label": "Bậc Phụ Thu Trả Phòng Muộn (Late Check-out)"
+  },
+  {
+   "default": "15:00:00",
+   "fieldname": "late_tier1_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 1 (Từ Giờ Chuẩn đến)"
+  },
+  {
+   "default": "30",
+   "fieldname": "late_tier1_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 1 (%)"
+  },
+  {
+   "fieldname": "column_break_late",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "18:00:00",
+   "fieldname": "late_tier2_hour",
+   "fieldtype": "Time",
+   "label": "Mốc Giờ Bậc 2 (Từ Bậc 1 đến)"
+  },
+  {
+   "default": "50",
+   "fieldname": "late_tier2_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 2 (%)"
+  },
+  {
+   "default": "100",
+   "fieldname": "late_tier3_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Bậc 3 (Sau Bậc 2) (%)"
+  },
+  {
+   "fieldname": "section_break_child_bed",
+   "fieldtype": "Section Break",
+   "label": "Phụ Thu Trẻ Em & Giường Phụ"
+  },
+  {
+   "default": "5",
+   "fieldname": "child_free_max_age",
+   "fieldtype": "Int",
+   "label": "Độ Tuổi Tối Đa Miễn Phí (Tuổi)"
+  },
+  {
+   "default": "6",
+   "fieldname": "child_surcharge_min_age",
+   "fieldtype": "Int",
+   "label": "Độ Tuổi Phụ Thu Từ (Tuổi)"
+  },
+  {
+   "default": "11",
+   "fieldname": "child_surcharge_max_age",
+   "fieldtype": "Int",
+   "label": "Độ Tuổi Phụ Thu Đến (Tuổi)"
+  },
+  {
+   "default": "200000",
+   "fieldname": "child_surcharge_rate",
+   "fieldtype": "Currency",
+   "label": "Đơn Giá Phụ Thu Trẻ Em (VND/Trẻ/Ngày)"
+  },
+  {
+   "fieldname": "column_break_bed",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "500000",
+   "fieldname": "extra_bed_rate",
+   "fieldtype": "Currency",
+   "label": "Đơn Giá Giường Phụ / Người Thứ 3 (VND/Đêm)"
+  },
+  {
+   "fieldname": "section_break_foc",
+   "fieldtype": "Section Break",
+   "label": "Chính Sách Phòng FOC Hướng Dẫn Viên"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_foc_policy",
+   "fieldtype": "Check",
+   "label": "Bật Chính Sách Tặng Phòng FOC Cho Đoàn"
+  },
+  {
+   "default": "15",
+   "fieldname": "rooms_per_foc",
+   "fieldtype": "Int",
+   "label": "Số Phòng Trả Tiền Để Tặng 1 Phòng FOC"
+  },
+  {
+   "fieldname": "section_break_holiday_weekend",
+   "fieldtype": "Section Break",
+   "label": "Phụ Thu Ngày Lễ Tết & Cuối Tuần (Peak Surcharges)"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_weekend_surcharge",
+   "fieldtype": "Check",
+   "label": "Bật Phụ Thu Cuối Tuần (Thứ 6 & Thứ 7)"
+  },
+  {
+   "default": "0",
+   "depends_on": "enable_weekend_surcharge",
+   "fieldname": "weekend_surcharge_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Cuối Tuần (%)"
+  },
+  {
+   "fieldname": "column_break_holiday",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_holiday_surcharge",
+   "fieldtype": "Check",
+   "label": "Bật Phụ Thu Ngày Lễ Tết (ERPNext Holiday List)"
+  },
+  {
+   "default": "0",
+   "depends_on": "enable_holiday_surcharge",
+   "fieldname": "holiday_surcharge_pct",
+   "fieldtype": "Percent",
+   "label": "Tỷ Lệ Phụ Thu Ngày Lễ Tết (%)"
+  },
+  {
+   "default": "Tuần Châu Resort Hạ Long",
+   "fieldname": "establishment_name",
+   "fieldtype": "Data",
+   "label": "Tên Cơ Sở Lưu Trú"
+  },
+  {
+   "default": "TCG-QN-01",
+   "fieldname": "establishment_code",
+   "fieldtype": "Data",
+   "label": "Mã Cơ Sở Lưu Trú (Do Công an cấp)"
+  },
+  {
+   "default": "Công an Phường Tuần Châu",
+   "fieldname": "police_station_name",
+   "fieldtype": "Data",
+   "label": "Công An Phường / Xã Quản Lý"
+  },
+  {
+   "default": "Tỉnh Quảng Ninh",
+   "fieldname": "police_city",
+   "fieldtype": "Data",
+   "label": "Tỉnh / Thành Phố"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "5702169704",
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Mã Số Thuế Doanh Nghiệp"
+  },
+  {
+   "default": "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO",
+   "fieldname": "resort_company_name",
+   "fieldtype": "Data",
+   "label": "Tên Pháp Nhân Doanh Nghiệp"
+  },
+  {
+   "default": "Đảo Tuần Châu, TP. Hạ Long, Tỉnh Quảng Ninh",
+   "fieldname": "address",
+   "fieldtype": "Data",
+   "label": "Địa Chỉ Cơ Sở Lưu Trú"
+  },
+  {
+   "fieldname": "section_break_xnc",
+   "fieldtype": "Section Break",
+   "label": "Cổng Xuất Nhập Cảnh Công An Tỉnh Quảng Ninh"
+  },
+  {
+   "default": "https://quangninh.xuatnhapcanh.gov.vn",
+   "fieldname": "immigration_portal_url",
+   "fieldtype": "Data",
+   "label": "URL Cổng Khai Báo XNC"
+  },
+  {
+   "default": "Du lịch / Nghỉ dưỡng",
+   "fieldname": "default_stay_purpose",
+   "fieldtype": "Select",
+   "label": "Mục Đích Cư Trú Mặc Định",
+   "options": "Du lịch / Nghỉ dưỡng\nCông tác\nHội nghị / Sự kiện\nThăm thân\nKhác"
+  },
+  {
+   "fieldname": "section_break_printing",
+   "fieldtype": "Section Break",
+   "label": "Automatic Printing"
+  },
+  {
+   "fieldname": "enable_auto_print",
+   "fieldtype": "Check",
+   "label": "Enable Automatic Receipt Printing",
+   "default": 0,
+   "description": "Automatically print receipts to the system's default printer when a POS Invoice is submitted"
+  },
+  {
+   "fieldname": "receipt_print_format",
+   "fieldtype": "Link",
+   "label": "Receipt Print Format",
+   "options": "Print Format",
+   "description": "Custom print format for receipts (leave blank to use default POS Invoice format)",
+   "depends_on": "enable_auto_print"
+  },
+  {
+   "fieldname": "print_copies",
+   "fieldtype": "Int",
+   "label": "Number of Copies to Print",
+   "default": 3,
+   "description": "Number of receipt copies to print automatically",
+   "depends_on": "enable_auto_print"
+  },
+  {
+   "description": "If the 'vietnam_einvoice' app is installed, it is the real issuance path and reads its OWN settings from 'Vietnam E-Invoice Config' (per Company) instead — the fields below are only used as a local fallback when that app is not installed.",
+   "fieldname": "section_break_einvoice",
+   "fieldtype": "Section Break",
+   "label": "E-Invoice (TT78 / NĐ123) — Fallback Provider"
+  },
+  {
+   "default": "Mock",
+   "description": "Mock generates a fake lookup code locally for testing the Guest Folio button/UI without a real tax-authority connection. Switch to a real provider once the API Endpoint/Key/Tax Code below are configured.",
+   "fieldname": "einvoice_provider",
+   "fieldtype": "Select",
+   "label": "E-Invoice Provider",
+   "options": "Mock\nVNPT\nViettel\nMISA meInvoice"
+  },
+  {
+   "default": "8",
+   "fieldname": "einvoice_default_vat_rate",
+   "fieldtype": "Percent",
+   "label": "Default VAT Rate (%)"
+  },
+  {
+   "fieldname": "column_break_einvoice",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.einvoice_provider!='Mock'",
+   "fieldname": "einvoice_api_endpoint",
+   "fieldtype": "Data",
+   "label": "API Endpoint"
+  },
+  {
+   "depends_on": "eval:doc.einvoice_provider!='Mock'",
+   "fieldname": "einvoice_api_key",
+   "fieldtype": "Password",
+   "label": "API Key / Token"
+  },
+  {
+   "depends_on": "eval:doc.einvoice_provider!='Mock'",
+   "fieldname": "einvoice_tax_code",
+   "fieldtype": "Data",
+   "label": "Company Tax Code (MST)"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_pos_cash_register",
+   "fieldtype": "Check",
+   "label": "Enable POS Cash Register E-Invoice (Mã CQT)"
+  },
+  {
+   "default": "1C26MNG",
+   "depends_on": "enable_pos_cash_register",
+   "fieldname": "pos_invoice_template",
+   "fieldtype": "Data",
+   "label": "POS Cash Register Invoice Template (Ký hiệu mẫu)"
+  },
+  {
+   "fieldname": "section_break_vietqr",
+   "fieldtype": "Section Break",
+   "label": "Cấu hình Thanh toán VietQR (NAPAS 247)"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_vietqr",
+   "fieldtype": "Check",
+   "label": "Bật Thanh toán VietQR Động"
+  },
+  {
+   "default": "970415",
+   "depends_on": "enable_vietqr",
+   "description": "VietinBank (970415), MBBank (970422), Vietcombank (970436), BIDV (970418), Techcombank (970407)...",
+   "fieldname": "vietqr_bank_id",
+   "fieldtype": "Select",
+   "label": "Mã Ngân hàng Thụ hưởng (BIN)",
+   "options": "970415\n970422\n970436\n970418\n970407\n970405\n970423\n970416\n970432\n970441"
+  },
+  {
+   "depends_on": "enable_vietqr",
+   "fieldname": "vietqr_account_number",
+   "fieldtype": "Data",
+   "label": "Số Tài khoản Thụ hưởng"
+  },
+  {
+   "depends_on": "enable_vietqr",
+   "fieldname": "vietqr_account_name",
+   "fieldtype": "Data",
+   "label": "Tên Chủ Tài khoản (In hoa không dấu)"
+  },
+  {
+   "fieldname": "column_break_vietqr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "compact2",
+   "depends_on": "enable_vietqr",
+   "fieldname": "vietqr_template",
+   "fieldtype": "Select",
+   "label": "Giao diện Mẫu VietQR",
+   "options": "compact2\nqr_only\nprint\ncompact"
+  },
+  {
+   "default": "TCG",
+   "depends_on": "enable_vietqr",
+   "description": "Tiền tố nội dung chuyển khoản, ví dụ: TCG 101 FOL-00123",
+   "fieldname": "vietqr_content_prefix",
+   "fieldtype": "Data",
+   "label": "Tiền tố Nội dung Chuyển khoản"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

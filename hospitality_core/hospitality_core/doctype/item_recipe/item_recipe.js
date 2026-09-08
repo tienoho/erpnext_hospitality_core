@@ -93,19 +93,21 @@ function calculate_stock_qty(frm, cdt, cdn) {
 }
 
 function calculate_total_cost(frm) {
-    let total_cost = 0;
+    // Chờ TẤT CẢ lời gọi get_value hoàn tất bằng Promise.all thay vì đoán một
+    // khoảng setTimeout cố định 500ms — với công thức nhiều nguyên liệu hoặc
+    // mạng chậm, 500ms không đủ để mọi promise resolve, khiến "Estimated Cost"
+    // hiển thị bị thiếu mà không có dấu hiệu nào cho biết là chưa tính xong.
+    const lookups = (frm.doc.ingredients || []).map((ingredient) =>
+        frappe.db.get_value('Item', ingredient.ingredient_item, 'valuation_rate').then((r) => {
+            if (r.message) {
+                return flt(ingredient.stock_qty) * flt(r.message.valuation_rate);
+            }
+            return 0;
+        })
+    );
 
-    frm.doc.ingredients.forEach(function (ingredient) {
-        frappe.db.get_value('Item', ingredient.ingredient_item, 'valuation_rate')
-            .then(r => {
-                if (r.message) {
-                    const cost = flt(ingredient.stock_qty) * flt(r.message.valuation_rate);
-                    total_cost += cost;
-                }
-            });
-    });
-
-    setTimeout(function () {
+    Promise.all(lookups).then((costs) => {
+        const total_cost = costs.reduce((sum, c) => sum + c, 0);
         frappe.msgprint(__('Estimated Cost: {0}', [format_currency(total_cost)]));
-    }, 500);
+    });
 }

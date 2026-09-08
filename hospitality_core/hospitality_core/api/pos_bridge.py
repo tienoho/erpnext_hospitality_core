@@ -3,6 +3,81 @@ from frappe import _
 from frappe.utils import flt
 from hospitality_core.hospitality_core.api.folio import mirror_to_company_folio
 
+def assign_hospitality_property(doc, method=None):
+    """
+    Hook: POS Invoice (validate)
+    TRƯỚC ĐÂY: POS Invoice nằm trong CORE_SCOPED (property_scope.py) nhưng
+    KHÔNG CÓ BẤT KỲ nơi nào từng set field hospitality_property của nó —
+    khiến toàn bộ bảo vệ phân quyền theo property cho POS Invoice là VÔ
+    NGHĨA (mọi bản ghi mãi mãi NULL = "ngoài phạm vi", không bị lọc). Nay
+    lấy từ field hospitality_property mới trên chính POS Profile của hóa
+    đơn (1 property có thể có nhiều POS Profile/outlet — nhà hàng, bar,
+    spa... — nên mapping đúng chiều là POS Profile -> Property, không phải
+    ngược lại). Chạy ở validate() (không phải before_submit) để giá trị
+    cũng đúng ngay từ bản nháp, và tự cập nhật nếu ai đổi pos_profile trước
+    khi submit.
+    """
+    if not doc.get('pos_profile'):
+        return
+    property = frappe.db.get_value('POS Profile', doc.pos_profile, 'hospitality_property')
+    if property:
+        doc.hospitality_property = property
+
+
+WALKIN_CUSTOMER = "Walk in Customer"
+GUEST_ACCOUNT_MODE = "Guest Account"
+COMPLIMENTARY_MODE = "Complimentary"
+
+
+def enforce_payment_mode_rules(doc, method=None):
+    """
+    Hook: POS Invoice (validate)
+    TRƯỚC ĐÂY: 4 quy tắc bắt buộc về payment mode (xem
+    public/js/pos_payment_control.js's docstring) — (1) có Phòng -> CHỈ
+    được "Guest Account"; (2) Customer không phải Walk-in VÀ không có
+    Phòng -> CHỈ được "Complimentary"; (3) Walk-in Customer không có Phòng
+    -> KHÔNG được "Guest Account"/"Complimentary" — chỉ được thực thi ở
+    PHÍA CLIENT (chặn bằng CSS/DOM, chặn click). Server (process_room_charge()
+    bên dưới) chỉ đọc "có bao nhiêu tiền gắn Guest Account" để ghi vào
+    Folio, KHÔNG hề xác minh lại các quy tắc trên — bất kỳ ai bỏ qua JS
+    (devtools, gọi thẳng API, sửa payload trước khi gửi) đều có thể tự do
+    trộn payment mode: dùng "Complimentary" cho khách Walk-in không có căn
+    cứ (miễn phí đồ ăn/thức uống mà không ai duyệt), hoặc chỉ gắn 1 phần
+    nhỏ vào "Guest Account" còn lại thu tiền mặt/thẻ không qua sổ sách —
+    thất thoát doanh thu thật, không có dấu vết. Xác minh lại CHÍNH XÁC 3
+    quy tắc đó ở server trước khi cho lưu, không tin tưởng riêng phía JS.
+    """
+    if not doc.get('payments'):
+        return
+
+    room = doc.get('hotel_room')
+    customer = doc.get('customer')
+
+    if room:
+        others = sum(flt(p.amount) for p in doc.payments if p.mode_of_payment != GUEST_ACCOUNT_MODE)
+        if others > 0.01:
+            frappe.throw(_(
+                "Hóa đơn có gắn Phòng ({0}) chỉ được thanh toán qua phương thức 'Guest Account' (ghi vào Folio). "
+                "Vui lòng bỏ trống Phòng nếu khách thanh toán bằng phương thức khác."
+            ).format(room))
+    elif customer and customer != WALKIN_CUSTOMER:
+        others = sum(flt(p.amount) for p in doc.payments if p.mode_of_payment != COMPLIMENTARY_MODE)
+        if others > 0.01:
+            frappe.throw(_(
+                "Khách hàng {0} (không gắn Phòng) chỉ được thanh toán qua phương thức 'Complimentary'. "
+                "Vui lòng chọn Phòng nếu khách đang lưu trú thật, hoặc đổi Customer thành 'Walk in Customer' nếu "
+                "thanh toán bằng tiền thật."
+            ).format(customer))
+    elif customer == WALKIN_CUSTOMER and not room:
+        blocked = sum(flt(p.amount) for p in doc.payments
+                       if p.mode_of_payment in (GUEST_ACCOUNT_MODE, COMPLIMENTARY_MODE))
+        if blocked > 0.01:
+            frappe.throw(_(
+                "Khách 'Walk in Customer' không gắn Phòng không được thanh toán qua 'Guest Account' hoặc "
+                "'Complimentary'."
+            ))
+
+
 def process_room_charge(doc, method=None):
     """
     Hook: POS Invoice (on_submit)
@@ -61,33 +136,44 @@ def process_room_charge(doc, method=None):
     invoice_total = flt(doc.grand_total)
     ratio = room_charge_payment / invoice_total if invoice_total > 0 else 1
 
-    # 4. Determine Bill To logic (Company vs Guest)
+    # 4. Determine Bill To logic (Company vs Group vs Guest)
     bill_to = "Guest"
     res_name = frappe.db.get_value("Guest Folio", folio_name, "reservation")
     if res_name:
         # Check if POS Posting is allowed for this reservation
-        res_details = frappe.db.get_value("Hotel Reservation", res_name, ["is_company_guest", "allow_pos_posting"], as_dict=True)
-        
+        res_details = frappe.db.get_value(
+            "Hotel Reservation", res_name,
+            ["is_company_guest", "is_group_guest", "allow_pos_posting"], as_dict=True
+        )
+
+        if not res_details:
+            frappe.throw(_("Reservation {0} linked to Folio {1} could not be found.").format(res_name, folio_name))
+
         if not res_details.allow_pos_posting:
             frappe.throw(_("Room {0} is closed for POS Posting.").format(doc.hotel_room))
 
         if res_details.is_company_guest:
             bill_to = "Company"
+        elif res_details.is_group_guest:
+            bill_to = "Group"
 
     # 5. POST TO FOLIO (Grouped or Individual)
-    pos_profile = doc.get("pos_profile")
-    
-    # Check if we should group the transaction
+    pos_profile = (doc.get("pos_profile") or "").strip().lower()
+
+    # Check if we should group the transaction.
+    # NOTE: no dedicated "outlet grouping" setting exists yet in Hospitality
+    # Accounting Settings — matching is case/whitespace-insensitive so a minor
+    # rename of one of these profiles doesn't silently break grouping.
     group_item = None
     group_desc = None
-    
-    if pos_profile in ["Restaurant", "Bush Bar Kitchen"]:
+
+    if pos_profile in ["restaurant", "bush bar kitchen"]:
         group_item = "Food"
         group_desc = f"Food (POS: {doc.name})"
-    elif pos_profile in ["Fountain Bar", "Bush Bar Drinks"]:
+    elif pos_profile in ["fountain bar", "bush bar drinks"]:
         group_item = "Beverages"
         group_desc = f"Beverages (POS: {doc.name})"
-        
+
     if group_item:
         # Group everything into one Folio Transaction
         total_posted_amount = 0
@@ -188,6 +274,9 @@ def get_guest_details_from_room(room_number):
     """
     Fetches the Customer linked to the currently active (Open) Guest Folio for a given room.
     """
+    if not frappe.has_permission("Guest Folio", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     if not room_number:
         return {}
 
@@ -242,6 +331,9 @@ def close_all_open_pos_sessions():
     """
     Closes all open POS sessions by creating and submitting a POS Closing Entry for each.
     """
+    from hospitality_core.hospitality_core.api.folio_operations import _check_supervisor
+    _check_supervisor()
+
     open_entries = frappe.get_all("POS Opening Entry", filters={"status": "Open"})
     
     from erpnext.accounts.doctype.pos_closing_entry.pos_closing_entry import make_closing_entry_from_opening

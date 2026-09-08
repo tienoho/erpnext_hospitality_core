@@ -15,7 +15,9 @@
   "enable_booking_com",
   "column_break_platforms",
   "enable_traveloka",
-  "enable_trip_com"
+  "enable_trip_com",
+  "section_break_commission",
+  "ota_commission_rates"
  ],
  "fields": [
   {
@@ -80,6 +82,18 @@
    "fieldname": "enable_trip_com",
    "fieldtype": "Check",
    "label": "Trip.com"
+  },
+  {
+   "fieldname": "section_break_commission",
+   "fieldtype": "Section Break",
+   "label": "Tỷ Lệ Hoa Hồng OTA",
+   "description": "Cấu hình % hoa hồng cho từng kênh OTA — dùng để tính \"OTA Commission Report\". Kênh không có dòng cấu hình ở đây sẽ hiện hoa hồng = 0% trên báo cáo (chưa xác nhận với đối tác)."
+  },
+  {
+   "fieldname": "ota_commission_rates",
+   "fieldtype": "Table",
+   "label": "Tỷ Lệ Hoa Hồng Theo Kênh",
+   "options": "OTA Commission Rate"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -6,17 +6,88 @@ from frappe.model.document import Document
 from frappe.utils import flt
 
 class SalesReport(Document):
+    """
+    QUAN TRỌNG VỀ PHẠM VI: đây là báo cáo đóng ca CHỈ RIÊNG mảng POS/F&B
+    (nguồn dữ liệu duy nhất là POS Closing Entry) — KHÔNG bao gồm doanh thu
+    phòng (Guest Folio/Folio Transaction). Đây là quyết định phạm vi có chủ
+    đích, không phải thiếu sót: doanh thu phòng đã có báo cáo riêng
+    (room_only_sales, monthly_revenue_by_room_type, city_ledger...), và
+    chính vòng đời có Submit/Cancel/Amend của DocType này khớp đúng quy
+    trình ký duyệt đóng ca thu ngân POS, khác hẳn quy trình đối soát doanh
+    thu phòng (qua Night Audit). VÌ VẬY: `vat_amount`/`service_charge`/
+    `consumption_tax`/`total_taxes` ở đây KHÔNG PHẢI số dư đầy đủ của 3 tài
+    khoản GL thuế tương ứng — số dư GL thật còn bao gồm cả phần thuế phát
+    sinh từ charge phòng (ghi qua api/accounting.py, độc lập với DocType
+    này). Muốn đối soát ĐẦY ĐỦ thuế toàn khách sạn (phòng + POS) với GL,
+    DÙNG BÁO CÁO "Taxes And Charges Report" (report/taxes_and_charges_report)
+    — báo cáo đó đọc TRỰC TIẾP GL Entry theo 3 tài khoản thuế đã cấu hình,
+    không lọc theo voucher_type, nên tự động bao gồm CẢ 2 nguồn (phòng qua
+    accounting.py, POS qua reclassify_pos_taxes trong CÙNG file) — đây mới
+    là công cụ đối soát đúng, không phải báo cáo Sales Report này.
+    """
+    def autoname(self):
+        # Trước đây doctype này là Single (đúng 1 bản ghi cho toàn hệ thống) dù
+        # dữ liệu thực chất là báo cáo cuối ngày theo từng company+khoảng ngày —
+        # mỗi lần tạo báo cáo mới sẽ xóa mất báo cáo trước đó, không có lịch sử
+        # kiểm toán. Nay là DocType thường: tự đặt tên tự mô tả theo company +
+        # ngày để dễ nhận biết trong danh sách, đồng thời khiến việc tạo 2 báo
+        # cáo cho CÙNG company+ngày tự nhiên báo lỗi trùng tên thay vì âm thầm
+        # ghi đè. Dùng autoname() (không phải before_insert()) để khớp đúng cơ
+        # chế Frappe thực sự gọi khi xác định tên bản ghi mới (set_new_name()
+        # gọi run_method("autoname") — xem quy ước tương tự tại
+        # GuestFolio.autoname() trong cùng app này) và không can thiệp vào tên
+        # do Frappe tự đặt khi Amend (dạng "{tên gốc}-1").
+        if self.amended_from:
+            return
+        from frappe.utils import getdate
+        date_str = getdate(self.from_date_time).strftime("%Y-%m-%d") if self.from_date_time else frappe.utils.nowdate()
+        company_abbr = frappe.db.get_value("Company", self.company, "abbr") if self.company else None
+        new_name = f"EOD-{company_abbr or self.company or 'NA'}-{date_str}"
+
+        # Báo lỗi rõ ràng thay vì để insert thất bại với lỗi trùng khóa CSDL
+        # khó hiểu — đây cũng chính là cách chặn tạo 2 báo cáo cho cùng
+        # company+ngày mà comment ở trên nhắc tới.
+        if frappe.db.exists("Sales Report", new_name):
+            frappe.throw(frappe._(
+                "Đã tồn tại báo cáo Sales Report cho {0} ngày {1} (mã {2}). "
+                "Vui lòng mở báo cáo đó để chỉnh sửa/tạo lại thay vì tạo bản ghi mới."
+            ).format(self.company, date_str, new_name))
+
+        self.name = new_name
+
+    def validate(self):
+        # Tên bản ghi được tính 1 LẦN DUY NHẤT lúc insert (xem autoname()) từ
+        # company + from_date_time — autoname() không chạy lại khi save() một
+        # bản ghi đã tồn tại, nên nếu cho phép đổi 2 trường này sau khi đã lưu,
+        # tên bản ghi (VD "EOD-TCG-2026-03-12") sẽ không còn khớp với dữ liệu
+        # thật bên trong. Bắt buộc tạo báo cáo mới nếu cần company/ngày khác.
+        if not self.is_new():
+            if self.has_value_changed("company"):
+                frappe.throw(frappe._("Không thể đổi Company sau khi đã lưu báo cáo — vui lòng tạo một bản ghi Sales Report mới."))
+            if self.has_value_changed("from_date_time"):
+                frappe.throw(frappe._("Không thể đổi From Date & Time sau khi đã lưu báo cáo — vui lòng tạo một bản ghi Sales Report mới."))
+
     @frappe.whitelist()
     def generate_report(self):
+        if self.docstatus == 1:
+            frappe.throw(frappe._("Báo cáo này đã được chốt (Submitted) — không thể tạo lại. Vui lòng Hủy (Cancel) và Amend nếu cần điều chỉnh."))
+
         self.clear_existing_data()
-        
+
         closing_entries = self.get_closing_entries()
         if not closing_entries:
             frappe.msgprint("No POS Closing Entries found for the selected criteria.")
-            return
-            
+            # QUAN TRỌNG: khi đây là bản ghi MỚI chưa từng lưu (trước đây là
+            # Single nên luôn "tồn tại" sẵn, không sao) và không có Closing
+            # Entry nào, hàm này return sớm mà KHÔNG gọi self.save() — với
+            # DocType thường bây giờ, nghĩa là bản ghi thực sự CHƯA từng được
+            # tạo trên server. Phải báo cho client biết để không gọi
+            # frm.reload_doc() trên một tên bản ghi tạm (new-sales-report-...)
+            # chưa hề tồn tại, gây lỗi "not found" khó hiểu.
+            return {"success": False, "saved": not self.is_new()}
+
         closing_entry_names = tuple([e.name for e in closing_entries])
-        
+
         self.aggregate_kpis(closing_entries)
         self.aggregate_invoices(closing_entry_names)
         self.aggregate_payments(closing_entry_names)
@@ -35,6 +106,7 @@ class SalesReport(Document):
         
         self.save()
         frappe.msgprint("Report Generated Successfully")
+        return {"success": True, "saved": True, "name": self.name}
 
     def clear_existing_data(self):
         self.set("eod_item_sales", [])
@@ -55,22 +127,49 @@ class SalesReport(Document):
         self.total_transactions = 0
         
     def get_closing_entries(self):
-        from frappe.utils import getdate, add_days
-
-        # Shift dates by 1 day based on user request ("if I pick 11, it generates for 12")
-        from_date = add_days(getdate(self.from_date_time), 1)
-        to_date = add_days(getdate(self.to_date_time), 1)
-
+        # TRƯỚC ĐÂY: cắt from_date_time/to_date_time (Datetime) về Date thuần
+        # rồi lọc posting_date BETWEEN (bao gồm CẢ 2 đầu mút) — ca đóng POS
+        # không thẳng theo nửa đêm (nhân viên chốt ca muộn sau 0h, rất phổ
+        # biến ở nhà hàng/bar phục vụ khuya) khiến 2 báo cáo EOD liền kề có
+        # thể cùng đếm trùng closing entry của "ngày biên". Dùng đúng
+        # period_start_date/period_end_date (Datetime, khoảng thời gian
+        # THẬT của ca đóng — field chuẩn của POS Closing Entry trong
+        # ERPNext) để so khớp nửa-mở với đúng khoảng from_date_time/
+        # to_date_time của báo cáo này — 1 ca đóng chỉ thuộc về ĐÚNG 1 báo
+        # cáo, không phụ thuộc việc nó rơi vào ngày dương lịch nào.
+        # Chú ý: cả 2 vế đều dùng bất đẳng thức NGHIÊM NGẶT (< / >), không
+        # phải >= — dùng >= ở vế period_end_date trước đây tạo lệch bất đối
+        # xứng: 1 ca đóng có period_end_date TRÙNG KHỚP CHÍNH XÁC ranh giới
+        # giữa 2 báo cáo liền kề (VD kết thúc đúng lúc window_end của báo
+        # cáo A = window_start của báo cáo B) sẽ thỏa mãn CẢ 2 điều kiện,
+        # bị đếm trùng vào cả báo cáo A lẫn B. Dùng nghiêm ngặt cả 2 vế đảm
+        # bảo 1 ca chỉ thuộc đúng 1 cửa sổ nửa-mở duy nhất.
         filters = {
             "company": self.company,
-            "posting_date": ("between", [from_date, to_date]),
+            "period_start_date": ("<", self.to_date_time),
+            "period_end_date": (">", self.from_date_time),
             "docstatus": 1
         }
-        
+
+        # TRƯỚC ĐÂY: Sales Report nằm trong SCOPED (property_scope.py) nhưng
+        # không hề lọc theo self.property — mọi property dùng chung 1
+        # company sẽ bị trộn lẫn số liệu. POS Closing Entry không có field
+        # property riêng, nhưng POS Profile thì có (field hospitality_property
+        # mới, xem migrations/property_v2.py) — 1 property có thể có nhiều
+        # POS Profile/outlet, nên lọc gián tiếp qua danh sách profile thuộc
+        # đúng property này. Nếu người dùng CŨNG chọn thủ công 1 danh sách
+        # pos_profiles cụ thể, lấy GIAO của 2 danh sách (không để cái sau
+        # ghi đè mất cái trước).
+        allowed_profiles = None
         if self.pos_profiles:
-            profiles = [row.pos_profile for row in self.pos_profiles]
-            filters["pos_profile"] = ("in", profiles)
-            
+            allowed_profiles = {row.pos_profile for row in self.pos_profiles}
+        if self.get('property'):
+            property_profiles = set(frappe.get_all("POS Profile",
+                filters={"hospitality_property": self.property}, pluck="name"))
+            allowed_profiles = property_profiles if allowed_profiles is None else (allowed_profiles & property_profiles)
+        if allowed_profiles is not None:
+            filters["pos_profile"] = ("in", list(allowed_profiles) or [""])
+
         return frappe.get_all("POS Closing Entry", filters=filters, fields=["name", "pos_profile", "grand_total", "net_total", "total_quantity", "user"])
         
     def aggregate_kpis(self, closing_entries):
@@ -84,12 +183,57 @@ class SalesReport(Document):
         self.total_expected_amount = flt(totals.get("expected"))
         self.total_actual_amount = flt(totals.get("actual"))
         self.total_difference = flt(totals.get("diff"))
-        
-        self.vat_amount = self.total_expected_amount * 0.075
-        self.service_charge = self.total_expected_amount * 0.10
-        self.consumption_tax = self.total_expected_amount * 0.05
-        
+
+        settings = frappe.get_cached_doc("Hospitality Accounting Settings")
+        vat_account = getattr(settings, "vat_account", None)
+        service_account = getattr(settings, "service_charge_account", None)
+        consumption_account = getattr(settings, "consumption_tax_account", None)
+
+        if vat_account or service_account or consumption_account:
+            # Use the actual tax lines posted on submitted invoices instead of a
+            # flat percentage of total_expected_amount, which ignores tax-exempt
+            # items, discounts, and complimentary rooms.
+            by_account = self.get_tax_totals_by_account(closing_entry_names)
+            self.vat_amount = by_account.get(vat_account, 0.0)
+            self.service_charge = by_account.get(service_account, 0.0)
+            self.consumption_tax = by_account.get(consumption_account, 0.0)
+        else:
+            self.vat_amount = self.total_expected_amount * 0.075
+            self.service_charge = self.total_expected_amount * 0.10
+            self.consumption_tax = self.total_expected_amount * 0.05
+
         self.net_sales = self.total_expected_amount - (self.vat_amount + self.service_charge + self.consumption_tax)
+        # TRƯỚC ĐÂY: total_taxes được tính RIÊNG trong aggregate_invoices()
+        # bằng cách cộng thẳng total_taxes_and_charges của MỌI hóa đơn — số
+        # này có thể KHÔNG khớp vat_amount+service_charge+consumption_tax ở
+        # trên (dùng ở net_sales) nếu hóa đơn có dòng thuế thuộc tài khoản
+        # KHÁC 3 tài khoản đã cấu hình. Dùng lại đúng breakdown này làm nguồn
+        # duy nhất để total_taxes không bao giờ lệch với net_sales trên cùng
+        # 1 báo cáo.
+        self.total_taxes = self.vat_amount + self.service_charge + self.consumption_tax
+
+    def get_tax_totals_by_account(self, closing_entry_names):
+        invoice_references = frappe.db.sql("""
+            SELECT pos_invoice
+            FROM `tabPOS Invoice Reference`
+            WHERE parent IN %s
+        """, (closing_entry_names,), as_dict=True)
+
+        if not invoice_references:
+            return {}
+
+        invoice_names = tuple([r.pos_invoice for r in invoice_references])
+
+        tax_rows = frappe.db.sql("""
+            SELECT t.account_head,
+                SUM(CASE WHEN p.is_return = 1 THEN -t.tax_amount ELSE t.tax_amount END) as amount
+            FROM `tabSales Taxes and Charges` t
+            JOIN `tabPOS Invoice` p ON t.parent = p.name
+            WHERE t.parenttype = 'POS Invoice' AND t.parent IN %s AND p.docstatus = 1
+            GROUP BY t.account_head
+        """, (invoice_names,), as_dict=True)
+
+        return {r.account_head: flt(r.amount) for r in tax_rows}
 
     def aggregate_invoices(self, closing_entry_names):
         # Get linked invoices from the child table of POS Closing Entry
@@ -113,12 +257,8 @@ class SalesReport(Document):
         self.total_transactions = len(invoices)
         if not invoices:
             return
-            
+
         submitted_invoice_names = tuple([i.name for i in invoices])
-        
-        for inv in invoices:
-            multiplier = -1 if inv.is_return else 1
-            self.total_taxes += flt(inv.total_taxes_and_charges) * multiplier
 
         item_sales = frappe.db.sql("""
             SELECT 

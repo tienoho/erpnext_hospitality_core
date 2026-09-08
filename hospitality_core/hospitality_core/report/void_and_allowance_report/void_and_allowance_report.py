@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -23,9 +24,16 @@ def execute(filters=None):
 
     data = []
 
+    allowed_properties = allowed_properties_for_report()
+    property_condition = ""
+    property_params = ()
+    if allowed_properties is not None:
+        property_condition = "AND ft.property IN %s"
+        property_params = (allowed_properties or [""],)
+
     # 1. Fetch Voids (Logically deleted/reversed transactions)
     # is_void = 1
-    voids = frappe.db.sql("""
+    voids = frappe.db.sql(f"""
         SELECT
             ft.posting_date,
             ft.parent,
@@ -33,7 +41,7 @@ def execute(filters=None):
             g.full_name as guest_name,
             'Void' as type,
             ft.description,
-            ft.amount, 
+            ft.amount,
             ft.void_reason,
             ft.owner
         FROM `tabFolio Transaction` ft
@@ -41,7 +49,9 @@ def execute(filters=None):
         LEFT JOIN `tabGuest` g ON gf.guest = g.name
         WHERE ft.posting_date BETWEEN %s AND %s
         AND ft.is_void = 1
-    """, (from_date, to_date), as_dict=True)
+        AND COALESCE(ft.mirror_source, '') = ''
+        {property_condition}
+    """, (from_date, to_date) + property_params, as_dict=True)
 
     # 2. Fetch Allowances/Discounts (Negative amounts, not payments)
     # Exclude Payment Items
@@ -51,16 +61,16 @@ def execute(filters=None):
     
     # Also check for "Complimentary" in description or specific Reason Codes
     
-    allowances = frappe.db.sql("""
+    allowances = frappe.db.sql(f"""
         SELECT
             ft.posting_date,
             ft.parent,
             gf.room,
             g.full_name as guest_name,
-            CASE 
+            CASE
                 WHEN ft.description LIKE '%%Discount%%' THEN 'Discount'
                 WHEN ft.description LIKE '%%Complimentary%%' THEN 'Complimentary'
-                ELSE 'Allowance' 
+                ELSE 'Allowance'
             END as type,
             ft.description,
             ft.amount,
@@ -75,7 +85,10 @@ def execute(filters=None):
         AND ft.item NOT IN (SELECT name FROM `tabItem` WHERE item_group = 'Payment')
         AND ft.description NOT LIKE '%%Payment%%'
         AND ft.description NOT LIKE '%%Transfer%%'
-    """, (from_date, to_date), as_dict=True)
+        AND COALESCE(ft.mirror_source, '') = ''
+        AND ft.reference_doctype != 'Folio Transaction'
+        {property_condition}
+    """, (from_date, to_date) + property_params, as_dict=True)
 
     data = voids + allowances
     

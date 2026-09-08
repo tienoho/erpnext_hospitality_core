@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -36,12 +37,18 @@ def execute(filters=None):
     if not filters.get("include_non_revenue"):
          conditions += """
             AND (gf.is_company_master = 0 OR gf.is_company_master IS NULL)
+            AND NOT EXISTS (SELECT 1 FROM `tabHotel Group Booking` hgb WHERE hgb.master_folio = gf.name)
             AND (res.is_complimentary = 0 OR res.is_complimentary IS NULL)
          """
     
     if filters.get("hotel_reception"):
         conditions += " AND (res.hotel_reception = %(hotel_reception)s OR gf.hotel_reception = %(hotel_reception)s)"
-    
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND ft.property IN %(_properties)s"
+        filters["_properties"] = allowed_properties or [""]
+
     # Fetch all charge and discount rows per reservation per date, grouped
     # We aggregate charges (positive) and discounts (negative) per room/guest/date/item_group
     sql = f"""
@@ -69,6 +76,8 @@ def execute(filters=None):
             ft.posting_date BETWEEN %(from_date)s AND %(to_date)s
             AND ft.is_void = 0
             AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
+            AND COALESCE(ft.mirror_source, '') = ''
+            AND ft.reference_doctype != 'Folio Transaction'
             AND ft.item NOT IN ('PAYMENT', 'TRANSFER', 'TRANSFER-GROUP')
             {conditions}
         ORDER BY

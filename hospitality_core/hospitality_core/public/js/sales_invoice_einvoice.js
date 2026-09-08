@@ -4,6 +4,12 @@
 // credentials are configured in Hospitality Accounting Settings).
 frappe.ui.form.on('Sales Invoice', {
     refresh: function (frm) {
+        // The dedicated vietnam_einvoice app (when installed) is the real, compliance-
+        // checked issuance path and ships its own button/indicator for this doctype.
+        // Skip this legacy fallback UI entirely to avoid two conflicting "Phát hành
+        // Hóa đơn Điện tử" buttons on the same form.
+        if (frappe.boot.versions && frappe.boot.versions.vietnam_einvoice) return;
+
         if (frm.doc.docstatus !== 1) return;
 
         if (frm.doc.einvoice_status === 'Issued') {

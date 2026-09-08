@@ -16,8 +16,10 @@ frappe.query_reports["City Ledger"] = {
             value = `<span style="color:red; font-weight:bold;">${value}</span>`;
         }
         
-        // Highlight negative balances (Credits) in green
-        if (column.fieldname === "outstanding_balance" && data && data.outstanding_balance < 0) {
+        // Highlight credit balances in green — report's actual column for
+        // this is "excess_payment" (Credit Balance), a non-negative amount;
+        // "outstanding_balance" isn't a column this report returns at all.
+        if (column.fieldname === "excess_payment" && data && data.excess_payment > 0) {
             value = `<span style="color:green;">${value}</span>`;
         }
 

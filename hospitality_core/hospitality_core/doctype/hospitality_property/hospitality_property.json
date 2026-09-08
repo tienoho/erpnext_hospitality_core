@@ -1,0 +1,117 @@
+{
+ "doctype": "DocType",
+ "name": "Hospitality Property",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "field:property_code",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "property_code",
+  "property_name",
+  "operating_company",
+  "currency",
+  "timezone",
+  "business_day_start",
+  "audit_time",
+  "enabled",
+  "accept_new_bookings",
+  "cutover_date",
+  "migration_verified",
+  "setup_preview"
+ ],
+ "fields": [
+  {
+   "fieldname": "property_code",
+   "label": "Property Code",
+   "fieldtype": "Data",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "property_name",
+   "label": "Property Name",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Currency"
+  },
+  {
+   "fieldname": "timezone",
+   "label": "Timezone",
+   "fieldtype": "Data",
+   "default": "Asia/Ho_Chi_Minh",
+   "reqd": 1
+  },
+  {
+   "fieldname": "business_day_start",
+   "label": "Business Day Start",
+   "fieldtype": "Time",
+   "default": "08:00:00"
+  },
+  {
+   "fieldname": "audit_time",
+   "label": "Audit Time",
+   "fieldtype": "Time",
+   "default": "14:00:00"
+  },
+  {
+   "fieldname": "enabled",
+   "label": "Enabled",
+   "fieldtype": "Check",
+   "default": "0"
+  },
+  {
+   "fieldname": "accept_new_bookings",
+   "label": "Accept New Bookings",
+   "fieldtype": "Check",
+   "default": "0"
+  },
+  {
+   "fieldname": "cutover_date",
+   "label": "Cutover Date",
+   "fieldtype": "Date"
+  },
+  {
+   "fieldname": "migration_verified",
+   "label": "Migration Verified",
+   "fieldtype": "Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "setup_preview",
+   "label": "Setup Preview",
+   "fieldtype": "HTML"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

@@ -1,0 +1,139 @@
+{
+ "doctype": "DocType",
+ "name": "Hospitality Loyalty Entry",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "membership",
+  "operating_company",
+  "currency",
+  "event_type",
+  "event_key",
+  "points",
+  "qualifying_spend",
+  "value",
+  "posting_time",
+  "expires_at",
+  "source_entry",
+  "reservation",
+  "invoice",
+  "journal_entry",
+  "evidence"
+ ],
+ "fields": [
+  {
+   "fieldname": "membership",
+   "label": "Membership",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest Membership"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Currency"
+  },
+  {
+   "fieldname": "event_type",
+   "label": "Event Type",
+   "fieldtype": "Select",
+   "reqd": 1,
+   "options": "Earn\nHold\nRedeem\nRelease\nExpire\nReverse"
+  },
+  {
+   "fieldname": "event_key",
+   "label": "Event Key",
+   "fieldtype": "Data",
+   "unique": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "points",
+   "label": "Points",
+   "fieldtype": "Int",
+   "reqd": 1
+  },
+  {
+   "fieldname": "qualifying_spend",
+   "label": "Qualifying Spend",
+   "fieldtype": "Currency",
+   "options": "currency"
+  },
+  {
+   "fieldname": "value",
+   "label": "Value",
+   "fieldtype": "Currency",
+   "options": "currency"
+  },
+  {
+   "fieldname": "posting_time",
+   "label": "Posting Time",
+   "fieldtype": "Datetime",
+   "reqd": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "label": "Expires At",
+   "fieldtype": "Datetime"
+  },
+  {
+   "fieldname": "source_entry",
+   "label": "Source Entry",
+   "fieldtype": "Link",
+   "options": "Hospitality Loyalty Entry"
+  },
+  {
+   "fieldname": "reservation",
+   "label": "Reservation",
+   "fieldtype": "Link",
+   "options": "Hotel Reservation"
+  },
+  {
+   "fieldname": "invoice",
+   "label": "Invoice",
+   "fieldtype": "Link",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "journal_entry",
+   "label": "Journal Entry",
+   "fieldtype": "Link",
+   "options": "Journal Entry"
+  },
+  {
+   "fieldname": "evidence",
+   "label": "Evidence",
+   "fieldtype": "Long Text"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

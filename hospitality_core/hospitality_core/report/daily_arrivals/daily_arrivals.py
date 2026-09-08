@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import nowdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -28,6 +29,11 @@ def execute(filters=None):
     conditions = ""
     if filters.get("hotel_reception"):
         conditions += " AND res.hotel_reception = %(hotel_reception)s"
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND res.property IN %(_properties)s"
+        filters["_properties"] = allowed_properties or [""]
 
     sql = """
         SELECT

@@ -35,6 +35,12 @@ def get_agent_credit_status(customer_name, company=None):
     if not customer_name:
         return {"status": "NO_CUSTOMER", "has_limit": False}
 
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — bất kỳ user đã đăng nhập nào cũng
+    # xem được hạn mức tín dụng/số dư nợ/tỷ lệ sử dụng của BẤT KỲ đại lý/công
+    # ty nào chỉ cần biết tên Customer.
+    if not frappe.has_permission("Customer", "read", doc=customer_name):
+        frappe.throw(_("Not permitted to view credit status for {0}.").format(customer_name), frappe.PermissionError)
+
     if not company:
         company = frappe.db.get_single_value("Global Defaults", "default_company") or "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO"
 
@@ -42,28 +48,43 @@ def get_agent_credit_status(customer_name, company=None):
     
     # Đọc hạn mức tín dụng từ bảng credit_limits của Customer hoặc trường credit_limit
     credit_limit = 0.0
+    company_limit_found = False
     if hasattr(cust_doc, "credit_limits") and cust_doc.credit_limits:
         for cl in cust_doc.credit_limits:
             if cl.company == company:
                 credit_limit = flt(cl.credit_limit)
+                company_limit_found = True
                 break
-    if credit_limit == 0 and hasattr(cust_doc, "credit_limit"):
+    if not company_limit_found and hasattr(cust_doc, "credit_limit"):
         credit_limit = flt(cust_doc.credit_limit)
 
     # Lấy tổng dư nợ hiện tại (Outstanding Amount)
     outstanding_amt = 0.0
     try:
-        # Tận dụng hàm chuẩn ERPNext nếu có
+        # Tận dụng hàm chuẩn ERPNext nếu có — TRƯỚC ĐÂY: get_dashboard_info()
+        # thực ra trả về 1 DANH SÁCH (company_wise_info, mỗi phần tử là 1
+        # dict riêng theo từng company), KHÔNG PHẢI 1 dict như code cũ giả
+        # định — gọi .get() trên list luôn ném AttributeError, bị except bên
+        # dưới nuốt ÂM THẦM, khiến nhánh "tận dụng hàm chuẩn ERPNext" không
+        # bao giờ thực sự chạy được (dead code, luôn rơi về fallback). Đã
+        # sửa duyệt đúng danh sách, lấy đúng phần tử khớp company.
         from erpnext.accounts.party import get_dashboard_info
-        info = get_dashboard_info("Customer", customer_name)
-        outstanding_amt = flt(info.get("total_unpaid", 0))
+        info_list = get_dashboard_info("Customer", customer_name) or []
+        matched = next((row for row in info_list if row.get("company") == company), None)
+        if matched is None:
+            raise ValueError("Không có dữ liệu dashboard cho company này")
+        outstanding_amt = flt(matched.get("total_unpaid", 0))
     except Exception:
-        # Fallback query số dư nợ chưa thanh toán từ Sales Invoice
+        # Fallback query số dư nợ chưa thanh toán từ Sales Invoice — TRƯỚC
+        # ĐÂY không lọc theo company, cộng dồn dư nợ TOÀN BỘ pháp nhân của
+        # khách hàng rồi so với hạn mức CHỈ RIÊNG 1 company (credit_limit ở
+        # trên đã lọc theo company) — sai lệch nếu khách hàng có giao dịch
+        # với nhiều pháp nhân trong tập đoàn.
         res = frappe.db.sql("""
-            SELECT SUM(outstanding_amount) 
+            SELECT SUM(outstanding_amount)
             FROM `tabSales Invoice`
-            WHERE customer = %(customer)s AND docstatus = 1 AND outstanding_amount > 0
-        """, {"customer": customer_name})
+            WHERE customer = %(customer)s AND company = %(company)s AND docstatus = 1 AND outstanding_amount > 0
+        """, {"customer": customer_name, "company": company})
         outstanding_amt = flt(res[0][0]) if res and res[0][0] else 0.0
 
     available_credit = credit_limit - outstanding_amt if credit_limit > 0 else 0
@@ -133,8 +154,11 @@ def apply_foc_to_reservation(group_booking_name, reservation_name):
     """
     Áp dụng chính sách phòng FOC (Miễn phí) cho phòng của Hướng dẫn viên.
     """
-    if not frappe.has_permission("Hotel Reservation", "write"):
-        frappe.throw(_("Bạn không có quyền chỉnh sửa hoặc áp dụng FOC cho Đặt phòng này."), frappe.PermissionError)
+    # Reuse the same supervisor-level role check as the other privileged folio
+    # actions (Split/Merge Folio, Room Move) instead of the generic doctype
+    # write-permission check, which any ordinary reservation-editing role passes.
+    from hospitality_core.hospitality_core.api.folio_operations import _check_supervisor
+    _check_supervisor()
 
     calc = calculate_group_foc_rooms(group_booking_name)
     if not calc.get("policy_enabled"):
@@ -143,6 +167,11 @@ def apply_foc_to_reservation(group_booking_name, reservation_name):
     res = frappe.get_doc("Hotel Reservation", reservation_name)
     if res.group_booking != group_booking_name:
         frappe.throw(_("Đặt phòng {0} không thuộc đoàn {1}.").format(reservation_name, group_booking_name))
+
+    if not res.is_complimentary and calc.get("remaining_foc_quota", 0) <= 0:
+        frappe.throw(_("Đã sử dụng hết hạn mức phòng FOC ({0} phòng/đoàn) cho đoàn {1}.").format(
+            calc.get("foc_eligible", 0), group_booking_name
+        ))
 
     res.is_complimentary = 1
     res.discount_type = "Percentage"

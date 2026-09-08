@@ -94,12 +94,21 @@ class LockOperationEngine:
     def read_card(cls):
         vendor = CONFIG["vendor"]
         logger.info(f"[Action] Reading card from {vendor} reader on {CONFIG['port']}...")
-        
+
         if not CONFIG["simulation_mode"] and DLLDriverRegistry._loaded_dll:
-            try:
-                pass
-            except Exception as e:
-                logger.error(f"DLL read error: {e}")
+            # QUAN TRỌNG: chưa có tích hợp ctypes thật với DLL nhà cung cấp
+            # khóa cửa (cần SDK/tài liệu vendor cụ thể) — code cũ rơi xuyên
+            # qua đây (thân try là "pass") rồi vẫn trả về success=True với
+            # card_uid giả lập, khiến nhân viên tưởng đã đọc thẻ thật trong
+            # khi KHÔNG có gì thực sự xảy ra với đầu đọc. Phải báo lỗi rõ ràng
+            # thay vì im lặng giả vờ thành công.
+            logger.error(f"DLL loaded for {vendor} nhưng chưa có logic đọc thẻ thật — từ chối để tránh báo thành công giả.")
+            return {
+                "success": False,
+                "vendor": vendor,
+                "is_simulation": False,
+                "message": f"Chưa tích hợp driver thật cho đầu đọc {vendor}. Vui lòng chuyển sang Simulation Mode hoặc liên hệ IT để hoàn thiện driver trước khi dùng ở chế độ thật."
+            }
 
         now = datetime.now()
         card_uid = f"TCG-{vendor[:3].upper()}-{int(time.time()) % 1000000:06d}"
@@ -120,12 +129,20 @@ class LockOperationEngine:
     def encode_card(cls, room_no, checkin_time, checkout_time, guest_name="", card_no=1, is_duplicate=False):
         vendor = CONFIG["vendor"]
         logger.info(f"[Action] Encoding card: Room {room_no} | Guest: {guest_name} | In: {checkin_time} | Out: {checkout_time} | Dup: {is_duplicate}")
-        
+
         if not CONFIG["simulation_mode"] and DLLDriverRegistry._loaded_dll:
-            try:
-                pass
-            except Exception as e:
-                logger.error(f"DLL write error: {e}")
+            # Xem chú thích tương tự trong read_card() — chưa có logic ghi thẻ
+            # thật qua DLL. Đây là trường hợp NGHIÊM TRỌNG NHẤT vì lễ tân có
+            # thể trao thẻ cho khách tưởng đã ghi thành công trong khi cơ chế
+            # khóa cửa thật không hề nhận được dữ liệu mới — khách không mở
+            # được cửa phòng mà không có cảnh báo nào.
+            logger.error(f"DLL loaded for {vendor} nhưng chưa có logic ghi thẻ thật — từ chối để tránh phát thẻ không hoạt động.")
+            return {
+                "success": False,
+                "vendor": vendor,
+                "is_simulation": False,
+                "message": f"Chưa tích hợp driver thật cho đầu ghi {vendor}. TUYỆT ĐỐI KHÔNG trao thẻ này cho khách — vui lòng chuyển sang Simulation Mode hoặc liên hệ IT để hoàn thiện driver."
+            }
 
         card_uid = f"TCG-{room_no}-{int(time.time()) % 10000:04d}"
         op_info = {
@@ -156,12 +173,15 @@ class LockOperationEngine:
     def clear_card(cls):
         vendor = CONFIG["vendor"]
         logger.info(f"[Action] Clearing/Recycling keycard on {CONFIG['port']}...")
-        
+
         if not CONFIG["simulation_mode"] and DLLDriverRegistry._loaded_dll:
-            try:
-                pass
-            except Exception as e:
-                logger.error(f"DLL clear error: {e}")
+            logger.error(f"DLL loaded for {vendor} nhưng chưa có logic xóa thẻ thật — từ chối để tránh báo thành công giả.")
+            return {
+                "success": False,
+                "vendor": vendor,
+                "is_simulation": False,
+                "message": f"Chưa tích hợp driver thật cho {vendor}. Vui lòng chuyển sang Simulation Mode hoặc liên hệ IT."
+            }
 
         CONFIG["last_operation"] = {"action": "CLEAR", "time": datetime.now().isoformat()}
         return {

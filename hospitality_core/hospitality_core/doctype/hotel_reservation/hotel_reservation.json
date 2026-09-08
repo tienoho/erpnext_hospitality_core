@@ -1,355 +1,441 @@
 {
-    "actions": [],
-    "autoname": "naming_series:",
-    "creation": "2025-01-28 10:50:00",
-    "doctype": "DocType",
-    "engine": "InnoDB",
-    "field_order": [
-        "naming_series",
-        "hotel_reception",
-        "reserved_by",
-        "guest",
-        "room_type",
-        "room",
-        "column_break_1",
-        "status",
-        "folio",
-        "arrival_date",
-        "departure_date",
-        "children_count",
-        "extra_bed_count",
-        "actual_checkin_time",
-        "actual_checkout_time",
-        "arriving_from",
-        "departing_to",
-        "is_alien",
-        "passport_number",
-        "section_break_financial",
-        "rate_plan",
-        "is_complimentary",
-        "discount_type",
-        "discount_value",
-        "room_rate_preview",
-        "is_company_guest",
-        "company",
-        "routing_instructions",
-        "amended_from",
-        "is_group_guest",
-        "group_booking",
-        "section_break_channel",
-        "booking_source",
-        "column_break_channel",
-        "ota_platform",
-        "external_booking_id"
-    ],
-    "fields": [
-        {
-            "default": "HR-.YYYY.-",
-            "fieldname": "naming_series",
-            "fieldtype": "Data",
-            "label": "Naming Series",
-            "no_copy": 1,
-            "reqd": 1
-        },
-        {
-            "fieldname": "hotel_reception",
-            "fieldtype": "Link",
-            "ignore_user_permissions": 1,
-            "in_filter": 1,
-            "in_standard_filter": 1,
-            "label": "Hotel Reception",
-            "options": "Hotel Reception",
-            "reqd": 1
-        },
-        {
-            "fieldname": "reserved_by",
-            "fieldtype": "Link",
-            "ignore_user_permissions": 1,
-            "label": "Reserved By",
-            "options": "User",
-            "read_only": 1
-        },
-        {
-            "fieldname": "guest",
-            "fieldtype": "Link",
-            "ignore_user_permissions": 1,
-            "in_filter": 1,
-            "in_global_search": 1,
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Guest",
-            "options": "Guest",
-            "reqd": 1
-        },
-        {
-            "fieldname": "room_type",
-            "fieldtype": "Link",
-            "in_filter": 1,
-            "in_global_search": 1,
-            "in_standard_filter": 1,
-            "label": "Room Type",
-            "options": "Hotel Room Type",
-            "reqd": 1
-        },
-        {
-            "fieldname": "room",
-            "fieldtype": "Link",
-            "in_filter": 1,
-            "in_global_search": 1,
-            "in_standard_filter": 1,
-            "label": "Room",
-            "options": "Hotel Room",
-            "reqd": 1
-        },
-        {
-            "fieldname": "column_break_1",
-            "fieldtype": "Column Break"
-        },
-        {
-            "default": "Reserved",
-            "fieldname": "status",
-            "fieldtype": "Select",
-            "in_filter": 1,
-            "in_global_search": 1,
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Booking Status",
-            "options": "Reserved\nChecked In\nChecked Out\nCancelled",
-            "read_only": 1,
-            "reqd": 1
-        },
-        {
-            "fieldname": "arrival_date",
-            "fieldtype": "Date",
-            "in_filter": 1,
-            "in_list_view": 1,
-            "in_standard_filter": 1,
-            "label": "Arrival Date",
-            "reqd": 1
-        },
-        {
-            "fieldname": "departure_date",
-            "fieldtype": "Date",
-            "in_list_view": 1,
-            "label": "Departure Date",
-            "reqd": 1
-        },
-        {
-            "default": "0",
-            "fieldname": "children_count",
-            "fieldtype": "Int",
-            "label": "Số lượng Trẻ em"
-        },
-        {
-            "default": "0",
-            "fieldname": "extra_bed_count",
-            "fieldtype": "Int",
-            "label": "Số Giường phụ (Extra Bed)"
-        },
-        {
-            "fieldname": "actual_checkin_time",
-            "fieldtype": "Time",
-            "label": "Giờ Nhận phòng Thực tế"
-        },
-        {
-            "fieldname": "actual_checkout_time",
-            "fieldtype": "Time",
-            "label": "Giờ Trả phòng Thực tế"
-        },
-        {
-            "fieldname": "arriving_from",
-            "fieldtype": "Data",
-            "label": "Arriving From"
-        },
-        {
-            "fieldname": "departing_to",
-            "fieldtype": "Data",
-            "label": "Departing To"
-        },
-        {
-            "default": "0",
-            "fieldname": "is_alien",
-            "fieldtype": "Check",
-            "label": "Alien (Foreign National)"
-        },
-        {
-            "depends_on": "eval:doc.is_alien==1",
-            "fieldname": "passport_number",
-            "fieldtype": "Data",
-            "label": "Passport Number",
-            "mandatory_depends_on": "eval:doc.is_alien==1"
-        },
-        {
-            "fieldname": "section_break_financial",
-            "fieldtype": "Section Break",
-            "label": "Financial & Routing"
-        },
-        {
-            "fieldname": "rate_plan",
-            "fieldtype": "Link",
-            "label": "Rate Plan",
-            "options": "Room Rate Plan"
-        },
-        {
-            "default": "0",
-            "fieldname": "is_complimentary",
-            "fieldtype": "Check",
-            "in_filter": 1,
-            "in_standard_filter": 1,
-            "label": "Complimentary (Free Stay)"
-        },
-        {
-            "default": "Amount",
-            "depends_on": "eval:doc.is_complimentary==0",
-            "fieldname": "discount_type",
-            "fieldtype": "Select",
-            "label": "Discount Type",
-            "options": "Amount\nPercentage"
-        },
-        {
-            "depends_on": "eval:doc.is_complimentary==0 && doc.discount_type",
-            "fieldname": "discount_value",
-            "fieldtype": "Currency",
-            "label": "Discount Value"
-        },
-        {
-            "fieldname": "room_rate_preview",
-            "fieldtype": "HTML",
-            "label": "Room Rate Preview",
-            "options": "<div id='room-rate-preview-box'></div>"
-        },
-        {
-            "default": "1",
-            "description": "If unchecked, Cashiers cannot post charges to this room.",
-            "fieldname": "allow_pos_posting",
-            "fieldtype": "Check",
-            "label": "Allow POS/F&B Posting"
-        },
-        {
-            "default": "0",
-            "description": "If checked, all charges are automatically mirrored to the Company Master Folio.",
-            "fieldname": "is_company_guest",
-            "fieldtype": "Check",
-            "in_filter": 1,
-            "in_standard_filter": 1,
-            "label": "Is Company Guest"
-        },
-        {
-            "default": "0",
-            "description": "If checked, all charges are routed to the Group Master Folio.",
-            "fieldname": "is_group_guest",
-            "fieldtype": "Check",
-            "label": "Is Group Guest"
-        },
-        {
-            "fieldname": "group_booking",
-            "fieldtype": "Link",
-            "label": "Group Booking",
-            "mandatory_depends_on": "eval:doc.is_group_guest==1",
-            "options": "Hotel Group Booking"
-        },
-        {
-            "depends_on": "eval:doc.is_company_guest==true",
-            "fieldname": "company",
-            "fieldtype": "Link",
-            "label": "Company Name",
-            "mandatory_depends_on": "eval:doc.is_company_guest==1",
-            "options": "Customer"
-        },
-        {
-            "fieldname": "routing_instructions",
-            "fieldtype": "Table",
-            "hidden": 1,
-            "label": "Routing Instructions",
-            "options": "Reservation Routing"
-        },
-        {
-            "fieldname": "folio",
-            "fieldtype": "Link",
-            "label": "Folio",
-            "options": "Guest Folio",
-            "read_only": 1
-        },
-        {
-            "fieldname": "amended_from",
-            "fieldtype": "Link",
-            "label": "Amended From",
-            "no_copy": 1,
-            "options": "Hotel Reservation",
-            "read_only": 1
-        },
-        {
-            "fieldname": "section_break_channel",
-            "fieldtype": "Section Break",
-            "label": "Channel & Distribution"
-        },
-        {
-            "default": "Direct",
-            "description": "Used by Tape Chart 2.0 for color-coded source grouping. Set automatically to 'OTA' by the Channel Manager Gateway when a reservation is created from an OTA webhook.",
-            "fieldname": "booking_source",
-            "fieldtype": "Select",
-            "in_filter": 1,
-            "in_standard_filter": 1,
-            "label": "Booking Source",
-            "options": "Direct\nOTA\nCorporate\nGroup\nComplimentary"
-        },
-        {
-            "fieldname": "column_break_channel",
-            "fieldtype": "Column Break"
-        },
-        {
-            "depends_on": "eval:doc.booking_source==\"OTA\"",
-            "fieldname": "ota_platform",
-            "fieldtype": "Select",
-            "label": "OTA Platform",
-            "options": "\nAgoda\nBooking.com\nTraveloka\nTrip.com\nOther"
-        },
-        {
-            "depends_on": "eval:doc.booking_source==\"OTA\"",
-            "fieldname": "external_booking_id",
-            "fieldtype": "Data",
-            "label": "External Booking ID",
-            "read_only": 1
-        }
-    ],
-    "index_web_pages_for_search": 1,
-    "links": [],
-    "modified": "2026-01-11 04:36:04.538259",
-    "modified_by": "Administrator",
-    "module": "Hospitality Core",
-    "name": "Hotel Reservation",
-    "naming_rule": "By \"Naming Series\" field",
-    "owner": "Administrator",
-    "permissions": [
-        {
-            "create": 1,
-            "delete": 1,
-            "email": 1,
-            "export": 1,
-            "print": 1,
-            "read": 1,
-            "report": 1,
-            "role": "System Manager",
-            "share": 1,
-            "write": 1
-        },
-        {
-            "create": 1,
-            "email": 1,
-            "export": 1,
-            "if_owner": 0,
-            "print": 1,
-            "read": 1,
-            "report": 1,
-            "role": "Hospitality User",
-            "share": 1,
-            "write": 1
-        }
-    ],
-    "row_format": "Dynamic",
-    "search_fields": "guest,room",
-    "sort_field": "modified",
-    "sort_order": "DESC",
-    "states": [],
-    "track_changes": 1
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2025-01-28 10:50:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "hotel_reception",
+  "reserved_by",
+  "guest",
+  "blacklist_override_reason",
+  "room_type",
+  "room",
+  "column_break_1",
+  "status",
+  "folio",
+  "arrival_date",
+  "departure_date",
+  "children_count",
+  "extra_bed_count",
+  "actual_checkin_time",
+  "actual_checkout_time",
+  "arriving_from",
+  "departing_to",
+  "is_alien",
+  "passport_number",
+  "section_break_financial",
+  "rate_plan",
+  "is_complimentary",
+  "allow_pos_posting",
+  "discount_type",
+  "discount_value",
+  "room_rate_preview",
+  "is_company_guest",
+  "company",
+  "routing_instructions",
+  "amended_from",
+  "is_group_guest",
+  "group_booking",
+  "section_break_channel",
+  "booking_source",
+  "column_break_channel",
+  "ota_platform",
+  "external_booking_id",
+  "rate_snapshot",
+  "property",
+  "operating_company",
+  "currency",
+  "accounting_version",
+  "billing_customer",
+  "membership",
+  "loyalty_snapshot",
+  "channel_connection",
+  "channel_booking_key"
+ ],
+ "fields": [
+  {
+   "default": "HR-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "label": "Naming Series",
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "hotel_reception",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "in_filter": 1,
+   "in_standard_filter": 1,
+   "label": "Hotel Reception",
+   "options": "Hotel Reception",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reserved_by",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Reserved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "guest",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Guest",
+   "options": "Guest",
+   "reqd": 1
+  },
+  {
+   "fieldname": "blacklist_override_reason",
+   "fieldtype": "Small Text",
+   "label": "Lý Do Duyệt Khách Trong Danh Sách Đen (Blacklist)",
+   "description": "CHỈ cần điền nếu Guest được đánh dấu Blacklisted. Bắt buộc tối thiểu 10 ký tự và chỉ Frontdesk Supervisor/Hospitality Manager/System Manager mới lưu được đặt phòng cho khách trong danh sách đen — hệ thống tự kiểm tra ở server, không chỉ dựa vào giao diện."
+  },
+  {
+   "fieldname": "room_type",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_standard_filter": 1,
+   "label": "Room Type",
+   "options": "Hotel Room Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "room",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_standard_filter": 1,
+   "label": "Room",
+   "options": "Hotel Room",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Reserved",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Booking Status",
+   "options": "Reserved\nChecked In\nChecked Out\nCancelled",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "arrival_date",
+   "fieldtype": "Date",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Arrival Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "departure_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Departure Date",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "children_count",
+   "fieldtype": "Int",
+   "label": "Số lượng Trẻ em"
+  },
+  {
+   "default": "0",
+   "fieldname": "extra_bed_count",
+   "fieldtype": "Int",
+   "label": "Số Giường phụ (Extra Bed)"
+  },
+  {
+   "fieldname": "actual_checkin_time",
+   "fieldtype": "Time",
+   "label": "Giờ Nhận phòng Thực tế"
+  },
+  {
+   "fieldname": "actual_checkout_time",
+   "fieldtype": "Time",
+   "label": "Giờ Trả phòng Thực tế"
+  },
+  {
+   "fieldname": "arriving_from",
+   "fieldtype": "Data",
+   "label": "Arriving From"
+  },
+  {
+   "fieldname": "departing_to",
+   "fieldtype": "Data",
+   "label": "Departing To"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_alien",
+   "fieldtype": "Check",
+   "label": "Alien (Foreign National)"
+  },
+  {
+   "depends_on": "eval:doc.is_alien==1",
+   "fieldname": "passport_number",
+   "fieldtype": "Data",
+   "label": "Passport Number",
+   "mandatory_depends_on": "eval:doc.is_alien==1"
+  },
+  {
+   "fieldname": "section_break_financial",
+   "fieldtype": "Section Break",
+   "label": "Financial & Routing"
+  },
+  {
+   "fieldname": "rate_plan",
+   "fieldtype": "Link",
+   "label": "Rate Plan",
+   "options": "Room Rate Plan"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_complimentary",
+   "fieldtype": "Check",
+   "in_filter": 1,
+   "in_standard_filter": 1,
+   "label": "Complimentary (Free Stay)"
+  },
+  {
+   "default": "Amount",
+   "depends_on": "eval:doc.is_complimentary==0",
+   "fieldname": "discount_type",
+   "fieldtype": "Select",
+   "label": "Discount Type",
+   "options": "Amount\nPercentage"
+  },
+  {
+   "depends_on": "eval:doc.is_complimentary==0 && doc.discount_type",
+   "fieldname": "discount_value",
+   "fieldtype": "Currency",
+   "label": "Discount Value",
+   "options": "currency"
+  },
+  {
+   "fieldname": "room_rate_preview",
+   "fieldtype": "HTML",
+   "label": "Room Rate Preview",
+   "options": "<div id='room-rate-preview-box'></div>"
+  },
+  {
+   "default": "1",
+   "description": "If unchecked, Cashiers cannot post charges to this room.",
+   "fieldname": "allow_pos_posting",
+   "fieldtype": "Check",
+   "label": "Allow POS/F&B Posting"
+  },
+  {
+   "default": "0",
+   "description": "If checked, all charges are automatically mirrored to the Company Master Folio.",
+   "fieldname": "is_company_guest",
+   "fieldtype": "Check",
+   "in_filter": 1,
+   "in_standard_filter": 1,
+   "label": "Is Company Guest"
+  },
+  {
+   "default": "0",
+   "description": "If checked, all charges are routed to the Group Master Folio.",
+   "fieldname": "is_group_guest",
+   "fieldtype": "Check",
+   "label": "Is Group Guest"
+  },
+  {
+   "fieldname": "group_booking",
+   "fieldtype": "Link",
+   "label": "Group Booking",
+   "mandatory_depends_on": "eval:doc.is_group_guest==1",
+   "options": "Hotel Group Booking"
+  },
+  {
+   "depends_on": "eval:doc.is_company_guest==true",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company Name",
+   "mandatory_depends_on": "eval:doc.is_company_guest==1",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "routing_instructions",
+   "fieldtype": "Table",
+   "hidden": 1,
+   "label": "Routing Instructions",
+   "options": "Reservation Routing"
+  },
+  {
+   "fieldname": "folio",
+   "fieldtype": "Link",
+   "label": "Folio",
+   "options": "Guest Folio",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Hotel Reservation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_channel",
+   "fieldtype": "Section Break",
+   "label": "Channel & Distribution"
+  },
+  {
+   "default": "Direct",
+   "description": "Used by Tape Chart 2.0 for color-coded source grouping. Set automatically to 'OTA' by the Channel Manager Gateway when a reservation is created from an OTA webhook.",
+   "fieldname": "booking_source",
+   "fieldtype": "Select",
+   "in_filter": 1,
+   "in_standard_filter": 1,
+   "label": "Booking Source",
+   "options": "Direct\nOTA\nCorporate\nGroup\nComplimentary"
+  },
+  {
+   "fieldname": "column_break_channel",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.booking_source==\"OTA\"",
+   "fieldname": "ota_platform",
+   "fieldtype": "Select",
+   "label": "OTA Platform",
+   "options": "\nAgoda\nBooking.com\nTraveloka\nTrip.com\nOther"
+  },
+  {
+   "depends_on": "eval:doc.booking_source==\"OTA\"",
+   "fieldname": "external_booking_id",
+   "fieldtype": "Data",
+   "label": "External Booking ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rate_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Căn cứ giá lúc đặt phòng",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "accounting_version",
+   "label": "Accounting Version",
+   "fieldtype": "Select",
+   "read_only": 1,
+   "no_copy": 1,
+   "options": "Legacy\nProperty v2"
+  },
+  {
+   "fieldname": "billing_customer",
+   "label": "Billing Customer",
+   "fieldtype": "Link",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "membership",
+   "label": "Membership",
+   "fieldtype": "Link",
+   "options": "Guest Membership"
+  },
+  {
+   "fieldname": "loyalty_snapshot",
+   "label": "Loyalty Snapshot",
+   "fieldtype": "Long Text",
+   "read_only": 1
+  },
+  {
+   "fieldname": "channel_connection",
+   "label": "Channel Connection",
+   "fieldtype": "Link",
+   "options": "Hospitality Channel Connection"
+  },
+  {
+   "fieldname": "channel_booking_key",
+   "label": "Channel Booking Key",
+   "fieldtype": "Data",
+   "unique": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-01-11 04:36:04.538259",
+ "modified_by": "Administrator",
+ "module": "Hospitality Core",
+ "name": "Hotel Reservation",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "if_owner": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Hospitality User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "guest,room",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
 }

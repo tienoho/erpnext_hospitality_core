@@ -32,8 +32,15 @@ def void_transaction(folio_transaction_name, reason_code):
     # 2. Check Reason Code / Approval
     reason_doc = frappe.get_doc("Allowance Reason Code", reason_code)
     if reason_doc.requires_manager_approval:
-        if not ("Frontdesk Supervisor" in frappe.get_roles() or frappe.session.user == "Administrator"):
-            frappe.throw(_("This Reason Code requires Supervisor Approval."))
+        # Deliberately a stricter, manager-tier role than the entry gate above
+        # (which already allows Frontdesk Supervisor) — otherwise this check is
+        # a no-op for anyone who already passed the entry gate.
+        if not (
+            "Hospitality Manager" in frappe.get_roles()
+            or "System Manager" in frappe.get_roles()
+            or frappe.session.user == "Administrator"
+        ):
+            frappe.throw(_("This Reason Code requires Manager Approval."))
 
     ref_doctype = trans.reference_doctype or ""
     ref_name = trans.reference_name or ""
@@ -82,6 +89,12 @@ def void_transaction(folio_transaction_name, reason_code):
         frappe.msgprint(
             _(f"Payment Entry '{ref_name}' cancelled — credit removed from the Folio.")
         )
+        return
+
+    if trans.get('pricing_details') or trans.get('pricing_origin') or trans.get('mirror_source'):
+        from hospitality_core.hospitality_core.api.rate_plan import void_pricing_charge
+        void_pricing_charge(trans, reason_code)
+        frappe.msgprint(_('Đã hủy tiền phòng và các khoản giảm giá liên quan.'))
         return
 
     # ── Regular (non-linked or Sales-Invoice-linked) transactions ────────────
@@ -185,9 +198,16 @@ def _void_pos_invoice_with_closing_entry(pos_doc, closing_entry_name, ref_name):
         amended_closing.insert(ignore_permissions=True)
         frappe.db.commit()
     except Exception as e:
+        frappe.log_error(
+            f"Void of POS Invoice {ref_name}: original Closing Entry {closing_entry_name} is "
+            f"already cancelled and cannot be restored. Amend failed: {str(e)}",
+            "Hospitality Core: Unreconciled POS Closing Entry"
+        )
         frappe.throw(_(
-            f"POS Invoice was voided but amending POS Closing Entry '{closing_entry_name}' "
-            f"failed: {str(e)}. Please manually amend the closing entry."
+            f"POS Invoice was voided, but there is now NO POS Closing Entry for this shift — "
+            f"the original '{closing_entry_name}' was already cancelled and creating its "
+            f"replacement failed: {str(e)}. A supervisor must manually create a new POS Closing "
+            f"Entry covering the remaining invoices for this shift before it can be reconciled."
         ))
 
     # ── Step 4: Submit the amended POS Closing Entry ─────────────────────────

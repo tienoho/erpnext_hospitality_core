@@ -1,0 +1,30 @@
+{
+ "doctype": "DocType",
+ "name": "Room Type Currency Rate",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 1,
+ "track_changes": 0,
+ "field_order": [
+  "currency",
+  "default_rate"
+ ],
+ "fields": [
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Currency"
+  },
+  {
+   "fieldname": "default_rate",
+   "label": "Default Rate",
+   "fieldtype": "Currency",
+   "reqd": 1,
+   "options": "currency"
+  }
+ ],
+ "permissions": []
+}

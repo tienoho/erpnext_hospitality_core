@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -18,9 +19,28 @@ def execute(filters=None):
     ]
 
     conditions = "gf.status = 'Open'"
-    
+
     if not filters.get("show_corporate"):
         conditions += " AND (gf.company IS NULL OR gf.company = '')"
+    else:
+        # A company-billed charge lives on the guest's own folio AND, once
+        # mirrored, also on that company's Master Folio. Only show a non-master
+        # folio here when its company has no Master Folio to mirror into yet,
+        # so the same charge isn't listed (and totalled) twice.
+        conditions += """ AND (
+            gf.company IS NULL OR gf.company = '' OR gf.is_company_master = 1
+            OR NOT EXISTS (
+                SELECT 1 FROM `tabGuest Folio` m
+                WHERE m.company = gf.company AND m.is_company_master = 1
+                AND m.status = 'Open' AND m.name != gf.name
+            )
+        )"""
+
+    params = {}
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND gf.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
 
     sql = f"""
         SELECT
@@ -46,7 +66,7 @@ def execute(filters=None):
             gf.room ASC
     """
 
-    data = frappe.db.sql(sql, as_dict=True)
+    data = frappe.db.sql(sql, params, as_dict=True)
     
     # Add Total Row
     if data:

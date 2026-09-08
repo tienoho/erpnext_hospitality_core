@@ -27,138 +27,192 @@ def get_tax_breakdown(total_amount):
     }
 
 def make_gl_entries_for_folio_transaction(txn_doc, method=None):
-    """
-    Creates GL entries for a Folio Transaction (Charge).
-    dr Receivable / cr Suspense
-    """
-    if flt(txn_doc.amount) <= 0 or txn_doc.item in ["PAYMENT", "DISCOUNT", "COMPLIMENTARY"]:
+    """Ghi chênh lệch GL của giao dịch gốc; gọi lại không ghi trùng."""
+    if txn_doc.get('accounting_version') == 'Property v2':
         return
-
-    # Handle Cancellation/Void
-    is_cancelled = False
-    if method == "on_cancel" or txn_doc.docstatus == 2 or getattr(txn_doc, "is_void", 0):
-        is_cancelled = True
-
-    # Skip if originated from POS Invoice (POS Invoice creates its own GL entries)
-    if txn_doc.reference_doctype == "POS Invoice":
+    if (txn_doc.get('mirror_source') or txn_doc.reference_doctype in ('POS Invoice', 'Payment Entry', 'Folio Transaction')
+            or txn_doc.item in ('PAYMENT', 'TRANSFER', 'TRANSFER-GROUP')
+            or str(txn_doc.item or '').startswith('PAYMENT-')):
         return
-
-    settings = frappe.get_single("Hospitality Accounting Settings")
-    
-    # 1. Identify Customer (Party)
-    guest_folio = frappe.get_doc("Guest Folio", txn_doc.parent)
-    customer = guest_folio.company
-    
+    amount = 0 if txn_doc.is_void or txn_doc.docstatus == 2 or method == 'on_cancel' else flt(txn_doc.amount)
+    if amount == 0 and not txn_doc.is_void:
+        return
+    frappe.db.sql('SELECT name FROM `tabGuest Folio` WHERE name=%s FOR UPDATE', txn_doc.parent)
+    settings = frappe.get_single('Hospitality Accounting Settings')
+    folio = frappe.get_doc('Guest Folio', txn_doc.parent)
+    customer = folio.company or frappe.db.get_value('Guest', folio.guest, 'customer')
     if not customer:
-        customer = frappe.db.get_value("Guest", guest_folio.guest, "customer")
-    
-    if not customer:
+        frappe.throw(_('Khách chưa liên kết Customer; không thể ghi công nợ folio.'))
+    company = frappe.db.get_value('Account', settings.receivable_account, 'company')
+    if not company:
+        frappe.throw(_('Cần cấu hình tài khoản phải thu của khách sạn.'))
+    # Giao dịch 'Legacy' (chưa cutover sang Property v2) của 1 property có
+    # operating_company KHÁC với công ty sở hữu tài khoản phải thu toàn cục
+    # (Hospitality Accounting Settings — Single, 1 bộ tài khoản duy nhất cho
+    # CẢ site) TRƯỚC ĐÂY sẽ vẫn bị ghi sổ GL vào công ty của Settings toàn
+    # cục — SAI PHÁP NHÂN — vì hàm này không hề đối chiếu operating_company
+    # của giao dịch với company suy ra từ Settings. Logic thuế/tài khoản kiểu
+    # Legacy (income_suspense/consumption_tax/vat/service_charge) chỉ được
+    # thiết kế cho 1 công ty duy nhất — không thể tự suy ra cấu hình đúng cho
+    # công ty khác, nên phải CHẶN RÕ RÀNG thay vì âm thầm ghi nhầm sổ, buộc
+    # property đó phải hoàn tất cutover sang Property v2 (có
+    # Hospitality Company Accounting Settings riêng) trước khi tiếp tục ghi
+    # nhận doanh thu kiểu Legacy.
+    folio_company = folio.get('operating_company')
+    folio_property = folio.get('property')
+    if folio_property and not folio_company:
+        # property đã gán (Property v2) nhưng operating_company còn trống —
+        # thường do property_setup.py's apply_mapping() ghi thẳng bằng
+        # frappe.db.set_value (bỏ qua validate_document(), vốn tự động điền
+        # operating_company từ Hospitality Property khi có property). Trạng
+        # thái này nghĩa là mapping CHƯA hoàn tất — không có căn cứ để biết
+        # công ty toàn cục có đúng là pháp nhân của property này hay không,
+        # nên phải chặn thay vì âm thầm coi như khớp.
+        frappe.throw(_(
+            'Folio thuộc cơ sở {0} nhưng chưa xác định pháp nhân (operating_company) — '
+            'mapping property chưa hoàn tất, cần chạy lại wizard mapping trước khi ghi nhận giao dịch.'
+        ).format(folio_property))
+    if folio_company and folio_company != company:
+        frappe.throw(_(
+            'Giao dịch thuộc pháp nhân {0} nhưng cấu hình kế toán Legacy toàn cục đang trỏ tới pháp nhân {1}. '
+            'Cần hoàn tất chuyển đổi (cutover) property này sang Property v2 trước khi ghi nhận thêm giao dịch.'
+        ).format(folio_company, company))
+    parts = get_tax_breakdown(abs(amount))
+    sign = 1 if amount >= 0 else -1
+    expected = {}
+    for account, debit_minus_credit in [
+        (settings.receivable_account, amount),
+        (settings.income_suspense_account, -sign * parts['net_amount']),
+        (settings.consumption_tax_account, -sign * parts['ct_amount']),
+        (settings.vat_account, -sign * parts['vat_amount']),
+        (settings.service_charge_account, -sign * parts['sc_amount'])
+    ]:
+        expected[account] = flt(expected.get(account, 0) + debit_minus_credit, 2)
+    existing = frappe.db.sql("""SELECT account, debit, credit FROM `tabGL Entry`
+        WHERE voucher_type='Guest Folio' AND voucher_no=%s
+        AND (voucher_detail_no=%s OR remarks LIKE %s) FOR UPDATE""",
+        (txn_doc.parent, txn_doc.name, f'%(Ref: {txn_doc.name})%'), as_dict=True)
+    for row in existing:
+        expected[row.account] = flt(expected.get(row.account, 0) - flt(row.debit) + flt(row.credit), 2)
+    if abs(sum(expected.values())) > 0.01:
+        frappe.throw(_('GL lịch sử của giao dịch không cân bằng; cần đối soát trước khi điều chỉnh.'))
+    for account, delta in expected.items():
+        if not delta:
+            continue
+        # debit_in_account_currency/credit_in_account_currency: site này chỉ
+        # dùng 1 tiền tệ (VND) nên luôn khớp debit/credit — TRƯỚC ĐÂY thiếu
+        # cả 2 field này (xem ghi chú chi tiết ở reverse_charge_time_gl_on_invoice_submit()
+        # bên dưới, cùng lỗi lặp lại ở MỌI hàm ghi GL trong file này).
+        debit_amt, credit_amt = max(delta, 0), max(-delta, 0)
+        entry = dict(doctype='GL Entry', posting_date=txn_doc.posting_date, account=account,
+            company=company, cost_center=settings.cost_center, voucher_type='Guest Folio',
+            voucher_no=txn_doc.parent, voucher_detail_no=txn_doc.name,
+            debit=debit_amt, credit=credit_amt,
+            debit_in_account_currency=debit_amt, credit_in_account_currency=credit_amt,
+            remarks=f'{txn_doc.description} (Ref: {txn_doc.name})')
+        if account == settings.receivable_account:
+            entry.update(party_type='Customer', party=customer)
+        frappe.get_doc(entry).insert(ignore_permissions=True)
+
+
+def reverse_charge_time_gl_on_invoice_submit(doc, method=None):
+    """
+    Hook: Sales Invoice (on_submit/on_cancel)
+
+    Xác nhận CHẮC CHẮN (einvoice.py's issue_einvoice_from_folio() gọi thẳng
+    invoicing.py's create_invoice_from_folio() RỒI TỰ ĐỘNG submit()) rằng
+    Sales Invoice tạo từ Folio Legacy THẬT SỰ được submit trong luồng phát
+    hành hóa đơn điện tử tiêu chuẩn — không phải rủi ro giả định. Vì MỌI
+    Folio Transaction trên folio Legacy đã được make_gl_entries_for_folio_transaction()
+    ghi GL (Receivable/Income Suspense/3 TK thuế) NGAY LÚC PHÁT SINH CHARGE,
+    GL chuẩn của ERPNext khi submit hóa đơn (Debtors/Income) sẽ ghi TRÙNG
+    doanh thu nếu không xử lý.
+
+    Sửa TẬN GỐC: với mỗi Folio Transaction đã được invoicing.py gắn
+    reference_doctype='Sales Invoice'/reference_name=doc.name (chỉ áp dụng
+    cho hóa đơn Legacy — hóa đơn Property v2 dùng cơ chế Hospitality
+    Invoice Allocation riêng, không đi qua đây), tìm CHÍNH XÁC các GL Entry
+    đã ghi lúc charge (voucher_type='Guest Folio' + voucher_no + đúng
+    voucher_detail_no — CÙNG bộ khóa mà make_gl_entries_for_folio_transaction()
+    dùng, không suy đoán lại số tiền qua công thức riêng) rồi ĐẢO NGƯỢC
+    chính xác đúng số tiền đó (debit<->credit) tại thời điểm hóa đơn
+    submit — dùng chung idiom make_gl_entries(cancel=...) đã có sẵn trong
+    file này (redirect_pos_income_to_suspense/reclassify_pos_taxes) để tự
+    động đối xứng khi hóa đơn bị Cancel sau đó (phục hồi lại GL charge-time
+    ban đầu).
+
+    HẠN CHẾ ĐÃ BIẾT: nếu hóa đơn này sau đó được Amend (Cancel rồi Amend
+    theo quy trình ERPNext chuẩn), Sales Invoice MỚI có tên khác — Folio
+    Transaction vẫn còn reference_name trỏ hóa đơn CŨ (không có cơ chế
+    re-link như property_accounting.py's _relink_amended_allocations() cho
+    đường Property v2) — hóa đơn amend sẽ không tìm thấy GL để đảo, có thể
+    ghi trùng doanh thu lần nữa. Đây là hạn chế đã biết của toàn bộ đường
+    Legacy (vốn không hỗ trợ amend tốt), không phải lỗi mới.
+
+    CHÚ Ý KỸ THUẬT (phát hiện qua đọc trực tiếp erpnext/accounts/general_ledger.py):
+    KHÔNG dùng `make_gl_entries(cancel=...)` như bản đầu — hàm đó, khi các
+    dict truyền vào không có key "name", sẽ rơi vào nhánh "blanket cancel"
+    (UPDATE is_cancelled=1 cho MỌI GL Entry cùng voucher_type+voucher_no,
+    không khớp riêng từng dòng). Bút toán đảo ở đây dùng
+    voucher_type='Sales Invoice'+voucher_no=doc.name — TRÙNG với chính GL
+    Entry GỐC mà ERPNext tự ghi cho hóa đơn này (Debtors/Income) — blanket
+    cancel có thể đánh dấu NHẦM cả 2 loại nếu thứ tự hook thay đổi trong
+    tương lai. Thay vào đó: tự insert() trực tiếp (khớp mẫu
+    make_gl_entries_for_folio_transaction() đã dùng trong CHÍNH file này),
+    gán voucher_detail_no=t.name (tên Folio Transaction — không gian ID
+    khác hẳn voucher_detail_no của GL Entry gốc ERPNext ghi, vốn là tên
+    dòng Sales Invoice Item) để nhận diện CHÍNH XÁC chỉ các dòng do hàm này
+    tạo ra, không bao giờ lẫn với GL Entry gốc của ERPNext dù cùng
+    voucher_type/voucher_no.
+    """
+    txns = frappe.get_all("Folio Transaction",
+        filters={"reference_doctype": "Sales Invoice", "reference_name": doc.name},
+        fields=["name", "parent"])
+    if not txns:
         return
 
-    # 2. Check if already created (matching this specific flow: original or reversal)
-    check_debit = flt(txn_doc.amount) if not is_cancelled else 0
-    if frappe.db.exists("GL Entry", {
-        "remarks": ["like", f"%Ref: {txn_doc.name}%"],
-        "debit": check_debit,
-        "account": settings.receivable_account,
-        "is_cancelled": 1 if is_cancelled else 0
-    }):
+    settings = frappe.get_single('Hospitality Accounting Settings')
+
+    if method == "on_cancel" or doc.docstatus == 2:
+        # Hủy CHÍNH XÁC các dòng đảo do hàm này tạo (nhận diện qua
+        # voucher_detail_no=t.name), phục hồi lại hiệu lực GL charge-time
+        # gốc — không đụng tới bất kỳ GL Entry nào khác của hóa đơn.
+        for t in txns:
+            frappe.db.sql("""
+                UPDATE `tabGL Entry` SET is_cancelled=1
+                WHERE voucher_type='Sales Invoice' AND voucher_no=%s AND voucher_detail_no=%s
+                  AND ifnull(is_cancelled, 0) = 0
+            """, (doc.name, t.name))
         return
 
     gl_entries = []
-    
-    # Debit Receivable
-    gl_entries.append(frappe.get_doc({
-        "doctype": "GL Entry",
-        "posting_date": txn_doc.posting_date,
-        "account": settings.receivable_account,
-        "party_type": "Customer",
-        "party": customer,
-        "debit": flt(txn_doc.amount) if not is_cancelled else 0,
-        "credit": 0 if not is_cancelled else flt(txn_doc.amount),
-        "voucher_type": "Guest Folio",
-        "voucher_no": txn_doc.parent,
-        "remarks": f"{txn_doc.description} (Ref: {txn_doc.name})",
-        "is_cancelled": 1 if is_cancelled else 0,
-        "cost_center": settings.cost_center,
-        "company": txn_doc.company or frappe.db.get_default("company")
-    }))
-
-    # Credits
-    total_amount = flt(txn_doc.amount)
-    
-    # Calculate Inclusive Splits
-    # Total = Net + 0.05*Net + 0.075*Net + 0.10*Net = 1.225 * Net
-    net_amount = flt(total_amount / 1.225, 2)
-    ct_amount = flt(net_amount * 0.05, 2)
-    vat_amount = flt(net_amount * 0.075, 2)
-    sc_amount = flt(net_amount * 0.10, 2)
-
-    # 1. Credit Suspense (Net Revenue)
-    gl_entries.append(frappe.get_doc({
-        "doctype": "GL Entry",
-        "posting_date": txn_doc.posting_date,
-        "account": settings.income_suspense_account,
-        "debit": 0 if not is_cancelled else net_amount,
-        "credit": net_amount if not is_cancelled else 0,
-        "voucher_type": "Guest Folio",
-        "voucher_no": txn_doc.parent,
-        "remarks": f"{txn_doc.description} (Net) (Ref: {txn_doc.name})",
-        "is_cancelled": 1 if is_cancelled else 0,
-        "cost_center": settings.cost_center,
-        "company": txn_doc.company or frappe.db.get_default("company")
-    }))
-
-    # 2. Credit Consumption Tax
-    if ct_amount > 0:
-        gl_entries.append(frappe.get_doc({
-            "doctype": "GL Entry",
-            "posting_date": txn_doc.posting_date,
-            "account": settings.consumption_tax_account,
-            "debit": 0 if not is_cancelled else ct_amount,
-            "credit": ct_amount if not is_cancelled else 0,
-            "voucher_type": "Guest Folio",
-            "voucher_no": txn_doc.parent,
-            "remarks": f"Consumption Tax (5%) for {txn_doc.name}",
-            "is_cancelled": 1 if is_cancelled else 0,
-            "cost_center": settings.cost_center,
-            "company": txn_doc.company or frappe.db.get_default("company")
-        }))
-
-    # 3. Credit VAT
-    if vat_amount > 0:
-        gl_entries.append(frappe.get_doc({
-            "doctype": "GL Entry",
-            "posting_date": txn_doc.posting_date,
-            "account": settings.vat_account,
-            "debit": 0 if not is_cancelled else vat_amount,
-            "credit": vat_amount if not is_cancelled else 0,
-            "voucher_type": "Guest Folio",
-            "voucher_no": txn_doc.parent,
-            "remarks": f"VAT (7.5%) for {txn_doc.name}",
-            "is_cancelled": 1 if is_cancelled else 0,
-            "cost_center": settings.cost_center,
-            "company": txn_doc.company or frappe.db.get_default("company")
-        }))
-
-    # 4. Credit Service Charge
-    if sc_amount > 0:
-        gl_entries.append(frappe.get_doc({
-            "doctype": "GL Entry",
-            "posting_date": txn_doc.posting_date,
-            "account": settings.service_charge_account,
-            "debit": 0 if not is_cancelled else sc_amount,
-            "credit": sc_amount if not is_cancelled else 0,
-            "voucher_type": "Guest Folio",
-            "voucher_no": txn_doc.parent,
-            "remarks": f"Service Charge (10%) for {txn_doc.name}",
-            "is_cancelled": 1 if is_cancelled else 0,
-            "cost_center": settings.cost_center,
-            "company": txn_doc.company or frappe.db.get_default("company")
-        }))
+    for t in txns:
+        existing = frappe.db.sql("""
+            SELECT account, debit, credit FROM `tabGL Entry`
+            WHERE voucher_type='Guest Folio' AND voucher_no=%s AND voucher_detail_no=%s
+              AND ifnull(is_cancelled, 0) = 0
+        """, (t.parent, t.name), as_dict=True)
+        for row in existing:
+            if not (flt(row.debit) or flt(row.credit)):
+                continue
+            # debit_in_account_currency/credit_in_account_currency: đọc trực
+            # tiếp erpnext/accounts/doctype/gl_entry/gl_entry.py xác nhận
+            # ERPNext LUÔN set cả 2 cặp field này cùng lúc — get_balance_on()
+            # (mặc định in_account_currency=True) và update_outstanding_amt()
+            # tính số dư dựa trên CẶP field "_in_account_currency", KHÔNG
+            # PHẢI debit/credit thô. Site này chỉ 1 tiền tệ (VND, không quy
+            # đổi đa tiền tệ) nên 2 cặp luôn bằng nhau — thiếu cặp thứ 2 sẽ
+            # khiến số dư tính theo tiền tệ tài khoản LUÔN RA 0 bất kể ghi gì.
+            gl_entries.append(dict(doctype='GL Entry', posting_date=doc.posting_date, account=row.account,
+                company=doc.company, cost_center=settings.cost_center, voucher_type='Sales Invoice',
+                voucher_no=doc.name, voucher_detail_no=t.name,
+                debit=flt(row.credit), credit=flt(row.debit),
+                debit_in_account_currency=flt(row.credit), credit_in_account_currency=flt(row.debit),
+                remarks=f'Đảo bút toán charge-time (Guest Folio {t.parent}, giao dịch {t.name}) khi lập hóa đơn chính thức {doc.name}'))
 
     for entry in gl_entries:
-        entry.insert(ignore_permissions=True)
+        frappe.get_doc(entry).insert(ignore_permissions=True)
+
 
 def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
     """
@@ -167,6 +221,8 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
     Only the Net portion is transferred, as Taxes were already split into 
     total liability accounts during the Folio Transaction (Charge).
     """
+    if payment_doc.get('hospitality_accounting_version') == 'Property v2':
+        return
     settings = frappe.get_single("Hospitality Accounting Settings")
     
     # Calculate Net portion: Total = 1.225 * Net
@@ -174,6 +230,10 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
     
     gl_entries = []
 
+    # debit_in_account_currency/credit_in_account_currency phải luôn khớp
+    # debit/credit (site 1 tiền tệ) — thiếu cặp này khiến get_balance_on()/
+    # update_outstanding_amt() của ERPNext tính số dư = 0 (xem ghi chú đầy
+    # đủ ở reverse_charge_time_gl_on_invoice_submit()).
     # Debit Suspense
     gl_entries.append(frappe.get_doc({
         "doctype": "GL Entry",
@@ -181,6 +241,8 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
         "account": settings.income_suspense_account,
         "debit": net_amount if not cancel else 0,
         "credit": 0 if not cancel else net_amount,
+        "debit_in_account_currency": net_amount if not cancel else 0,
+        "credit_in_account_currency": 0 if not cancel else net_amount,
         "voucher_type": "Payment Entry",
         "voucher_no": payment_doc.name,
         "remarks": f"Income Realization (Net) for Folio {folio_id}",
@@ -195,6 +257,8 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
         "account": settings.income_account,
         "debit": 0 if not cancel else net_amount,
         "credit": net_amount if not cancel else 0,
+        "debit_in_account_currency": 0 if not cancel else net_amount,
+        "credit_in_account_currency": net_amount if not cancel else 0,
         "voucher_type": "Payment Entry",
         "voucher_no": payment_doc.name,
         "remarks": f"Income Realization (Net) for Folio {folio_id}",
@@ -229,11 +293,16 @@ def redirect_pos_income_to_suspense(pos_invoice, method=None):
     
     gl_entries = []
 
+    # debit_in_account_currency/credit_in_account_currency phải luôn khớp
+    # debit/credit (site 1 tiền tệ) — xem ghi chú đầy đủ ở
+    # reverse_charge_time_gl_on_invoice_submit().
     # 1. Debit Income (Reduce Realized Income)
     gl_entries.append(frappe._dict({
         "account": settings.income_account,
         "debit": abs(flt(room_charge_amount)),
         "credit": 0,
+        "debit_in_account_currency": abs(flt(room_charge_amount)),
+        "credit_in_account_currency": 0,
         "posting_date": pos_invoice.posting_date,
         "voucher_type": "POS Invoice",
         "voucher_no": pos_invoice.name,
@@ -247,6 +316,8 @@ def redirect_pos_income_to_suspense(pos_invoice, method=None):
         "account": settings.income_suspense_account,
         "debit": 0,
         "credit": abs(flt(room_charge_amount)),
+        "debit_in_account_currency": 0,
+        "credit_in_account_currency": abs(flt(room_charge_amount)),
         "posting_date": pos_invoice.posting_date,
         "voucher_type": "POS Invoice",
         "voucher_no": pos_invoice.name,
@@ -301,12 +372,17 @@ def reclassify_pos_taxes(pos_invoice, method=None):
 
     gl_entries = []
 
+    # debit_in_account_currency/credit_in_account_currency phải luôn khớp
+    # debit/credit (site 1 tiền tệ) — xem ghi chú đầy đủ ở
+    # reverse_charge_time_gl_on_invoice_submit().
     # 1. Debit Income (Tax portion of Cash/Card sales)
     if tax_from_income > 0:
         gl_entries.append(frappe._dict({
             "account": settings.income_account,
             "debit": tax_from_income,
             "credit": 0,
+            "debit_in_account_currency": tax_from_income,
+            "credit_in_account_currency": 0,
             "posting_date": pos_invoice.posting_date,
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
@@ -321,6 +397,8 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "account": settings.income_suspense_account,
             "debit": tax_from_suspense,
             "credit": 0,
+            "debit_in_account_currency": tax_from_suspense,
+            "credit_in_account_currency": 0,
             "posting_date": pos_invoice.posting_date,
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
@@ -335,6 +413,8 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "account": settings.consumption_tax_account,
             "debit": 0,
             "credit": ct_amount,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": ct_amount,
             "posting_date": pos_invoice.posting_date,
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
@@ -349,6 +429,8 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "account": settings.vat_account,
             "debit": 0,
             "credit": vat_amount,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": vat_amount,
             "posting_date": pos_invoice.posting_date,
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
@@ -363,6 +445,8 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "account": settings.service_charge_account,
             "debit": 0,
             "credit": sc_amount,
+            "debit_in_account_currency": 0,
+            "credit_in_account_currency": sc_amount,
             "posting_date": pos_invoice.posting_date,
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
@@ -390,13 +474,20 @@ def create_expense_gl_entries(expense_doc, method=None):
     gl_entries = []
     company = expense_doc.company or frappe.db.get_default("company")
 
+    # debit_in_account_currency/credit_in_account_currency phải luôn khớp
+    # debit/credit (site 1 tiền tệ) — xem ghi chú đầy đủ ở
+    # reverse_charge_time_gl_on_invoice_submit().
     # 1. Debit Expense Account (Net Amount)
+    expense_debit = abs(flt(expense_doc.amount)) if not is_cancelled else 0
+    expense_credit = 0 if not is_cancelled else abs(flt(expense_doc.amount))
     gl_entries.append(frappe.get_doc({
         "doctype": "GL Entry",
         "posting_date": expense_doc.expense_date,
         "account": expense_doc.expense_account,
-        "debit": abs(flt(expense_doc.amount)) if not is_cancelled else 0,
-        "credit": 0 if not is_cancelled else abs(flt(expense_doc.amount)),
+        "debit": expense_debit,
+        "credit": expense_credit,
+        "debit_in_account_currency": expense_debit,
+        "credit_in_account_currency": expense_credit,
         "voucher_type": "Hospitality Expense",
         "voucher_no": expense_doc.name,
         "remarks": f"Expense: {expense_doc.expense_category} - {expense_doc.description or ''}",
@@ -408,12 +499,16 @@ def create_expense_gl_entries(expense_doc, method=None):
     # 2. Debit Tax Accounts (if any)
     for tax in expense_doc.get("taxes"):
         if flt(tax.tax_amount) > 0:
+            tax_debit = abs(flt(tax.tax_amount)) if not is_cancelled else 0
+            tax_credit = 0 if not is_cancelled else abs(flt(tax.tax_amount))
             gl_entries.append(frappe.get_doc({
                 "doctype": "GL Entry",
                 "posting_date": expense_doc.expense_date,
                 "account": tax.account_head,
-                "debit": abs(flt(tax.tax_amount)) if not is_cancelled else 0,
-                "credit": 0 if not is_cancelled else abs(flt(tax.tax_amount)),
+                "debit": tax_debit,
+                "credit": tax_credit,
+                "debit_in_account_currency": tax_debit,
+                "credit_in_account_currency": tax_credit,
                 "voucher_type": "Hospitality Expense",
                 "voucher_no": expense_doc.name,
                 "remarks": f"Tax: {tax.description or tax.account_head} for {expense_doc.name}",
@@ -423,12 +518,16 @@ def create_expense_gl_entries(expense_doc, method=None):
             }))
 
     # 3. Credit Payment Account (Grand Total)
+    payment_debit = 0 if not is_cancelled else abs(flt(expense_doc.grand_total))
+    payment_credit = abs(flt(expense_doc.grand_total)) if not is_cancelled else 0
     gl_entries.append(frappe.get_doc({
         "doctype": "GL Entry",
         "posting_date": expense_doc.expense_date,
         "account": expense_doc.payment_account,
-        "debit": 0 if not is_cancelled else abs(flt(expense_doc.grand_total)),
-        "credit": abs(flt(expense_doc.grand_total)) if not is_cancelled else 0,
+        "debit": payment_debit,
+        "credit": payment_credit,
+        "debit_in_account_currency": payment_debit,
+        "credit_in_account_currency": payment_credit,
         "voucher_type": "Hospitality Expense",
         "voucher_no": expense_doc.name,
         "remarks": f"Payment via {expense_doc.paid_via} for {expense_doc.name}",
@@ -556,8 +655,12 @@ def run_pos_cancellation_test():
     else:
         print(f"FAIL: {txn_count} Folio Transactions still exist.")
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def execute_cleanup():
+    # Full destructive data wipe — restrict to System Manager only.
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(_("Access Denied. Only System Managers can execute this cleanup."), frappe.PermissionError)
+
     import hospitality_core.hospitality_core.hospitality_core.clear_hotel_data as clear_data
     clear_data.execute()
     return "Data wipe executed successfully via API."

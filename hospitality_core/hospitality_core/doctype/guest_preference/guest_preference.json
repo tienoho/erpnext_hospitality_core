@@ -1,0 +1,88 @@
+{
+ "doctype": "DocType",
+ "name": "Guest Preference",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "guest",
+  "preference_type",
+  "preference_value",
+  "sharing_scope",
+  "property",
+  "source",
+  "valid_until",
+  "active"
+ ],
+ "fields": [
+  {
+   "fieldname": "guest",
+   "label": "Guest",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest"
+  },
+  {
+   "fieldname": "preference_type",
+   "label": "Preference Type",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "preference_value",
+   "label": "Preference Value",
+   "fieldtype": "Small Text",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sharing_scope",
+   "label": "Sharing Scope",
+   "fieldtype": "Select",
+   "default": "Property",
+   "reqd": 1,
+   "options": "Property\nGroup"
+  },
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "source",
+   "label": "Source",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "valid_until",
+   "label": "Valid Until",
+   "fieldtype": "Date"
+  },
+  {
+   "fieldname": "active",
+   "label": "Active",
+   "fieldtype": "Check",
+   "default": "1"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ]
+}

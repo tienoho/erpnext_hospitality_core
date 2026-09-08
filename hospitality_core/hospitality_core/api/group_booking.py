@@ -4,6 +4,9 @@ from hospitality_core.hospitality_core.api.reservation import check_bulk_availab
 
 @frappe.whitelist()
 def create_master_folio(group_booking_name):
+    if not frappe.has_permission("Hotel Group Booking", "write", doc=group_booking_name):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     doc = frappe.get_doc("Hotel Group Booking", group_booking_name)
     
     if doc.master_folio:
@@ -29,14 +32,69 @@ def create_master_folio(group_booking_name):
     folio = frappe.new_doc("Guest Folio")
     folio.guest = organizer_guest
     folio.company = doc.master_payer
+    # TRƯỚC ĐÂY: không set property/operating_company/currency — đây là nút
+    # thủ công thay thế cho create_master_payer_reservation() (luồng tự động,
+    # đã có sẵn throw rõ ràng khi lệch property). Vì Guest Folio KHÔNG được
+    # liên kết room/reservation nào (không có gì cho validate_document()'s
+    # LINKS tự suy ra property), property_scope.py sẽ hoặc throw (nếu >1
+    # property đang enabled) hoặc âm thầm gán bừa property DUY NHẤT đang
+    # enabled — không đối chiếu với property của CHÍNH Hotel Group Booking
+    # này. Set tường minh từ group booking để nhất quán với luồng tự động.
+    if doc.get('property'):
+        folio.property = doc.property
+        folio.operating_company = doc.get('operating_company')
+        folio.currency = doc.get('currency')
     # We don't link a specific room or reservation, but we flag it as a Group Master
     folio.status = "Open"
     folio.save(ignore_permissions=True)
-    
+
+    if doc.get('property') and folio.get('property') != doc.property:
+        frappe.throw(_("Master Folio vừa tạo không cùng cơ sở (property) với Group Booking — vui lòng kiểm tra lại."))
+
     # Link back
     doc.db_set("master_folio", folio.name)
-    
+
     return folio.name
+
+
+@frappe.whitelist(methods=['POST'])
+def record_group_deposit(group_booking, mode_of_payment, amount=None, reference_no='', remarks=''):
+    """
+    Ghi nhận tiền đặt cọc đoàn bằng 1 Payment Entry THẬT trên Master Folio.
+
+    TRƯỚC ĐÂY: `deposit_status` (hotel_group_booking.py's validate_deposit())
+    chỉ là field thông tin THUẦN TÚY, hoàn toàn tách biệt khỏi
+    outstanding_balance thật của Master Folio — đánh dấu "Received" qua
+    dropdown KHÔNG hề trừ tiền vào số dư, khiến City Ledger/AR Aging báo
+    THỪA số tiền còn nợ (đã thu cọc thật nhưng báo cáo vẫn hiện đủ 100%
+    công nợ, có thể khiến kế toán đòi thu lại tiền đã thu). Cố ý làm thành
+    1 hàm RIÊNG, tường minh (không tự động kích hoạt ngay khi đổi dropdown
+    trong validate()) — thu cọc là hành động tài chính thật (tạo GL), nhân
+    viên cần chủ động xác nhận qua hành động này, không phải side-effect ẩn
+    của việc đổi 1 trường trạng thái.
+    """
+    doc = frappe.get_doc("Hotel Group Booking", group_booking)
+    if not doc.master_folio:
+        frappe.throw(_("Đoàn {0} chưa có Master Folio để ghi nhận đặt cọc.").format(group_booking))
+
+    from frappe.utils import flt
+    deposit_amount = flt(amount) if amount else flt(doc.deposit_required)
+    if deposit_amount <= 0:
+        frappe.throw(_("Số tiền đặt cọc phải lớn hơn 0."))
+
+    from hospitality_core.hospitality_core.api.payment_bridge import create_company_folio_payment
+    result = create_company_folio_payment(
+        doc.master_folio, deposit_amount, mode_of_payment,
+        hotel_reception=None,
+        reference_no=reference_no,
+        remarks=remarks or _("Đặt cọc đoàn {0}").format(doc.group_name or doc.name)
+    )
+
+    doc.flags.hospitality_service = True
+    doc.deposit_status = "Received"
+    doc.save(ignore_permissions=True)
+
+    return result
 
 @frappe.whitelist()
 def add_rooms_to_group(group_booking, rooms):
@@ -44,6 +102,9 @@ def add_rooms_to_group(group_booking, rooms):
     rooms: JSON string list of room names or reservations
     Logic to mass-update reservations to link them to this group.
     """
+    if not frappe.has_permission("Hotel Reservation", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     import json
     room_list = json.loads(rooms)
     
@@ -64,6 +125,9 @@ def mass_check_in(group_booking):
     Finds all 'Reserved' bookings linked to this group and checks them in.
     This includes both regular group reservations and the master payer reservation.
     """
+    if not frappe.has_permission("Hotel Reservation", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     # Get group doc to check for master folio
     group_doc = frappe.get_doc("Hotel Group Booking", group_booking)
 
@@ -84,13 +148,16 @@ def mass_check_in(group_booking):
             )
     
     # Get all reservations linked to this group
-    reservations = frappe.get_all("Hotel Reservation", 
+    # TRƯỚC ĐÂY: mỗi bước ở đây (kể cả khi hoàn toàn thành công) đều gọi
+    # frappe.log_error(..., "Mass Check-in Debug") — làm rác Error Log List
+    # bằng thông tin gỡ lỗi không phải lỗi thật, khiến khó phát hiện lỗi thật
+    # khi rà soát. Đã bỏ toàn bộ log debug, chỉ giữ log_error thật ở nhánh
+    # except bên dưới ("Mass Check-in Error").
+    reservations = frappe.get_all("Hotel Reservation",
         filters={"group_booking": group_booking, "status": "Reserved"},
         fields=["name"]
     )
-    
-    frappe.log_error(f"Group {group_booking}: Found {len(reservations)} reservations via group_booking field", "Mass Check-in Debug")
-    
+
     # Also check for master payer reservation by folio if it exists
     if group_doc.master_folio:
         master_res = frappe.get_all("Hotel Reservation",
@@ -100,25 +167,24 @@ def mass_check_in(group_booking):
             },
             fields=["name"]
         )
-        frappe.log_error(f"Group {group_booking}: Found {len(master_res)} reservations via master_folio", "Mass Check-in Debug")
         # Add master reservation if not already in list
         for m_res in master_res:
             if m_res not in reservations:
                 reservations.append(m_res)
-                frappe.log_error(f"Added master reservation {m_res.name} to check-in list", "Mass Check-in Debug")
-    
+
     if not reservations:
         return {"message": _("No reserved bookings found for this group.")}
-        
+
     count = 0
     errors = []
     for r in reservations:
+        frappe.db.savepoint('group_rate_checkin')
         try:
-            doc = frappe.get_doc("Hotel Reservation", r.name)
-            frappe.log_error(f"Checking in {doc.name}: rate_plan={doc.rate_plan}, room_type={doc.room_type}, folio={doc.folio}", "Mass Check-in Debug")
+            doc = frappe.get_doc("Hotel Reservation", r.name, for_update=True)
             doc.process_check_in()
             count += 1
         except Exception as e:
+            frappe.db.rollback(save_point='group_rate_checkin')
             err_msg = str(e) or _("Unknown error")
             errors.append(f"<b>{r.name}</b>: {err_msg}")
             frappe.log_error(f"Failed to check in {r.name}: {err_msg}", "Mass Check-in Error")
@@ -134,7 +200,10 @@ def mass_check_out(group_booking):
     """
     Finds all 'Checked In' bookings linked to this group and checks them out.
     """
-    reservations = frappe.get_all("Hotel Reservation", 
+    if not frappe.has_permission("Hotel Reservation", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    reservations = frappe.get_all("Hotel Reservation",
         filters={"group_booking": group_booking, "status": "Checked In"},
         fields=["name"]
     )
@@ -145,14 +214,34 @@ def mass_check_out(group_booking):
     count = 0
     errors = []
     for r in reservations:
+        # Khớp savepoint/rollback đã dùng ở mass_check_in() (bên trên) —
+        # TRƯỚC ĐÂY vòng lặp này không có, nên nếu process_check_out() ném
+        # lỗi SAU KHI đã ghi 1 phần giao dịch (VD tạo transaction TRANSFER
+        # sang City Ledger) nhưng TRƯỚC KHI cập nhật xong trạng thái, phần đã
+        # ghi vẫn ở lại trong DB dù toàn bộ lượt check-out của khách đó coi
+        # như thất bại — không đối xứng với luồng check-in đã được bảo vệ.
+        frappe.db.savepoint('group_rate_checkout')
         try:
-            doc = frappe.get_doc("Hotel Reservation", r.name)
+            # for_update=True — TRƯỚC ĐÂY đọc doc THƯỜNG (không khóa), khác với
+            # `check_out_guest()` (whitelisted wrapper cho check-out ĐƠN LẺ) vừa
+            # được thêm for_update=True cùng phiên này để chặn race điều kiện
+            # snapshot cũ. Nếu 1 nhân viên bấm "Check Out" đơn lẻ (đi qua
+            # check_out_guest(), có khóa) đúng lúc 1 nhân viên khác bấm
+            # "Mass Check Out" cho cả đoàn (đi qua đây, KHÔNG khóa) trên CÙNG 1
+            # đặt phòng, luồng mass check-out này đọc dưới REPEATABLE READ có
+            # thể không chờ khóa của luồng kia — vẫn thấy status="Checked In"
+            # cũ và chạy tiếp, có nguy cơ ghi trùng giao dịch transfer City
+            # Ledger/Group Master. Khóa ở đây để nhất quán với check_out_guest()
+            # và với mass_check_in() (đã có for_update=True) trong cùng file.
+            doc = frappe.get_doc("Hotel Reservation", r.name, for_update=True)
             doc.process_check_out()
             count += 1
         except Exception as e:
+            frappe.db.rollback(save_point='group_rate_checkout')
             err_msg = str(e) or _("Unknown error")
             errors.append(f"<b>{r.name}</b>: {err_msg}")
-            
+            frappe.log_error(f"Failed to check out {r.name}: {err_msg}", "Mass Check-out Error")
+
     res_msg = _("Successfully Checked Out {0} guests.").format(count)
     if errors:
         res_msg += "<br><br>" + _("<b>Failures:</b>") + "<br><ul><li>" + "</li><li>".join(errors) + "</li></ul>"
@@ -165,9 +254,18 @@ def bulk_reserve_rooms(group_booking, guest, rooms, arrival_date, departure_date
     Creates multiple Hotel Reservation records for a guest under a group booking.
     rooms: JSON list of room names
     """
+    # TRƯỚC ĐÂY: không có kiểm tra quyền RIÊNG (chỉ dựa vào quyền "create"
+    # ngầm định của res.insert() bên dưới) — khác với các hàm cùng file
+    # (create_master_folio/add_rooms_to_group/mass_check_in/out đều có
+    # frappe.has_permission("Hotel Reservation", "write") tường minh). Hàm
+    # này còn cho phép set discount_value tùy ý (tới 100%) khi tạo hàng loạt
+    # đặt phòng, nên cần chốt chặn rõ ràng như các hàm khác.
+    if not frappe.has_permission("Hotel Reservation", "write"):
+        frappe.throw(_("Not permitted to create reservations."), frappe.PermissionError)
+
     import json
     room_list = json.loads(rooms)
-    
+
     group_doc = frappe.get_doc("Hotel Group Booking", group_booking)
     
     # Comprehensive Availability Verification

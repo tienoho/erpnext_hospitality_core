@@ -8,6 +8,7 @@ Tuân thủ 100% nguyên tắc ZERO HARDCODE - Đọc cấu hình động từ H
 import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate, formatdate
+from xml.sax.saxutils import escape as xml_escape
 import io
 import csv
 
@@ -59,6 +60,17 @@ def _get_police_settings():
     stay_purpose = (getattr(settings, "default_stay_purpose", None) or "").strip() or _("Du lịch / Nghỉ dưỡng")
     portal_url = (getattr(settings, "immigration_portal_url", None) or "").strip() or "https://xuatnhapcanh.gov.vn"
 
+    required = {
+        "Mã số thuế": tax_id,
+        "Địa chỉ": address,
+        "Tên đơn vị công an": police_st,
+        "Tỉnh/Thành phố công an": police_city,
+        "Mã cơ sở lưu trú": est_code,
+    }
+    missing = [label for label, value in required.items() if not value]
+    if missing:
+        frappe.throw(_("Chưa cấu hình {0} trong Hospitality Police Settings. Vui lòng cấu hình đầy đủ trước khi xuất khai báo tạm trú.").format(", ".join(missing)))
+
     return {
         "establishment_name": est_name,
         "establishment_code": est_code,
@@ -71,6 +83,34 @@ def _get_police_settings():
         "immigration_portal_url": portal_url
     }
 
+def _vn_gender_label(gender_value, form="long"):
+    """
+    Quy đổi Guest.gender (Select: Male/Female/Other) sang nhãn tiếng Việt cho
+    biểu mẫu Công an. `form="code"` trả về mã số 1/2 theo chuẩn cột "Giới tính
+    (1:Nam, 2:Nữ)" của Cổng XNC Quảng Ninh.
+    TRƯỚC ĐÂY: cột này bị hardcode cứng chuỗi hiển thị "Nam/Nữ" (biểu mẫu
+    thường) hoặc luôn mặc định "1"/"Nam" (biểu mẫu XNC) cho MỌI khách bất kể
+    giới tính thật — vì Guest doctype chưa hề có trường gender. Nay đã có
+    trường thật, nhưng dữ liệu cũ (khách tạo trước khi thêm trường) vẫn có
+    thể để trống — khi đó trả về rỗng thay vì đoán bừa, để người khai báo
+    biết mà bổ sung thủ công thay vì nộp thiếu/sai thông tin cho Công an.
+    """
+    g = (gender_value or "").strip()
+    if form == "code":
+        if g == "Male":
+            return "1"
+        if g == "Female":
+            return "2"
+        return ""
+    if g == "Male":
+        return "Nam"
+    if g == "Female":
+        return "Nữ"
+    if g == "Other":
+        return "Khác"
+    return ""
+
+
 def check_police_declaration_permission():
     """
     Kiểm tra phân quyền truy cập tính năng Khai báo tạm trú.
@@ -78,10 +118,20 @@ def check_police_declaration_permission():
     if not frappe.session.user or frappe.session.user == "Guest":
         frappe.throw(_("Vui lòng đăng nhập để truy cập tính năng này."), frappe.PermissionError)
 
+    # TRƯỚC ĐÂY: `not has_role AND not frappe.has_permission(...)` — chỉ chặn
+    # khi CẢ HAI điều kiện đều sai, nghĩa là bất kỳ role nào có quyền đọc
+    # Hotel Reservation ở mức doctype (rất phổ biến, kể cả các vai trò không
+    # nằm trong ALLOWED_ROLES, VD lễ tân/buồng phòng chỉ cần tra cứu thông
+    # tin) đều vượt qua được, vô hiệu hóa hoàn toàn ý nghĩa của danh sách
+    # ALLOWED_ROLES — dữ liệu ở đây là PII nhạy cảm (CCCD/hộ chiếu, ngày
+    # sinh, quốc tịch, địa chỉ) của TOÀN BỘ khách đang lưu trú, xuất hàng
+    # loạt. ALLOWED_ROLES đã đủ rộng cho mọi vai trò thực sự cần tính năng
+    # này — bỏ hẳn điều kiện OR dự phòng, chỉ cho phép đúng các vai trò
+    # trong danh sách.
     user_roles = frappe.get_roles(frappe.session.user) if hasattr(frappe, "get_roles") else []
     has_role = any(r in ALLOWED_ROLES for r in user_roles)
 
-    if not has_role and not frappe.has_permission("Hotel Reservation", "read"):
+    if not has_role:
         frappe.throw(
             _("Bạn không có quyền truy cập hoặc kết xuất báo cáo Khai báo Tạm trú."),
             frappe.PermissionError
@@ -194,8 +244,26 @@ def get_daily_guest_list(target_date=None, company=None):
         company = conf["resort_company_name"]
 
     try:
+        # Chỉ 'Checked In' là trạng thái thật sự có khách đang lưu trú tại cơ
+        # sở (options thật của Hotel Reservation.status: Reserved/Checked
+        # In/Checked Out/Cancelled — 'Arrived'/'Confirmed' không tồn tại,
+        # không bao giờ khớp, chỉ gây hiểu nhầm nên đã bỏ).
+        #
+        # QUAN TRỌNG: KHÔNG lọc theo r.company — trường "company" trên Hotel
+        # Reservation thực chất là Link tới CUSTOMER (đối tượng chịu trách
+        # nhiệm thanh toán, VD công ty lữ hành đặt hộ khách), KHÔNG PHẢI Link
+        # tới ERPNext Company (pháp nhân khách sạn) như tham số `company` của
+        # hàm này. Bộ lọc cũ so sánh 2 giá trị này với nhau nên gần như không
+        # bao giờ khớp — MỌI khách đặt qua công ty/đại lý lữ hành (r.company
+        # có giá trị) bị âm thầm LOẠI KHỎI báo cáo khai báo tạm trú, trong khi
+        # đây chính là nhóm khách bắt buộc phải khai báo với Công an. Vì app
+        # này hiện chỉ hỗ trợ 1 pháp nhân/1 cơ sở lưu trú (chưa có multi-
+        # property — xem kế hoạch nâng cấp), không có trường property/company
+        # nào đáng tin cậy khác để lọc, nên bỏ hẳn điều kiện lọc theo company;
+        # tham số `company` vẫn được giữ lại chỉ để hiển thị trên tiêu đề báo
+        # cáo xuất ra.
         guests = frappe.db.sql("""
-            SELECT 
+            SELECT
                 g.name AS guest_id,
                 g.full_name,
                 g.identification_type,
@@ -203,6 +271,9 @@ def get_daily_guest_list(target_date=None, company=None):
                 g.mobile_no,
                 g.email_id,
                 g.address,
+                g.gender,
+                g.date_of_birth,
+                g.nationality,
                 r.name AS reservation_id,
                 r.room AS room_number,
                 r.arrival_date,
@@ -213,14 +284,19 @@ def get_daily_guest_list(target_date=None, company=None):
                 r.company
             FROM `tabHotel Reservation` r
             LEFT JOIN `tabGuest` g ON r.guest = g.name
-            WHERE (r.status IN ('Checked In', 'Arrived', 'Confirmed'))
+            WHERE (r.status = 'Checked In')
               AND (r.arrival_date <= %(target_date)s AND r.departure_date >= %(target_date)s)
-              AND (r.company = %(company)s OR r.company IS NULL OR %(company)s = '')
             ORDER BY r.room ASC, g.full_name ASC
-        """, {"target_date": target_date, "company": company}, as_dict=True)
+        """, {"target_date": target_date}, as_dict=True)
     except Exception as e:
+        # TRƯỚC ĐÂY: nuốt mọi lỗi truy vấn thành danh sách rỗng — nếu một sửa
+        # đổi sau này lỡ làm sai tham số/binding của câu SQL, người dùng sẽ
+        # nhận được một báo cáo khai báo tạm trú "0 khách lưu trú hôm nay" âm
+        # thầm SAI, không có bất kỳ dấu hiệu nào cho biết truy vấn đã lỗi, rồi
+        # có thể vô tình nộp báo cáo thiếu sót đó cho Công an. Vẫn ghi log để
+        # chẩn đoán, nhưng phải báo lỗi rõ ràng cho người dùng thay vì im lặng.
         frappe.log_error(f"Error querying guest list for police declaration: {str(e)}", "PoliceDeclaration")
-        guests = []
+        frappe.throw(_("Lỗi khi truy vấn danh sách khách lưu trú: {0}. Vui lòng thử lại hoặc liên hệ quản trị hệ thống — KHÔNG dùng báo cáo rỗng để khai báo với Công an.").format(str(e)))
 
     return guests
 
@@ -272,7 +348,9 @@ def export_police_declaration_csv(target_date=None, company=None, file_format="c
         full_name = (g.get('full_name') or g.get('name') or "").upper()
         id_type = "Hộ chiếu" if g.get('is_alien') or g.get('identification_type') == "Passport" else "CCCD"
         id_number = g.get('passport_number') or g.get('identification_no') or ""
-        nationality = "Nước ngoài" if g.get('is_alien') else "Việt Nam"
+        nationality = g.get('nationality') or ("Nước ngoài" if g.get('is_alien') else "Việt Nam")
+        gender_label = _vn_gender_label(g.get('gender'))
+        dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
         phone = g.get('mobile_no') or ""
         address = g.get('address') or ""
         room_no = g.get('room_number') or ""
@@ -282,8 +360,8 @@ def export_police_declaration_csv(target_date=None, company=None, file_format="c
         writer.writerow([
             idx,
             full_name,
-            "Nam/Nữ",
-            "",
+            gender_label,
+            dob,
             nationality,
             id_type,
             id_number,
@@ -349,7 +427,9 @@ def export_police_declaration_xlsx(target_date=None, company=None):
         full_name = (g.get("full_name") or g.get("name") or "").upper()
         id_type = "Hộ chiếu" if g.get("is_alien") or g.get("identification_type") == "Passport" else "CCCD"
         id_number = g.get("passport_number") or g.get("identification_no") or ""
-        nationality = "Nước ngoài" if g.get("is_alien") else "Việt Nam"
+        nationality = g.get("nationality") or ("Nước ngoài" if g.get("is_alien") else "Việt Nam")
+        gender_label = _vn_gender_label(g.get("gender"))
+        dob = formatdate(g.get("date_of_birth"), "dd/mm/yyyy") if g.get("date_of_birth") else ""
         phone = g.get("mobile_no") or ""
         address = g.get("address") or ""
         room_no = g.get("room_number") or ""
@@ -359,8 +439,8 @@ def export_police_declaration_xlsx(target_date=None, company=None):
         rows.append([
             idx,
             full_name,
-            "Nam/Nữ",
-            "",
+            gender_label,
+            dob,
             nationality,
             id_type,
             id_number,
@@ -437,11 +517,27 @@ def export_quangninh_immigration_report(target_date=None, company=None, file_for
 
     for idx, g in enumerate(foreign_guests, start=1):
         raw_name = (g.get('full_name') or "").strip()
+        # LƯU Ý: quy ước tách "Họ và Tên Đệm" / "Tên" bằng từ cuối cùng của
+        # full_name là quy ước dùng cho tên Việt Nam — CHƯA XÁC MINH được đây
+        # có đúng là cách Cổng XNC Quảng Ninh muốn nhận tên khách NƯỚC NGOÀI
+        # hay không (nhiều mẫu form của Công an VN áp dụng quy tắc này cho mọi
+        # quốc tịch, nhưng một số hộ chiếu phương Tây có thể cần tách theo
+        # đúng trường Surname/Given Name in trên hộ chiếu). Guest doctype hiện
+        # chỉ có 1 trường full_name, không có surname/given_name riêng —
+        # trước khi nộp thật cho cơ quan chức năng, cần đối chiếu quy tắc này
+        # với hướng dẫn thực tế của Cổng, hoặc bổ sung 2 trường riêng trên
+        # Guest lấy trực tiếp từ hộ chiếu (MRZ) qua id_scanner.py.
         parts = raw_name.split()
         first_name = parts[-1].upper() if len(parts) > 0 else ""
         middle_last_name = " ".join(parts[:-1]).upper() if len(parts) > 1 else ""
 
         passport_no = g.get('passport_number') or g.get('identification_no') or ""
+        gender_code = _vn_gender_label(g.get('gender'), form="code")
+        dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
+        # Mã ISO-3 thật cần bảng tra quốc gia riêng (Country doctype lõi của
+        # Frappe không có sẵn mã alpha-3) — tạm dùng tên quốc tịch thật nếu đã
+        # khai báo trên Guest, thay vì luôn hardcode "FOR" bất kể quốc tịch gì.
+        nationality_code = g.get('nationality') or ("VNM" if not g.get('is_alien') else "FOR")
         cin = formatdate(g.get('arrival_date'), "dd/mm/yyyy") if g.get('arrival_date') else formatdate(target_date, "dd/mm/yyyy")
         cout = formatdate(g.get('departure_date'), "dd/mm/yyyy") if g.get('departure_date') else ""
 
@@ -449,9 +545,9 @@ def export_quangninh_immigration_report(target_date=None, company=None, file_for
             idx,
             middle_last_name,
             first_name,
-            "1", # 1: Nam / 2: Nữ
-            "",
-            "VNM" if not g.get('is_alien') else "FOR",
+            gender_code,
+            dob,
+            nationality_code,
             passport_no,
             "Miễn thị thực",
             cin,
@@ -495,7 +591,7 @@ def export_quangninh_immigration_report_xlsx(target_date=None, company=None):
         "STT",
         "Họ và Tên Đệm (In hoa)",
         "Tên (In hoa)",
-        "Giới tính",
+        "Giới tính (1:Nam, 2:Nữ)",
         "Ngày sinh",
         "Quốc tịch (Mã ISO-3)",
         "Số Hộ chiếu",
@@ -515,6 +611,13 @@ def export_quangninh_immigration_report_xlsx(target_date=None, company=None):
         middle_last_name = " ".join(parts[:-1]).upper() if len(parts) > 1 else ""
 
         passport_no = g.get('passport_number') or g.get('identification_no') or ""
+        # Dùng cùng mã số 1/2 như bản CSV (export_quangninh_immigration_report)
+        # — trước đây bản Excel này lại xuất nhãn chữ "Nam"/"Nữ" dù cùng là
+        # "Chuẩn 11 cột quy định Cục Quản lý XNC", gây khác định dạng giữa 2
+        # bản của CÙNG một loại báo cáo chính thức.
+        gender_code = _vn_gender_label(g.get('gender'), form="code")
+        dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
+        nationality_code = g.get('nationality') or ("VNM" if not g.get('is_alien') else "FOR")
         cin = formatdate(g.get('arrival_date'), "dd/mm/yyyy") if g.get('arrival_date') else formatdate(target_date, "dd/mm/yyyy")
         cout = formatdate(g.get('departure_date'), "dd/mm/yyyy") if g.get('departure_date') else ""
 
@@ -522,9 +625,9 @@ def export_quangninh_immigration_report_xlsx(target_date=None, company=None):
             idx,
             middle_last_name,
             first_name,
-            "Nam" if str(g.get('gender', '')).lower() in ('nam', 'male', '1') else ("Nữ" if str(g.get('gender', '')).lower() in ('nữ', 'female', '2') else "Nam"),
-            "",
-            "VNM" if not g.get('is_alien') else "FOR",
+            gender_code,
+            dob,
+            nationality_code,
             passport_no,
             "Miễn thị thực",
             cin,
@@ -568,16 +671,21 @@ def export_police_declaration_xml(target_date=None, company=None):
 
     guests = get_daily_guest_list(target_date, company)
 
+    # QUAN TRỌNG: mọi giá trị tự do (tên khách, địa chỉ, tên công ty...) PHẢI
+    # được escape qua xml_escape() trước khi chèn vào tag — trước đây nội suy
+    # chuỗi trực tiếp, nên chỉ cần MỘT khách/địa chỉ/tên cơ sở có ký tự "&",
+    # "<" hoặc ">" (rất phổ biến, VD tên công ty có dấu "&") là file XML sinh
+    # ra bị hỏng cấu trúc, Cổng tiếp nhận sẽ từ chối hoặc đọc sai toàn bộ file.
     xml_lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
         '<KhaiBaoTamTru>',
         '  <ThongTinCoSo>',
-        f'    <TenCoSo>{conf["establishment_name"]}</TenCoSo>',
-        f'    <MaCoSo>{conf["establishment_code"]}</MaCoSo>',
-        f'    <DoanhNghiep>{company}</DoanhNghiep>',
-        f'    <MaSoThue>{conf["tax_id"]}</MaSoThue>',
-        f'    <DiaChi>{conf["address"]}</DiaChi>',
-        f'    <NgayKhaiBao>{target_date}</NgayKhaiBao>',
+        f'    <TenCoSo>{xml_escape(conf["establishment_name"])}</TenCoSo>',
+        f'    <MaCoSo>{xml_escape(conf["establishment_code"])}</MaCoSo>',
+        f'    <DoanhNghiep>{xml_escape(company)}</DoanhNghiep>',
+        f'    <MaSoThue>{xml_escape(conf["tax_id"])}</MaSoThue>',
+        f'    <DiaChi>{xml_escape(conf["address"])}</DiaChi>',
+        f'    <NgayKhaiBao>{xml_escape(str(target_date))}</NgayKhaiBao>',
         f'    <TongSoKhach>{len(guests)}</TongSoKhach>',
         '  </ThongTinCoSo>',
         '  <DanhSachKhach>'
@@ -587,20 +695,24 @@ def export_police_declaration_xml(target_date=None, company=None):
         full_name = (g.get('full_name') or "").upper()
         id_type = "Passport" if g.get('is_alien') else "CCCD"
         id_number = g.get('passport_number') or g.get('identification_no') or ""
-        nationality = "FOREIGN" if g.get('is_alien') else "VNM"
+        nationality = g.get('nationality') or ("FOREIGN" if g.get('is_alien') else "VNM")
+        gender_label = _vn_gender_label(g.get('gender'))
+        dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
 
         xml_lines.extend([
             '    <KhachLuuTru>',
             f'      <STT>{idx}</STT>',
-            f'      <HoTen>{full_name}</HoTen>',
-            f'      <QuocTich>{nationality}</QuocTich>',
-            f'      <LoaiGiayTo>{id_type}</LoaiGiayTo>',
-            f'      <SoGiayTo>{id_number}</SoGiayTo>',
-            f'      <SoDienThoai>{g.get("mobile_no") or ""}</SoDienThoai>',
-            f'      <SoPhong>{g.get("room_number") or ""}</SoPhong>',
-            f'      <NgayDen>{g.get("arrival_date") or target_date}</NgayDen>',
-            f'      <NgayDi>{g.get("departure_date") or ""}</NgayDi>',
-            f'      <MucDich>{conf["default_stay_purpose"]}</MucDich>',
+            f'      <HoTen>{xml_escape(full_name)}</HoTen>',
+            f'      <GioiTinh>{xml_escape(gender_label)}</GioiTinh>',
+            f'      <NgaySinh>{xml_escape(dob)}</NgaySinh>',
+            f'      <QuocTich>{xml_escape(nationality)}</QuocTich>',
+            f'      <LoaiGiayTo>{xml_escape(id_type)}</LoaiGiayTo>',
+            f'      <SoGiayTo>{xml_escape(id_number)}</SoGiayTo>',
+            f'      <SoDienThoai>{xml_escape(g.get("mobile_no") or "")}</SoDienThoai>',
+            f'      <SoPhong>{xml_escape(g.get("room_number") or "")}</SoPhong>',
+            f'      <NgayDen>{xml_escape(str(g.get("arrival_date") or target_date))}</NgayDen>',
+            f'      <NgayDi>{xml_escape(str(g.get("departure_date") or ""))}</NgayDi>',
+            f'      <MucDich>{xml_escape(conf["default_stay_purpose"])}</MucDich>',
             '    </KhachLuuTru>'
         ])
 

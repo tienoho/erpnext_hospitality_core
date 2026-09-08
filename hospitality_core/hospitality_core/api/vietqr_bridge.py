@@ -49,7 +49,15 @@ def _format_tlv(tag: str, value: str) -> str:
     return f"{tag}{length}{val_str}"
 
 
-def build_emvco_vietqr(bank_bin: str, account_number: str, amount: float = 0, description: str = "", account_name: str = "") -> str:
+# Mã ngành hàng (MCC) mặc định khi hệ thống chưa đăng ký MCC cụ thể với ngân
+# hàng thụ hưởng — "0000" là quy ước phổ biến cho "không phân loại", không
+# phải dữ liệu nghiệp vụ cần cấu hình riêng nên không vi phạm "ZERO HARDCODE"
+# của account/bank (những field đó vẫn 100% đọc từ Settings).
+DEFAULT_MERCHANT_CATEGORY_CODE = "0000"
+
+
+def build_emvco_vietqr(bank_bin: str, account_number: str, amount: float = 0, description: str = "",
+                        account_name: str = "", merchant_city: str = "") -> str:
     """
     Tạo chuỗi ký tự VietQR chuẩn EMVCo NAPAS 247 hoàn toàn Offline.
     """
@@ -60,37 +68,51 @@ def build_emvco_vietqr(bank_bin: str, account_number: str, amount: float = 0, de
     sub_02 = _format_tlv("02", "QRIBFTTA")     # Chuyển nhanh Napas 247
     tag_38 = _format_tlv("38", sub_00 + sub_01 + sub_02)
 
-    # 2. Transaction Currency (Tag 53): 704 = VND
+    # 2. Merchant Category Code (Tag 52) — bắt buộc theo EMVCo.
+    tag_52 = _format_tlv("52", DEFAULT_MERCHANT_CATEGORY_CODE)
+
+    # 3. Transaction Currency (Tag 53): 704 = VND
     tag_53 = _format_tlv("53", "704")
 
-    # 3. Country Code (Tag 58): VN
+    # 4. Country Code (Tag 58): VN
     tag_58 = _format_tlv("58", "VN")
 
-    # 4. Point of Initiation: 12 (Dynamic QR with amount) or 11 (Static QR)
+    # 5. Merchant Name (Tag 59) / Merchant City (Tag 60) — TRƯỚC ĐÂY:
+    # account_name được NHẬN làm tham số nhưng KHÔNG HỀ được dùng ở đâu cả
+    # trong hàm này — chuỗi EMVCo sinh ra thiếu 3 tag BẮT BUỘC (52/59/60)
+    # theo đặc tả gốc mà VietQR dựa trên. Ứng dụng ngân hàng của khách có thể
+    # từ chối quét hoặc hiển thị rỗng tên người nhận khi dùng mã OFFLINE này
+    # (đường chính khi không có mạng để gọi API ảnh cloud của vietqr.io).
+    clean_name = re.sub(r'[^A-Za-z0-9 ]', '', remove_vietnamese_accents(account_name))[:25].strip() or "UNKNOWN"
+    tag_59 = _format_tlv("59", clean_name)
+    clean_city = re.sub(r'[^A-Za-z0-9 ]', '', remove_vietnamese_accents(merchant_city))[:15].strip() or "VIETNAM"
+    tag_60 = _format_tlv("60", clean_city)
+
+    # 6. Point of Initiation: 12 (Dynamic QR with amount) or 11 (Static QR)
     point_init = "12" if amount > 0 else "11"
     tag_00 = _format_tlv("00", "01")
     tag_01 = _format_tlv("01", point_init)
 
-    qr_payload = tag_00 + tag_01 + tag_38 + tag_53
+    qr_payload = tag_00 + tag_01 + tag_38 + tag_52 + tag_53
 
-    # 5. Amount (Tag 54)
+    # 7. Amount (Tag 54)
     if amount > 0:
         amt_str = f"{int(round(amount))}"
         qr_payload += _format_tlv("54", amt_str)
 
-    qr_payload += tag_58
+    qr_payload += tag_58 + tag_59 + tag_60
 
-    # 6. Additional Data Field Template (Tag 62)
+    # 8. Additional Data Field Template (Tag 62)
     if description:
         # Chuẩn hóa nội dung không dấu, chỉ gồm chữ cái và số, tối đa 25 ký tự chuẩn EMVCo
         clean_desc = re.sub(r'[^A-Za-z0-9 ]', '', remove_vietnamese_accents(description))[:25].strip()
         sub_desc = _format_tlv("08", clean_desc)
         qr_payload += _format_tlv("62", sub_desc)
 
-    # 7. CRC16 Checksum (Tag 63)
+    # 9. CRC16 Checksum (Tag 63)
     raw_for_crc = (qr_payload + "6304").encode("utf-8")
     crc_code = crc16_ccitt(raw_for_crc)
-    
+
     return qr_payload + "6304" + crc_code
 
 
@@ -135,9 +157,13 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
     room_no = ""
 
     if folio_name:
+        if not frappe.has_permission("Guest Folio", "read", doc=folio_name):
+            frappe.throw(_("Không có quyền truy cập Guest Folio {0}.").format(folio_name), frappe.PermissionError)
         folio = frappe.get_doc("Guest Folio", folio_name)
-        if pay_amount <= 0:
-            pay_amount = flt(folio.outstanding_balance or 0)
+        # Số tiền luôn lấy từ số dư thực tế trên Folio — không tin tưởng
+        # tham số amount do client gửi, để tránh tạo mã QR với số tiền
+        # thấp hơn số nợ thực tế.
+        pay_amount = flt(folio.outstanding_balance or 0)
         room_no = folio.room or ""
         if not description:
             description = f"{prefix} {room_no} {folio_name}".strip()

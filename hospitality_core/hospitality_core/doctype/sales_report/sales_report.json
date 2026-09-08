@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "issingle": 1,
+ "is_submittable": 1,
  "creation": "2026-03-09 16:47:57.731229",
  "doctype": "DocType",
  "editable_grid": 1,
@@ -10,6 +10,7 @@
   "company",
   "from_date_time",
   "to_date_time",
+  "amended_from",
   "pos_entry_status",
   "pos_profiles",
   "include_stock_balances",
@@ -22,6 +23,7 @@
   "service_charge",
   "consumption_tax",
   "net_sales",
+  "total_taxes",
   "total_transactions",
   "cashiers",
   "section_break_item",
@@ -35,7 +37,10 @@
   "section_break_discrepancies",
   "eod_discrepancies",
   "section_break_stock",
-  "eod_stock_balance"
+  "eod_stock_balance",
+  "property",
+  "operating_company",
+  "currency"
  ],
  "fields": [
   {
@@ -59,6 +64,15 @@
    "in_list_view": 1,
    "label": "To Date & Time",
    "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Sales Report",
+   "print_hide": 1,
+   "read_only": 1
   },
   {
    "default": "Submitted",
@@ -89,19 +103,22 @@
    "fieldname": "total_expected_amount",
    "fieldtype": "Currency",
    "label": "Total Expected Amount",
-   "read_only": 1
+   "read_only": 1,
+   "options": "currency"
   },
   {
    "fieldname": "total_actual_amount",
    "fieldtype": "Currency",
    "label": "Total Actual Amount",
-   "read_only": 1
+   "read_only": 1,
+   "options": "currency"
   },
   {
    "fieldname": "total_difference",
    "fieldtype": "Currency",
    "label": "Total Difference",
-   "read_only": 1
+   "read_only": 1,
+   "options": "currency"
   },
   {
    "fieldname": "column_break_kpi",
@@ -110,26 +127,38 @@
   {
    "fieldname": "vat_amount",
    "fieldtype": "Currency",
-   "label": "VAT (7.5%)",
-   "read_only": 1
+   "label": "VAT",
+   "read_only": 1,
+   "options": "currency"
   },
   {
    "fieldname": "service_charge",
    "fieldtype": "Currency",
-   "label": "Service Charge (10%)",
-   "read_only": 1
+   "label": "Service Charge",
+   "read_only": 1,
+   "options": "currency"
   },
   {
    "fieldname": "consumption_tax",
    "fieldtype": "Currency",
-   "label": "Consumption Tax (5%)",
-   "read_only": 1
+   "label": "Consumption Tax",
+   "read_only": 1,
+   "options": "currency"
   },
   {
    "fieldname": "net_sales",
    "fieldtype": "Currency",
    "label": "Net Sales",
-   "read_only": 1
+   "read_only": 1,
+   "options": "currency"
+  },
+  {
+   "fieldname": "total_taxes",
+   "fieldtype": "Currency",
+   "label": "Total Actual Invoice Taxes",
+   "read_only": 1,
+   "description": "Sum of actual tax lines from submitted invoices in this period, for cross-checking against VAT/Service Charge/Consumption Tax above.",
+   "options": "currency"
   },
   {
    "fieldname": "total_transactions",
@@ -214,6 +243,26 @@
    "label": "Stock Balances",
    "options": "EOD Stock Balance",
    "read_only": 1
+  },
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency"
   }
  ],
  "grid_page_length": 50,
@@ -226,6 +275,8 @@
  "owner": "Administrator",
  "permissions": [
   {
+   "amend": 1,
+   "cancel": 1,
    "create": 1,
    "delete": 1,
    "email": 1,
@@ -235,6 +286,7 @@
    "report": 1,
    "role": "System Manager",
    "share": 1,
+   "submit": 1,
    "write": 1
   },
   {
@@ -246,12 +298,14 @@
    "report": 1,
    "role": "Hospitality User",
    "share": 1,
+   "submit": 1,
    "write": 1
   }
  ],
  "row_format": "Dynamic",
  "rows_threshold_for_grid_search": 20,
- "sort_field": "modified",
+ "sort_field": "from_date_time",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "track_changes": 1
 }

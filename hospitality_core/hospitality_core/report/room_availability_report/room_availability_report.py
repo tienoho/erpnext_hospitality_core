@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import add_days, getdate, date_diff, flt
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -27,14 +28,22 @@ def execute(filters=None):
     if filter_type:
         room_types_filters["room_type_name"] = filter_type
 
+    allowed_properties = allowed_properties_for_report()
+    room_property_condition = ""
+    room_property_params = {}
+    if allowed_properties is not None:
+        room_property_condition = "AND property IN %(_properties)s"
+        room_property_params["_properties"] = allowed_properties or [""]
+
     # Get counts of enabled rooms per type
-    inventory = frappe.db.sql("""
-        SELECT room_type, COUNT(name) as cnt 
-        FROM `tabHotel Room` 
-        WHERE is_enabled = 1 
+    inventory = frappe.db.sql(f"""
+        SELECT room_type, COUNT(name) as cnt
+        FROM `tabHotel Room`
+        WHERE is_enabled = 1
+        {room_property_condition}
         GROUP BY room_type
-    """, as_dict=True)
-    
+    """, room_property_params, as_dict=True)
+
     inventory_map = {i.room_type: i.cnt for i in inventory}
     
     all_types = list(inventory_map.keys())
@@ -50,12 +59,13 @@ def execute(filters=None):
         # Note: A proper maintenance module would have OOO logs with dates. 
         # Here we check current OOO status for "Today", but for future dates this might be inaccurate unless we have OOO Schedule.
         # For simplicity, we assume current OOO status applies to the forecast range unless expanded.
-        ooo_data = frappe.db.sql("""
-            SELECT room_type, COUNT(name) as cnt 
-            FROM `tabHotel Room` 
-            WHERE status = 'Out of Order'
+        ooo_data = frappe.db.sql(f"""
+            SELECT room_type, COUNT(name) as cnt
+            FROM `tabHotel Room`
+            WHERE status IN ('Out of Order', 'Dirty', 'Cleaning')
+            {room_property_condition}
             GROUP BY room_type
-        """, as_dict=True)
+        """, room_property_params, as_dict=True)
         ooo_map = {o.room_type: o.cnt for o in ooo_data}
 
         # Get Sold Rooms (Reservations covering this date)
@@ -65,6 +75,10 @@ def execute(filters=None):
         if filters.get("hotel_reception"):
             sold_conditions = "AND hotel_reception = %(hotel_reception)s"
             sold_params["hotel_reception"] = filters.get("hotel_reception")
+
+        if allowed_properties is not None:
+            sold_conditions += " AND property IN %(_properties)s"
+            sold_params["_properties"] = allowed_properties or [""]
 
         sold_sql = f"""
             SELECT room_type, COUNT(name) as cnt

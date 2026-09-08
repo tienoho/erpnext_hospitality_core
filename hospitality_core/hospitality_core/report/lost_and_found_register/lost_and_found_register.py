@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -17,33 +18,47 @@ def execute(filters=None):
     ]
 
     conditions = "1=1"
-    
+    params = {}
+
     if filters.get("from_date") and filters.get("to_date"):
-        conditions += f" AND lnf.found_date BETWEEN '{filters.get('from_date')}' AND '{filters.get('to_date')}'"
+        conditions += " AND lnf.found_date BETWEEN %(from_date)s AND %(to_date)s"
+        params["from_date"] = filters.get("from_date")
+        params["to_date"] = filters.get("to_date")
 
     if filters.get("status"):
-        conditions += f" AND lnf.status = '{filters.get('status')}'"
+        conditions += " AND lnf.status = %(status)s"
+        params["status"] = filters.get("status")
 
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND lnf.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
+    # TRƯỚC ĐÂY: JOIN `tabEmployee` ON lnf.finder = emp.name — nhưng
+    # `Lost and Found Item.finder` là field Data (TÊN NHẬP TAY TỰ DO), KHÔNG
+    # PHẢI Link tới Employee (Employee.name là mã tự sinh dạng "HR-EMP-00001",
+    # không bao giờ khớp 1 cái tên gõ tay) — JOIN này gần như KHÔNG BAO GIỜ
+    # khớp với dữ liệu thật, khiến cột "Found By" luôn hiện RỖNG dù nhân
+    # viên đã ghi rõ tên người tìm thấy. Dùng thẳng lnf.finder (đã là tên
+    # người, không cần join gì cả).
     sql = f"""
         SELECT
             lnf.name,
             lnf.found_date,
             lnf.item_name,
             lnf.found_location,
-            emp.employee_name as finder_name,
+            lnf.finder as finder_name,
             lnf.status,
             lnf.claimant_info,
             lnf.claimed_date
         FROM
             `tabLost and Found Item` lnf
-        LEFT JOIN
-            `tabEmployee` emp ON lnf.finder = emp.name
         WHERE
             {conditions}
         ORDER BY
             lnf.found_date DESC
     """
     
-    data = frappe.db.sql(sql, as_dict=True)
+    data = frappe.db.sql(sql, params, as_dict=True)
     
     return columns, data

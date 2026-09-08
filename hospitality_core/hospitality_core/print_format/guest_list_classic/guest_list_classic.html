@@ -65,8 +65,8 @@
             <tr>
                 <td class="room-col">{{ row.room }}</td>
                 <td class="guest-col">
-                    {{ row.guest_name }}
-                    <div class="billing-type">({{ row.billing_type }})</div>
+                    {{ row.guest_name | e }}
+                    <div class="billing-type">({{ row.billing_type | e }})</div>
                 </td>
                 <td class="date-col">{{ frappe.utils.formatdate(row.arrival_date, "dd MMM yyyy") }}</td>
                 <td class="date-col">{{ frappe.utils.formatdate(row.departure_date, "dd MMM yyyy") }}</td>

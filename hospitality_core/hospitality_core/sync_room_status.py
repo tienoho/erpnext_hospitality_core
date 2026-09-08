@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 from frappe.utils import nowdate
 
 @frappe.whitelist()
@@ -12,6 +13,9 @@ def sync_room_status():
       - Rooms marked 'Out of Order' → left unchanged (managed manually)
       - All other rooms → Available
     """
+    if not frappe.has_permission("Hotel Room", "write"):
+        frappe.throw(_("Not authorized to sync room statuses."), frappe.PermissionError)
+
     today = nowdate()
     print(f"\nStarting Room Status Sync for {today}...")
 

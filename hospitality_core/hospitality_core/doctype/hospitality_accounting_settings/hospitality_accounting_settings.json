@@ -118,9 +118,10 @@
             "depends_on": "enable_auto_print"
         },
         {
+            "description": "If the 'vietnam_einvoice' app is installed, it is the real issuance path and reads its OWN settings from 'Vietnam E-Invoice Config' (per Company) instead — the fields below are only used as a local fallback when that app is not installed.",
             "fieldname": "section_break_einvoice",
             "fieldtype": "Section Break",
-            "label": "E-Invoice (TT78 / NĐ123)"
+            "label": "E-Invoice (TT78 / NĐ123) — Fallback Provider"
         },
         {
             "default": "Mock",

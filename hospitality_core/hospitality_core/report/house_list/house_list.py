@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -21,8 +22,15 @@ def execute(filters=None):
         {"label": _("Credit"), "fieldname": "excess_payment", "fieldtype": "Currency", "width": 110}
     ]
 
-    sql = """
-        SELECT 
+    params = {"date": target_date}
+    property_condition = ""
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        property_condition = "AND res.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
+    sql = f"""
+        SELECT
             res.room,
             guest.full_name as guest_name,
             res.status,
@@ -40,15 +48,16 @@ def execute(filters=None):
             `tabGuest Folio` folio ON res.folio = folio.name
         WHERE
             res.arrival_date <= %(date)s
-            AND res.departure_date > %(date)s
+            AND res.departure_date >= %(date)s
             AND res.status IN ('Checked In', 'Checked Out')
+            {property_condition}
         ORDER BY
             CASE WHEN res.room REGEXP '^[0-9]+$' THEN 0 ELSE 1 END,
             CAST(res.room AS UNSIGNED),
             res.room
     """
 
-    data = frappe.db.sql(sql, {"date": target_date}, as_dict=True)
+    data = frappe.db.sql(sql, params, as_dict=True)
     
     # Add Total Rooms Occupied count
     report_summary = []

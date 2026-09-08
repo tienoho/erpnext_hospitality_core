@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import flt
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 
 def execute(filters=None):
@@ -18,6 +19,11 @@ def execute(filters=None):
     date_cond = ""
     if filters.get("from_date") and filters.get("to_date"):
         date_cond = "AND pos.posting_date BETWEEN %(from_date)s AND %(to_date)s"
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        date_cond += " AND pos.hospitality_property IN %(_properties)s"
+        filters["_properties"] = allowed_properties or [""]
 
     # --- Item rows ---
     data = frappe.db.sql(

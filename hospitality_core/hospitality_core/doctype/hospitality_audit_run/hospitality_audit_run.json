@@ -1,0 +1,68 @@
+{
+ "doctype": "DocType",
+ "name": "Hospitality Audit Run",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "property",
+  "business_date",
+  "run_key",
+  "status",
+  "details"
+ ],
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "business_date",
+   "label": "Business Date",
+   "fieldtype": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "run_key",
+   "label": "Run Key",
+   "fieldtype": "Data",
+   "unique": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "label": "Status",
+   "fieldtype": "Select",
+   "reqd": 1,
+   "options": "Running\nCompleted\nFailed"
+  },
+  {
+   "fieldname": "details",
+   "label": "Details",
+   "fieldtype": "Long Text"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

@@ -293,9 +293,25 @@ frappe.provide('hospitality.pos.payment_control');
     });
 
     // Poll until ERPNext POS is available
-    const patch_interval = setInterval(function () {
-        if (try_patch_payment_component()) clearInterval(patch_interval);
-    }, 600);
-    setTimeout(function () { clearInterval(patch_interval); }, 30000);
+    function poll_for_pos_component() {
+        const patch_interval = setInterval(function () {
+            if (try_patch_payment_component()) clearInterval(patch_interval);
+        }, 600);
+        setTimeout(function () { clearInterval(patch_interval); }, 30000);
+    }
+    poll_for_pos_component();
+
+    // This script loads once via app_include_js at initial desk page load, so
+    // the 30s window above only ever runs once per full page load. A 24/7
+    // front-desk terminal left logged in past that window before POS is first
+    // opened would silently never get the payment-mode patches installed for
+    // the rest of the session — re-arm polling on every route change into the
+    // POS page as a fallback (try_patch_payment_component() is itself
+    // idempotent via the _hcore_patched_* flags, so calling it again is safe).
+    frappe.router.on('change', function () {
+        if (frappe.get_route()[0] === 'point-of-sale') {
+            poll_for_pos_component();
+        }
+    });
 
 })();

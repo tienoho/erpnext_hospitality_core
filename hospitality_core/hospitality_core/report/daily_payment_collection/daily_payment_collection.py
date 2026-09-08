@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -37,6 +38,15 @@ def execute(filters=None):
     if mode_of_payment:
         conditions_pe += " AND pe.mode_of_payment = %(mode_of_payment)s"
         conditions_pi += " AND pip.mode_of_payment = %(mode_of_payment)s"
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        # Payment Entry/POS Invoice không có field "property" như doctype
+        # riêng của app này — dùng "hospitality_property" (custom field do
+        # migrations/property_v2.py tạo cho cả 2 doctype).
+        conditions_pe += " AND pe.hospitality_property IN %(_properties)s"
+        conditions_pi += " AND pi.hospitality_property IN %(_properties)s"
+        filters["_properties"] = allowed_properties or [""]
 
     sql = f"""
         SELECT

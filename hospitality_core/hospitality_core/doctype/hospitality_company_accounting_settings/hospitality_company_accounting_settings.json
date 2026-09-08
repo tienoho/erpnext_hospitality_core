@@ -1,0 +1,118 @@
+{
+ "doctype": "DocType",
+ "name": "Hospitality Company Accounting Settings",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "field:operating_company",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "operating_company",
+  "currency",
+  "receivable_account",
+  "unbilled_account",
+  "income_account",
+  "exchange_difference_account",
+  "round_off_account",
+  "loyalty_expense_account",
+  "cost_center",
+  "tax_template",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "unique": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Currency"
+  },
+  {
+   "fieldname": "receivable_account",
+   "label": "Receivable Account",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Account"
+  },
+  {
+   "fieldname": "unbilled_account",
+   "label": "Unbilled Account",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Account"
+  },
+  {
+   "fieldname": "income_account",
+   "label": "Income Account",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Account"
+  },
+  {
+   "fieldname": "exchange_difference_account",
+   "label": "Exchange Difference Account",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Account"
+  },
+  {
+   "fieldname": "round_off_account",
+   "label": "Round Off Account",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Account"
+  },
+  {
+   "fieldname": "loyalty_expense_account",
+   "label": "Loyalty Expense Account",
+   "fieldtype": "Link",
+   "options": "Account"
+  },
+  {
+   "fieldname": "cost_center",
+   "label": "Cost Center",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "tax_template",
+   "label": "Tax Template",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Sales Taxes and Charges Template"
+  },
+  {
+   "fieldname": "enabled",
+   "label": "Enabled",
+   "fieldtype": "Check",
+   "default": "0"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

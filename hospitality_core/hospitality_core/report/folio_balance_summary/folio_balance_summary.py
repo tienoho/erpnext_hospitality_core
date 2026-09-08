@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     columns = [
@@ -12,16 +13,27 @@ def execute(filters=None):
 
     data = []
 
+    # Lọc theo property được phép xem — xem report_scope.py để biết lý do.
+    allowed_properties = allowed_properties_for_report()
+    property_sql = ""
+    property_sql_gf = ""
+    property_params = ()
+    if allowed_properties is not None:
+        property_sql = "AND property IN %(_properties)s"
+        property_sql_gf = "AND gf.property IN %(_properties)s"
+        property_params = {"_properties": allowed_properties or [""]}
+
     # 1. Calculate Guest Ledger (In-House Private Guests)
-    guest_stats = frappe.db.sql("""
-        SELECT 
-            COUNT(name) as cnt, 
+    guest_stats = frappe.db.sql(f"""
+        SELECT
+            COUNT(name) as cnt,
             SUM(CASE WHEN outstanding_balance > 0 THEN outstanding_balance ELSE 0 END) as bal,
             SUM(excess_payment) as liability
         FROM `tabGuest Folio`
-        WHERE status = 'Open' 
+        WHERE status = 'Open'
         AND (company IS NULL OR company = '')
-    """, as_dict=True)[0]
+        {property_sql}
+    """, property_params, as_dict=True)[0]
 
     data.append({
         "ledger_type": "Guest Ledger",
@@ -32,16 +44,30 @@ def execute(filters=None):
     })
 
     # 2. Calculate City Ledger (Corporate/Direct Bill)
-    city_stats = frappe.db.sql("""
-        SELECT 
-            COUNT(name) as cnt, 
-            SUM(CASE WHEN outstanding_balance > 0 THEN outstanding_balance ELSE 0 END) as bal,
-            SUM(excess_payment) as liability
-        FROM `tabGuest Folio`
-        WHERE status = 'Open' 
-        AND company IS NOT NULL 
-        AND company != ''
-    """, as_dict=True)[0]
+    # A company-billed charge lives on the guest's own folio AND, once mirrored,
+    # also on that company's Master Folio (see api/folio.py mirror_to_company_folio).
+    # To avoid double-counting the same charge twice, only count a non-master
+    # folio when its company has no Master Folio to mirror into yet — matching
+    # mirror_to_company_folio()'s own "if no master exists, skip mirroring" rule.
+    city_stats = frappe.db.sql(f"""
+        SELECT
+            COUNT(gf.name) as cnt,
+            SUM(CASE WHEN gf.outstanding_balance > 0 THEN gf.outstanding_balance ELSE 0 END) as bal,
+            SUM(gf.excess_payment) as liability
+        FROM `tabGuest Folio` gf
+        WHERE gf.status = 'Open'
+        AND gf.company IS NOT NULL
+        AND gf.company != ''
+        AND (
+            gf.is_company_master = 1
+            OR NOT EXISTS (
+                SELECT 1 FROM `tabGuest Folio` m
+                WHERE m.company = gf.company AND m.is_company_master = 1
+                AND m.status = 'Open' AND m.name != gf.name
+            )
+        )
+        {property_sql_gf}
+    """, property_params, as_dict=True)[0]
 
     data.append({
         "ledger_type": "City Ledger",

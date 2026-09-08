@@ -1,0 +1,119 @@
+{
+ "doctype": "DocType",
+ "name": "Guest Benefit Entitlement",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "guest",
+  "reservation",
+  "benefit_type",
+  "benefit_date",
+  "quantity",
+  "status",
+  "event_key",
+  "policy_snapshot",
+  "decision_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "options": "Hospitality Property"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "guest",
+   "label": "Guest",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest"
+  },
+  {
+   "fieldname": "reservation",
+   "label": "Reservation",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Hotel Reservation"
+  },
+  {
+   "fieldname": "benefit_type",
+   "label": "Benefit Type",
+   "fieldtype": "Select",
+   "reqd": 1,
+   "options": "Breakfast\nLate Checkout\nUpgrade"
+  },
+  {
+   "fieldname": "benefit_date",
+   "label": "Benefit Date",
+   "fieldtype": "Date"
+  },
+  {
+   "fieldname": "quantity",
+   "label": "Quantity",
+   "fieldtype": "Int",
+   "default": "1"
+  },
+  {
+   "fieldname": "status",
+   "label": "Status",
+   "fieldtype": "Select",
+   "default": "Requested",
+   "options": "Requested\nConfirmed\nUsed\nCancelled"
+  },
+  {
+   "fieldname": "event_key",
+   "label": "Event Key",
+   "fieldtype": "Data",
+   "unique": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "policy_snapshot",
+   "label": "Policy Snapshot",
+   "fieldtype": "Long Text"
+  },
+  {
+   "fieldname": "decision_reason",
+   "label": "Decision Reason",
+   "fieldtype": "Small Text"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

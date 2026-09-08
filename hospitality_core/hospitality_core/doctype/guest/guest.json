@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:{full_name}",
+ "autoname": "GUEST-.########",
  "creation": "2025-01-28 10:30:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -14,7 +14,12 @@
   "customer",
   "address",
   "identification_no",
-  "identification_type"
+  "identification_type",
+  "column_break_police",
+  "gender",
+  "date_of_birth",
+  "nationality",
+  "merged_into"
  ],
  "fields": [
   {
@@ -70,6 +75,37 @@
    "fieldtype": "Select",
    "label": "ID Type",
    "options": "\nPassport\nNational ID\nDriver License"
+  },
+  {
+   "fieldname": "column_break_police",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gender",
+   "fieldtype": "Select",
+   "label": "Gender",
+   "options": "\nMale\nFemale\nOther",
+   "description": "Bắt buộc cho khai báo tạm trú Công an (Giới tính)."
+  },
+  {
+   "fieldname": "date_of_birth",
+   "fieldtype": "Date",
+   "label": "Date of Birth",
+   "description": "Bắt buộc cho khai báo tạm trú Công an (Ngày sinh)."
+  },
+  {
+   "fieldname": "nationality",
+   "fieldtype": "Link",
+   "label": "Nationality",
+   "options": "Country",
+   "description": "Dùng để xác định mã quốc tịch ISO-3 khi xuất khai báo XNC cho khách nước ngoài."
+  },
+  {
+   "fieldname": "merged_into",
+   "label": "Merged Into",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Guest"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -106,5 +142,6 @@
  ],
  "sort_field": "modified",
  "sort_order": "DESC",
- "track_changes": 1
+ "track_changes": 1,
+ "title_field": "full_name"
 }

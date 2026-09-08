@@ -148,6 +148,10 @@ def issue_einvoice(sales_invoice):
     result (status/number/lookup code) on the invoice itself.
     """
     invoice_doc = frappe.get_doc("Sales Invoice", sales_invoice)
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — hàm này PHÁT HÀNH HÓA ĐƠN ĐIỆN TỬ
+    # PHÁP LÝ (nghĩa vụ thuế thật với cơ quan thuế), bất kỳ user đã đăng nhập
+    # nào cũng gọi được cho bất kỳ Sales Invoice nào.
+    invoice_doc.check_permission("write")
 
     if invoice_doc.docstatus != 1:
         frappe.throw(_("The Sales Invoice must be submitted before issuing an E-Invoice."))
@@ -157,9 +161,16 @@ def issue_einvoice(sales_invoice):
             sales_invoice, invoice_doc.get("einvoice_number")
         ))
 
-    # Ưu tiên ủy quyền (delegate) xử lý sang App chuyên biệt erpnext_vietnam_einvoice nếu có
+    # Ưu tiên ủy quyền (delegate) xử lý sang App chuyên biệt erpnext_vietnam_einvoice nếu có.
+    # Chỉ rơi xuống provider cục bộ khi App đó CHƯA được cài đặt (ImportError). Mọi lỗi
+    # nghiệp vụ/xác thực thật (frappe.throw từ einvoice_core) phải được ném lại, không được
+    # nuốt và âm thầm phát hành hóa đơn Mock giả đè lên trạng thái thật.
     try:
         from vietnam_einvoice.vietnam_einvoice.api.einvoice_core import issue_einvoice as vn_issue_einvoice
+    except ImportError:
+        vn_issue_einvoice = None
+
+    if vn_issue_einvoice:
         vn_result = vn_issue_einvoice(invoice_name=sales_invoice, doctype="Sales Invoice")
         if vn_result and vn_result.get("success"):
             return {
@@ -167,8 +178,9 @@ def issue_einvoice(sales_invoice):
                 "einvoice_number": vn_result.get("invoice_number"),
                 "einvoice_lookup_code": vn_result.get("lookup_code"),
             }
-    except Exception:
-        pass
+        # Non-exception failure (e.g. queued for offline retry) — surface it as-is instead
+        # of silently falling through to the local Mock/legacy provider below.
+        return vn_result or {"einvoice_status": "Failed"}
 
     provider, settings = _get_provider()
     payload = _build_payload(invoice_doc, settings)
@@ -203,6 +215,7 @@ def issue_einvoice(sales_invoice):
 @frappe.whitelist()
 def get_einvoice_status(sales_invoice):
     invoice_doc = frappe.get_doc("Sales Invoice", sales_invoice)
+    invoice_doc.check_permission("read")
     return {
         "einvoice_status": invoice_doc.get("einvoice_status") or "Not Issued",
         "einvoice_provider": invoice_doc.get("einvoice_provider"),
@@ -221,16 +234,23 @@ def issue_einvoice_from_folio(folio_name):
     from hospitality_core.hospitality_core.api.invoicing import create_invoice_from_folio
 
     folio_doc = frappe.get_doc("Guest Folio", folio_name)
-    
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — hàm này tự tạo/submit Sales Invoice
+    # VÀ phát hành hóa đơn điện tử pháp lý cho bất kỳ Guest Folio nào.
+    folio_doc.check_permission("write")
+
     # Check if there is an existing submitted Sales Invoice for this folio
+    # TRƯỚC ĐÂY: query field "custom_guest_folio" (Sales Invoice) và
+    # "guest_folio" (Sales Invoice Item) — CẢ 2 field này KHÔNG TỒN TẠI ở
+    # BẤT KỲ ĐÂU trong app (không có migration/fixture/custom field script
+    # nào tạo ra chúng) — mỗi lần gọi hàm này sẽ ném lỗi DB "Unknown column"
+    # NGAY LẬP TỨC, trước khi kịp tạo/submit hóa đơn nào. Field LIÊN KẾT
+    # THẬT giữa Sales Invoice và Guest Folio là "hospitality_folio" (tạo ở
+    # migrations/property_v2.py, được property_accounting.py's create_invoice()
+    # và invoicing.py's create_invoice_from_folio() cùng set).
     existing_si = frappe.db.get_value(
         "Sales Invoice",
-        {"custom_guest_folio": folio_name, "docstatus": 1},
+        {"hospitality_folio": folio_name, "docstatus": 1},
         "name"
-    ) or frappe.db.get_value(
-        "Sales Invoice Item",
-        {"guest_folio": folio_name, "docstatus": 1},
-        "parent"
     )
 
     if not existing_si:

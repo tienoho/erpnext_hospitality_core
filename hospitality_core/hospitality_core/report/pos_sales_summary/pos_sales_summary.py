@@ -124,9 +124,19 @@ def build_summary_section(filters, profile_totals, no_profile_filter):
 	return data
 
 def get_closing_entries(filters):
-	closing_date = add_days(getdate(filters.get("date")), 1)
-	conditions = ["docstatus = 1", "posting_date = %(closing_date)s"]
-	params = {"closing_date": closing_date}
+	# TRƯỚC ĐÂY: giả định MỌI ca đóng POS đều submit vào NGÀY HÔM SAU
+	# (posting_date = date+1) — sai với outlet đóng ca sớm cùng ngày (spa,
+	# lưu niệm), khiến closing entry của outlet đó rớt hoàn toàn khỏi mọi
+	# báo cáo. Dùng đúng khoảng thời gian thật của ca (period_start_date/
+	# period_end_date) giao với cửa sổ [date 00:00, date+1 00:00) — khớp
+	# đúng 1 ngày kinh doanh, không phụ thuộc outlet đóng ca sớm hay muộn.
+	window_start = getdate(filters.get("date"))
+	window_end = add_days(window_start, 1)
+	# Nghiêm ngặt cả 2 vế (< / >, không >=) — 1 ca đóng có period_end_date
+	# trùng khớp CHÍNH XÁC ranh giới giữa 2 báo cáo liền kề sẽ không bị đếm
+	# trùng vào cả 2 bên.
+	conditions = ["docstatus = 1", "period_start_date < %(window_end)s", "period_end_date > %(window_start)s"]
+	params = {"window_start": window_start, "window_end": window_end}
 
 	if filters.get("pos_profile"):
 		conditions.append("pos_profile = %(pos_profile)s")

@@ -11,6 +11,25 @@ hospitality.pos.RoomSelector = class {
     init() {
         // Robust polling mechanism to wait for PointOfSale components
         console.log("Initializing Hospitality Room Selector...");
+        this.poll_for_pos();
+
+        // This file loads once via app_include_js at initial desk page load
+        // (not on every SPA route change), so the 30s polling window below
+        // only ever runs once per full page load — if the front desk terminal
+        // is already logged in (very normal for a 24/7 desk) and nobody opens
+        // POS within that first 30 seconds, hook_pos_components() never runs
+        // again for the rest of the session. Re-arm polling on every route
+        // change into the POS page as a fallback so this can't get silently
+        // and permanently stuck for a whole shift.
+        frappe.router.on('change', () => {
+            if (!this.has_hooked_pos && frappe.get_route()[0] === 'point-of-sale') {
+                this.poll_for_pos();
+            }
+        });
+    }
+
+    poll_for_pos() {
+        if (this.has_hooked_pos) return;
         const interval = setInterval(() => {
             if (window.erpnext && erpnext.PointOfSale && erpnext.PointOfSale.ItemCart) {
                 clearInterval(interval);

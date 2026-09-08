@@ -1,0 +1,93 @@
+{
+ "doctype": "DocType",
+ "name": "Guest Membership",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "guest",
+  "program",
+  "operating_company",
+  "currency",
+  "membership_key",
+  "enabled",
+  "tier",
+  "qualifying_spend"
+ ],
+ "fields": [
+  {
+   "fieldname": "guest",
+   "label": "Guest",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest"
+  },
+  {
+   "fieldname": "program",
+   "label": "Program",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Hospitality Loyalty Program"
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "read_only": 1,
+   "options": "Currency"
+  },
+  {
+   "fieldname": "membership_key",
+   "label": "Membership Key",
+   "fieldtype": "Data",
+   "unique": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "enabled",
+   "label": "Enabled",
+   "fieldtype": "Check",
+   "default": "1"
+  },
+  {
+   "fieldname": "tier",
+   "label": "Tier",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qualifying_spend",
+   "label": "Qualifying Spend",
+   "fieldtype": "Currency",
+   "read_only": 1,
+   "options": "currency"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ]
+}

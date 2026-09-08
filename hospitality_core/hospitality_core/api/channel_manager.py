@@ -72,6 +72,14 @@ def _auto_assign_room(room_type, arrival_date, departure_date):
     if not candidate_rooms:
         frappe.throw(_("No rooms configured for Room Type {0}.").format(room_type))
 
+    # Lock the candidate rooms for the rest of this DB transaction so a concurrent
+    # webhook assigning the same room type/dates blocks here instead of reading the
+    # same "free" snapshot and double-booking the same room.
+    frappe.db.sql(
+        "SELECT name FROM `tabHotel Room` WHERE name IN %(rooms)s FOR UPDATE",
+        {"rooms": candidate_rooms},
+    )
+
     booked_rooms = frappe.get_all(
         "Hotel Reservation",
         filters={
@@ -128,41 +136,58 @@ def receive_ota_webhook(platform, secret, payload):
     arrival_date = getdate(payload["arrival_date"])
     departure_date = getdate(payload["departure_date"])
 
-    existing = frappe.db.get_value(
-        "Hotel Reservation",
-        {"external_booking_id": payload["external_booking_id"], "ota_platform": platform},
-        "name",
-    )
-    if existing:
-        return {"reservation": existing, "status": "already_exists"}
+    # Khóa mutex đặt tên (MySQL GET_LOCK) theo (platform, external_booking_id)
+    # — TRƯỚC ĐÂY câu kiểm tra "đã tồn tại chưa" chỉ là 1 SELECT thường, không
+    # khóa gì cả: 2 lần gọi webhook gần như đồng thời cho CÙNG 1 booking (OTA
+    # gửi trùng do retry mạng, hoặc do chính OTA gửi 2 lần) đều có thể cùng
+    # đọc thấy "chưa tồn tại" trước khi bên kia kịp insert, rồi cả hai cùng
+    # tạo ra 2 Hotel Reservation cho cùng 1 booking thật — double-book cùng 1
+    # phòng, khách phải trả tiền 2 lần nếu cả 2 đều được check-in/tính tiền.
+    # Không có dòng nào sẵn có để SELECT...FOR UPDATE (bản ghi CHƯA tồn tại),
+    # nên dùng named lock cấp DB để tuần tự hóa toàn bộ đoạn kiểm tra+tạo mới.
+    lock_key = f"ota_webhook:{platform}:{payload['external_booking_id']}"
+    got_lock = frappe.db.sql("SELECT GET_LOCK(%s, 10)", lock_key)[0][0]
+    if not got_lock:
+        frappe.throw(_("Hệ thống đang xử lý một booking khác trùng mã tham chiếu này. Vui lòng thử lại sau."))
 
-    if not settings.default_hotel_reception:
-        frappe.throw(_("Please set a Default Hotel Reception in Hospitality Channel Manager Settings."))
+    try:
+        existing = frappe.db.get_value(
+            "Hotel Reservation",
+            {"external_booking_id": payload["external_booking_id"], "ota_platform": platform},
+            "name",
+        )
+        if existing:
+            return {"reservation": existing, "status": "already_exists"}
 
-    guest = _find_or_create_guest(
-        payload["guest_name"], payload.get("mobile_no"), payload.get("identification_no")
-    )
-    room = _auto_assign_room(payload["room_type"], arrival_date, departure_date)
+        if not settings.default_hotel_reception:
+            frappe.throw(_("Please set a Default Hotel Reception in Hospitality Channel Manager Settings."))
 
-    reservation = frappe.get_doc({
-        "doctype": "Hotel Reservation",
-        "hotel_reception": settings.default_hotel_reception,
-        "guest": guest,
-        "room_type": payload["room_type"],
-        "room": room,
-        "arrival_date": arrival_date,
-        "departure_date": departure_date,
-        "booking_source": "OTA",
-        "ota_platform": platform,
-        "external_booking_id": payload["external_booking_id"],
-    })
-    reservation.insert(ignore_permissions=True)
+        guest = _find_or_create_guest(
+            payload["guest_name"], payload.get("mobile_no"), payload.get("identification_no")
+        )
+        room = _auto_assign_room(payload["room_type"], arrival_date, departure_date)
 
-    frappe.logger("channel_manager").info(
-        f"OTA booking received: platform={platform} ref={payload['external_booking_id']} -> {reservation.name}"
-    )
+        reservation = frappe.get_doc({
+            "doctype": "Hotel Reservation",
+            "hotel_reception": settings.default_hotel_reception,
+            "guest": guest,
+            "room_type": payload["room_type"],
+            "room": room,
+            "arrival_date": arrival_date,
+            "departure_date": departure_date,
+            "booking_source": "OTA",
+            "ota_platform": platform,
+            "external_booking_id": payload["external_booking_id"],
+        })
+        reservation.insert(ignore_permissions=True)
 
-    return {"reservation": reservation.name, "room": room, "guest": guest, "status": "created"}
+        frappe.logger("channel_manager").info(
+            f"OTA booking received: platform={platform} ref={payload['external_booking_id']} -> {reservation.name}"
+        )
+
+        return {"reservation": reservation.name, "room": room, "guest": guest, "status": "created"}
+    finally:
+        frappe.db.sql("SELECT RELEASE_LOCK(%s)", lock_key)
 
 
 @frappe.whitelist()
@@ -172,6 +197,10 @@ def push_availability(room_type, start_date, end_date):
     room-nights for `room_type` between start_date/end_date. Wire in real
     HTTP calls per platform once partnership API credentials exist.
     """
+    # TRƯỚC ĐÂY: không hề kiểm tra quyền — hiện tại chỉ là mock/log nên rủi ro
+    # thấp, nhưng cần chặn TRƯỚC KHI có API key/tích hợp thật, không phải sau.
+    if not frappe.has_permission("Hospitality Channel Manager Settings", "write"):
+        frappe.throw(_("Not permitted to manage channel manager integrations."), frappe.PermissionError)
     settings = _get_settings()
     enabled_platforms = [
         name for name, flag in {
@@ -205,6 +234,8 @@ def push_availability(room_type, start_date, end_date):
 @frappe.whitelist()
 def push_rates(room_type, date, rate):
     """MOCK: would call each enabled OTA's rate API to update the sell rate."""
+    if not frappe.has_permission("Hospitality Channel Manager Settings", "write"):
+        frappe.throw(_("Not permitted to manage channel manager integrations."), frappe.PermissionError)
     settings = _get_settings()
     enabled_platforms = [
         name for name, flag in {

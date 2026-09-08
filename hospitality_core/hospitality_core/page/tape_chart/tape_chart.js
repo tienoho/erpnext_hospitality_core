@@ -167,7 +167,7 @@ function draw_grid(data, start, end) {
                      data-source-room="${room.name}"
                      style="background:${booking.color}; opacity:${opacity};"
                      onclick="frappe.set_route('Form', 'Hotel Reservation', '${booking.name}')">
-                    ${booking.guest_name || booking.guest || ''}
+                    ${frappe.utils.escape_html(booking.guest_name || booking.guest || '')}
                 </div>
             </td>`;
             date_idx += span;
@@ -195,11 +195,11 @@ function attach_tooltip_handlers(bookings) {
             let balance = b.outstanding_balance != null ? frappe.format(b.outstanding_balance, { fieldtype: 'Currency' }) : '0 VND';
             let source_line = b.source_category === 'OTA' && b.ota_platform ? `${b.source_category} (${b.ota_platform})` : b.source_category;
             tooltip.html(`
-                <div style="font-size:13px; font-weight:700; margin-bottom:2px;">${b.guest_name || b.guest}</div>
-                <div style="color:#a0aec0; font-size:11px;">${b.status} &middot; <span style="color:#63b3ed;">${source_line}</span></div>
+                <div style="font-size:13px; font-weight:700; margin-bottom:2px;">${frappe.utils.escape_html(b.guest_name || b.guest || '')}</div>
+                <div style="color:#a0aec0; font-size:11px;">${frappe.utils.escape_html(b.status || '')} &middot; <span style="color:#63b3ed;">${frappe.utils.escape_html(source_line || '')}</span></div>
                 <div style="margin-top:4px;">${b.arrival_date} &rarr; ${b.departure_date}</div>
                 <div style="margin-top:2px;">Dư nợ Folio: <b style="color:#feb2b2;">${balance}</b></div>
-                ${b.external_booking_id ? `<div style="color:#cbd5e0; font-size:11px;">Mã OTA: ${b.external_booking_id}</div>` : ''}
+                ${b.external_booking_id ? `<div style="color:#cbd5e0; font-size:11px;">Mã OTA: ${frappe.utils.escape_html(b.external_booking_id)}</div>` : ''}
             `).show();
         })
         .on('mousemove', function (e) {

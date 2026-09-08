@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import nowdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 
 def execute(filters=None):
@@ -21,7 +22,7 @@ def get_columns():
         {"label": _("Arrival Date"), "fieldname": "arrival_date", "fieldtype": "Date", "width": 110},
         {"label": _("Departure Date"), "fieldname": "departure_date", "fieldtype": "Date", "width": 110},
         {"label": _("Nights"), "fieldname": "nights", "fieldtype": "Int", "width": 70},
-        {"label": _("Rate Plan"), "fieldname": "rate_plan", "fieldtype": "Link", "options": "Rate Plan", "width": 130},
+        {"label": _("Rate Plan"), "fieldname": "rate_plan", "fieldtype": "Link", "options": "Room Rate Plan", "width": 130},
         {"label": _("Folio"), "fieldname": "folio", "fieldtype": "Link", "options": "Guest Folio", "width": 140},
         {"label": _("Booked By"), "fieldname": "reserved_by", "fieldtype": "Data", "width": 130},
     ]
@@ -59,6 +60,11 @@ def get_data(filters):
     if filters.get("room_type"):
         conditions.append("res.room_type = %(room_type)s")
         params["room_type"] = filters.get("room_type")
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions.append("res.property IN %(_properties)s")
+        params["_properties"] = allowed_properties or [""]
 
     where_clause = " AND ".join(conditions)
 

@@ -76,7 +76,7 @@
                 <th style="width: 10%;">Status</th>
                 <th style="width: 10%;">Arrival</th>
                 <th style="width: 10%;">Departure</th>
-                <th style="width: 15%; text-align: right;">Balance Due (₦)</th>
+                <th style="width: 15%; text-align: right;">Balance Due</th>
             </tr>
         </thead>
         <tbody>
@@ -84,8 +84,8 @@
             <tr>
                 <td style="font-weight: 700;">{{ row.room }}</td>
                 <td>
-                    {{ row.guest_name }}
-                    {% if row.company %}<br><span style="font-size: 10px; color: #666; font-style: italic;">{{ row.company }}</span>{% endif %}
+                    {{ row.guest_name | e }}
+                    {% if row.company %}<br><span style="font-size: 10px; color: #666; font-style: italic;">{{ row.company | e }}</span>{% endif %}
                 </td>
                 <td>
                     <span class="status-badge {{ 'status-in' if row.status == 'Checked In' else 'status-out' }}">

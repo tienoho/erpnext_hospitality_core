@@ -1,0 +1,62 @@
+{
+ "doctype": "DocType",
+ "name": "Guest Merge Log",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 0,
+ "track_changes": 1,
+ "field_order": [
+  "source_guest",
+  "target_guest",
+  "reason",
+  "performed_by"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_guest",
+   "label": "Source Guest",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest"
+  },
+  {
+   "fieldname": "target_guest",
+   "label": "Target Guest",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "Guest"
+  },
+  {
+   "fieldname": "reason",
+   "label": "Reason",
+   "fieldtype": "Small Text",
+   "reqd": 1
+  },
+  {
+   "fieldname": "performed_by",
+   "label": "Performed By",
+   "fieldtype": "Link",
+   "reqd": 1,
+   "options": "User"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 0,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Hospitality User",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1
+  }
+ ]
+}

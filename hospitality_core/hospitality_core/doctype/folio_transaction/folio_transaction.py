@@ -27,7 +27,7 @@ class FolioTransaction(Document):
     def after_insert(self):
         self.reorder_sibling_rows()
 
-    def after_save(self):
+    def on_update(self):
         self.reorder_sibling_rows()
 
     def reorder_sibling_rows(self):
@@ -48,7 +48,9 @@ class FolioTransaction(Document):
             frappe.db.set_value("Folio Transaction", name, "idx", new_idx, update_modified=False)
 
     def validate(self):
+        self.validate_parent_status()
         self.validate_void_status()
+        self.validate_pricing_evidence()
         self.fetch_price_if_missing()
         self.compute_debit_credit()
 
@@ -74,12 +76,31 @@ class FolioTransaction(Document):
         if db_is_void and not self.is_void:
             frappe.throw(_("Cannot un-void a transaction. Create a new correction posting instead."))
 
+    def validate_pricing_evidence(self):
+        keys = ['pricing_details', 'pricing_origin', 'pricing_reservation', 'mirror_source']
+        if self.flags.get('from_rate_plan') or self.flags.get('from_folio_mirror'):
+            return
+        old = frappe.db.get_value('Folio Transaction', self.name, keys + ['amount', 'item', 'is_void'], as_dict=True) if not self.is_new() else None
+        if old and any(old.get(k) for k in keys):
+            if any(self.get(k) != old.get(k) for k in keys + ['amount', 'item', 'is_void']):
+                frappe.throw(_('Không được sửa căn cứ giá hoặc số tiền đã ghi. Hãy dùng điều chỉnh hoặc hủy tiền phòng.'))
+        elif any(self.get(k) for k in keys):
+            frappe.throw(_('Căn cứ giá và liên kết giao dịch chỉ được tạo bởi hệ thống tính giá.'))
+
+    def on_trash(self):
+        if self.get('pricing_details') or self.get('pricing_origin'):
+            frappe.throw(_('Không được xóa lịch sử tính giá. Hãy hủy dòng tiền phòng gốc.'))
+
     def fetch_price_if_missing(self):
         """
         Requirement: "price should be fetched automatically"
         If Item is selected but Amount is 0, fetch from Item Price (Standard Selling) or Item Standard Rate.
+        Only runs on the initial insert — otherwise editing an existing row down to a
+        deliberate 0 (e.g. comping a charge) would get silently overwritten on every save.
         """
-        if self.item and not self.amount and not self.is_void:
+        if self.get('pricing_details') or self.get('pricing_origin'):
+            return  # Giá 0 theo bảng giá là giá có chủ đích, không lấy Item Price thay vào.
+        if self.is_new() and self.item and not self.amount and not self.is_void:
             # 1. Try fetching from Item Price List (Standard Selling)
             price = frappe.db.get_value("Item Price", 
                 {"item_code": self.item, "price_list": "Standard Selling"}, 

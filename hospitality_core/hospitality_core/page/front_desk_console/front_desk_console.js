@@ -226,10 +226,10 @@ function render_omni_results(rows) {
     let html = rows.map((r) => `
         <div class="fd-list-item" style="cursor:pointer;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${r.reservation}')">
             <div style="flex:1;">
-                <div style="font-weight:600;">${r.guest_name || ''}</div>
+                <div style="font-weight:600;">${frappe.utils.escape_html(r.guest_name || '')}</div>
                 <div style="font-size:12px; color:#6c757d;">
-                    ${r.room || __('Unassigned')} &middot; ${r.status} &middot; ${r.arrival_date} &rarr; ${r.departure_date}
-                    ${r.external_booking_id ? ' &middot; Ref: ' + r.external_booking_id : ''}
+                    ${frappe.utils.escape_html(r.room || __('Unassigned'))} &middot; ${frappe.utils.escape_html(r.status || '')} &middot; ${r.arrival_date} &rarr; ${r.departure_date}
+                    ${r.external_booking_id ? ' &middot; Ref: ' + frappe.utils.escape_html(r.external_booking_id) : ''}
                 </div>
             </div>
         </div>`).join('');
@@ -270,11 +270,33 @@ function open_id_scanner_dialog() {
                     dialog.set_value('date_of_birth', res.date_of_birth);
                     dialog.set_value('nationality', res.nationality);
                     dialog.set_primary_action(__('Create Guest'), function () {
-                        frappe.new_doc('Guest', {
+                        // parse_id_document() đã bóc tách đủ gender/date_of_birth/
+                        // nationality từ lâu, nhưng trước đây "Create Guest" không hề
+                        // truyền các trường này — Guest tạo ra luôn thiếu Giới tính/Ngày
+                        // sinh (2 trường bắt buộc cho khai báo tạm trú Công an, xem
+                        // police_declaration.py). Đồng thời "CCCD" không phải giá trị
+                        // hợp lệ của Select "identification_type" (chỉ có Passport/
+                        // National ID/Driver License) — đã sửa thành "National ID".
+                        let guest_fields = {
                             full_name: res.full_name,
                             identification_no: res.id_number,
-                            identification_type: res.document_type === 'Passport' ? 'Passport' : 'CCCD'
-                        });
+                            identification_type: res.document_type === 'Passport' ? 'Passport' : 'National ID',
+                            date_of_birth: res.date_of_birth || undefined
+                        };
+                        if (res.gender === 'Nam') {
+                            guest_fields.gender = 'Male';
+                        } else if (res.gender === 'Nữ') {
+                            guest_fields.gender = 'Female';
+                        }
+                        // Guest.nationality là Link tới Country (ERPNext core lưu tên
+                        // tiếng Anh, VD "Vietnam") — parse_id_document() trả "Việt Nam"
+                        // cho CCCD (map an toàn được), nhưng trả mã ISO-3 thô (VD "USA")
+                        // cho hộ chiếu nước ngoài, không khớp trực tiếp tên Country nào
+                        // nên cố tình BỎ TRỐNG để lễ tân tự chọn, tránh set sai dữ liệu.
+                        if (res.nationality === 'Việt Nam') {
+                            guest_fields.nationality = 'Vietnam';
+                        }
+                        frappe.new_doc('Guest', guest_fields);
                         dialog.hide();
                     });
                 }
@@ -390,10 +412,10 @@ function render_arrivals(data) {
             <div class="fd-list-item">
                 <div style="flex:1;">
                     <div style="font-weight:600; font-size:14px;">
-                        <a href="#" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${d.guest_name}</a>
+                        <a href="#" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || '')}</a>
                     </div>
                     <div style="font-size:12px; color:#6c757d;">
-                        <span class="fas fa-bed"></span> ${d.room || 'Unassigned'} &middot; ${d.room_type}
+                        <span class="fas fa-bed"></span> ${frappe.utils.escape_html(d.room || 'Unassigned')} &middot; ${frappe.utils.escape_html(d.room_type || '')}
                     </div>
                 </div>
                 <div class="text-right">
@@ -428,10 +450,10 @@ function render_departures(data) {
             <div class="fd-list-item">
                 <div style="flex:1;">
                     <div style="font-weight:600; font-size:14px;">
-                        <a href="#" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${d.guest_name}</a>
+                        <a href="#" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || '')}</a>
                     </div>
                     <div style="font-size:12px; color:#6c757d;">
-                        <span class="fas fa-door-open"></span> ${d.room} &middot; ${d.room_type}
+                        <span class="fas fa-door-open"></span> ${frappe.utils.escape_html(d.room || '')} &middot; ${frappe.utils.escape_html(d.room_type || '')}
                     </div>
                 </div>
                 <div class="text-right">

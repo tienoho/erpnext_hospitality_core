@@ -1,5 +1,7 @@
 import frappe
+from frappe import _
 from frappe.utils import getdate
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 # Color mapping used by Tape Chart 2.0 to group bookings by acquisition channel.
 # Kept in Python (not just JS) so any future export/report can reuse the same mapping.
@@ -14,10 +16,27 @@ SOURCE_COLORS = {
 
 @frappe.whitelist()
 def get_chart_data(start_date, end_date):
+    if not frappe.has_permission("Hotel Reservation", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    # TRƯỚC ĐÂY: get_all() với is_enabled — frappe.get_all() đặt
+    # ignore_permissions=True, khiến build_match_conditions() (nơi áp
+    # permission_query_conditions của Property v2) bị bỏ qua hoàn toàn —
+    # KHÔNG tự động lọc property như tưởng. Cả rooms lẫn bookings dưới đây
+    # đều cần lọc thủ công.
+    allowed_properties = allowed_properties_for_report()
+    room_filters = {"is_enabled": 1}
+    property_condition = ""
+    params = {"start": start_date, "end": end_date}
+    if allowed_properties is not None:
+        room_filters["property"] = ["in", allowed_properties or [""]]
+        property_condition = "AND res.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
     # 1. Get all Enabled Rooms
     rooms = frappe.get_all(
         "Hotel Room",
-        filters={"is_enabled": 1},
+        filters=room_filters,
         fields=["name", "room_number", "room_type", "status"],
         order_by="room_number asc",
     )
@@ -26,7 +45,7 @@ def get_chart_data(start_date, end_date):
     #    frontend can render tooltips/popovers without extra round-trips.
     # Logic: Arrival < End AND Departure > Start
     bookings = frappe.db.sql(
-        """
+        f"""
         SELECT
             res.name, res.guest, res.room, res.arrival_date, res.departure_date,
             res.status, res.folio, res.booking_source, res.ota_platform,
@@ -39,8 +58,9 @@ def get_chart_data(start_date, end_date):
         LEFT JOIN `tabGuest Folio` f ON res.folio = f.name
         WHERE res.status IN ('Reserved', 'Checked In')
         AND res.arrival_date < %(end)s AND res.departure_date > %(start)s
+        {property_condition}
         """,
-        {"start": start_date, "end": end_date},
+        params,
         as_dict=True,
     )
 

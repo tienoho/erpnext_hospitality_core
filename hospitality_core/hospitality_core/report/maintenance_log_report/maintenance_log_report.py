@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -17,12 +18,21 @@ def execute(filters=None):
     ]
 
     conditions = "1=1"
-    
+    params = {}
+
     if filters.get("from_date") and filters.get("to_date"):
-        conditions += f" AND DATE(hmr.creation) BETWEEN '{filters.get('from_date')}' AND '{filters.get('to_date')}'"
+        conditions += " AND DATE(hmr.creation) BETWEEN %(from_date)s AND %(to_date)s"
+        params["from_date"] = filters.get("from_date")
+        params["to_date"] = filters.get("to_date")
 
     if filters.get("status"):
-        conditions += f" AND hmr.status = '{filters.get('status')}'"
+        conditions += " AND hmr.status = %(status)s"
+        params["status"] = filters.get("status")
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND hmr.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
 
     sql = f"""
         SELECT
@@ -44,6 +54,6 @@ def execute(filters=None):
             hmr.creation DESC
     """
     
-    data = frappe.db.sql(sql, as_dict=True)
+    data = frappe.db.sql(sql, params, as_dict=True)
     
     return columns, data

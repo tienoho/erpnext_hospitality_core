@@ -58,6 +58,5 @@ def setup_composite_item_fields():
 	}
 	
 	create_custom_fields(custom_fields, update=True)
-	frappe.db.commit()
 	
 	print("✓ Custom fields created successfully")

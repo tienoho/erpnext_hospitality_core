@@ -56,7 +56,13 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
         "full_name": "",
         "id_number": "",
         "date_of_birth": "",
-        "gender": "Nam",
+        # TRƯỚC ĐÂY mặc định "Nam" — nếu không nhánh nào bên dưới xác định
+        # được giới tính rõ ràng, kết quả vẫn "success": True kèm giới tính
+        # SAI CHẮC CHẮN thay vì để trống. Khác với dữ liệu THIẾU (rỗng, dễ
+        # phát hiện), dữ liệu SAI đi thẳng vào khai báo tạm trú công an mà
+        # không ai nghi ngờ để sửa — nguy hiểm hơn. Để rỗng theo đúng triết
+        # lý "để trống nếu không chắc" đã áp dụng cho police_declaration.py.
+        "gender": "",
         "nationality": "Việt Nam",
         "address": "",
         "is_alien": 0,
@@ -85,14 +91,26 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
                 passport_no = line2[0:9].replace('<', '').strip()
                 nat = line2[10:13]
                 dob_raw = line2[13:19] # YYMMDD
-                gender_char = line2[20] # M/F
+                # TRƯỚC ĐÂY: line2[20] index thẳng — MRZ dòng 2 bị cắt ngắn
+                # (dán tay thiếu ký tự) ném IndexError không bắt được, crash
+                # cả luồng check-in giữa chừng thay vì báo lỗi rõ ràng.
+                gender_char = line2[20:21] # M/F/< (rỗng nếu dòng bị cắt ngắn)
 
                 result["document_type"] = "Passport"
                 result["full_name"] = names_part
                 result["id_number"] = passport_no
                 result["nationality"] = nat if nat != "VNM" else "Việt Nam"
                 result["is_alien"] = 1 if nat != "VNM" else 0
-                result["gender"] = "Nữ" if gender_char == 'F' else "Nam"
+                # ICAO 9303: ký tự '<' nghĩa là KHÔNG XÁC ĐỊNH — trước đây bị
+                # coi mặc định là "Nam" cùng với mọi giá trị không phải 'F',
+                # kể cả '<' hoặc dữ liệu bị cắt ngắn (rỗng) — để trống thay
+                # vì suy đoán sai.
+                if gender_char == 'F':
+                    result["gender"] = "Nữ"
+                elif gender_char == 'M':
+                    result["gender"] = "Nam"
+                else:
+                    result["gender"] = ""
                 if len(dob_raw) == 6:
                     year_prefix = "19" if int(dob_raw[:2]) > 30 else "20"
                     result["date_of_birth"] = f"{year_prefix}{dob_raw[:2]}-{dob_raw[2:4]}-{dob_raw[4:6]}"
@@ -158,11 +176,22 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
             if len(parts) == 3:
                 result["date_of_birth"] = f"{parts[2]}-{int(parts[1]):02d}-{int(parts[0]):02d}"
 
-        # Trích xuất Giới tính
-        if re.search(r'\b(Nữ|Female|F)\b', text, re.IGNORECASE):
-            result["gender"] = "Nữ"
+        # Trích xuất Giới tính — TRƯỚC ĐÂY: không khớp "Nữ/Female/F" thì mặc
+        # định LUÔN LÀ "Nam", kể cả khi văn bản OCR không hề chứa từ khóa
+        # giới tính nào (scan mờ/thiếu dòng) — trả về "success": True kèm
+        # giới tính SAI CHẮC CHẮN cho khai báo tạm trú công an. Nay bắt buộc
+        # khớp qua NHÃN "Giới tính/Gender/Sex" (khớp đúng quy ước label-based
+        # đã dùng cho ngày sinh/địa chỉ trong chính file này) thay vì dò từ
+        # "Nam"/"Nữ" TRẦN TRỤI trong toàn văn bản — dò trần trụi sẽ khớp NHẦM
+        # chữ "Nam" nằm sẵn trong "Việt Nam" (quốc tịch, luôn xuất hiện trên
+        # mọi CCCD) dù giới tính thật sự chưa xác định được. Không khớp nhãn
+        # nào rõ ràng thì để trống cho lễ tân bổ sung thủ công.
+        gender_match = re.search(r'(?:Giới tính|Gender|Sex)[:\s]*(Nữ|Nam|Female|Male|F|M)\b', text, re.IGNORECASE)
+        if gender_match:
+            token = gender_match.group(1).strip().lower()
+            result["gender"] = "Nữ" if token in ('nữ', 'female', 'f') else "Nam"
         else:
-            result["gender"] = "Nam"
+            result["gender"] = ""
 
         # Trích xuất Địa chỉ thường trú
         addr_match = re.search(r'(?:Nơi thường trú|Nơi cư trú|Address)[:\s]*([^\n\r]+)', text, re.IGNORECASE)

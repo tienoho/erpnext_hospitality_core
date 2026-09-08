@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     columns, data = [], []
@@ -61,19 +62,27 @@ def get_columns():
 
 def get_data(filters):
     conditions = ""
+    params = {}
     if filters:
         if filters.get("from_date"):
-            conditions += f" AND move_datetime >= '{filters.get('from_date')}'"
+            conditions += " AND move_datetime >= %(from_date)s"
+            params["from_date"] = filters.get("from_date")
         if filters.get("to_date"):
-            conditions += f" AND move_datetime <= '{filters.get('to_date')} 23:59:59'"
-            
+            conditions += " AND move_datetime <= %(to_date)s"
+            params["to_date"] = f"{filters.get('to_date')} 23:59:59"
+
+    allowed_properties = allowed_properties_for_report()
+    if allowed_properties is not None:
+        conditions += " AND property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
     data = frappe.db.sql(f"""
-        SELECT 
-            move_datetime, transaction_name, item, amount, 
+        SELECT
+            move_datetime, transaction_name, item, amount,
             source_folio, target_folio, user
         FROM `tabFolio Transaction Move Log`
         WHERE 1=1 {conditions}
         ORDER BY move_datetime DESC
-    """, as_dict=1)
-    
+    """, params, as_dict=1)
+
     return data

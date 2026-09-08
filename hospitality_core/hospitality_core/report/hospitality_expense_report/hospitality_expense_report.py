@@ -3,6 +3,7 @@
 
 import frappe
 from frappe import _
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
 	columns = get_columns()
@@ -49,7 +50,10 @@ def get_data(filters):
 	return data
 
 def get_conditions(filters):
-	conditions = ["docstatus < 2"]
+	# Match frontdesk_end_of_day_report.py's expense query: only Submitted
+	# expenses count toward totals — a Draft hasn't been approved yet and can
+	# still be edited/deleted, so including it here disagrees with that report.
+	conditions = ["docstatus = 1"]
 	
 	if filters.get("from_date"):
 		conditions.append("expense_date >= %(from_date)s")
@@ -63,5 +67,10 @@ def get_conditions(filters):
 		conditions.append("hotel_reception = %(hotel_reception)s")
 	if filters.get("workflow_state"):
 		conditions.append("workflow_state = %(workflow_state)s")
-		
+
+	allowed_properties = allowed_properties_for_report()
+	if allowed_properties is not None:
+		conditions.append("property IN %(_properties)s")
+		filters["_properties"] = allowed_properties or [""]
+
 	return " AND ".join(conditions)

@@ -6,11 +6,22 @@ frappe.provide('frappe.hospitality');
 frappe.hospitality.BRIDGE_URL = 'http://127.0.0.1:8765';
 
 /**
+ * fetch() with a hard timeout so a hung/unresponsive local Bridge process
+ * (as opposed to an immediate connection-refused) can't hang the UI forever.
+ */
+frappe.hospitality._fetch_with_timeout = function(url, options, timeout_ms) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout_ms || 8000);
+    return fetch(url, Object.assign({}, options, { signal: controller.signal }))
+        .finally(() => clearTimeout(timer));
+};
+
+/**
  * Kiểm tra trạng thái kết nối tới Local Hardware Bridge
  */
 frappe.hospitality.check_bridge_status = async function() {
     try {
-        const response = await fetch(`${frappe.hospitality.BRIDGE_URL}/api/status`, {
+        const response = await frappe.hospitality._fetch_with_timeout(`${frappe.hospitality.BRIDGE_URL}/api/status`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -28,13 +39,22 @@ frappe.hospitality.check_bridge_status = async function() {
  * Ghi thẻ từ phòng khách sạn cho Lễ tân
  */
 frappe.hospitality.encode_keycard = async function(room_no, checkin_time, checkout_time, guest_name, is_duplicate) {
+    if (frappe.hospitality._encode_in_progress) {
+        frappe.show_alert({
+            message: __('Đang ghi thẻ, vui lòng đợi thao tác trước hoàn tất.'),
+            indicator: 'orange'
+        });
+        return { success: false, message: 'Encode already in progress' };
+    }
+    frappe.hospitality._encode_in_progress = true;
+
     frappe.show_alert({
         message: __('Đang kết nối đầu đọc thẻ từ...'),
         indicator: 'blue'
     });
 
     try {
-        const response = await fetch(`${frappe.hospitality.BRIDGE_URL}/api/lock/encode_card`, {
+        const response = await frappe.hospitality._fetch_with_timeout(`${frappe.hospitality.BRIDGE_URL}/api/lock/encode_card`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -82,6 +102,8 @@ frappe.hospitality.encode_keycard = async function(room_no, checkin_time, checko
                 </ul>
             `
         });
+    } finally {
+        frappe.hospitality._encode_in_progress = false;
     }
 };
 
@@ -90,7 +112,7 @@ frappe.hospitality.encode_keycard = async function(room_no, checkin_time, checko
  */
 frappe.hospitality.clear_keycard = async function() {
     try {
-        const response = await fetch(`${frappe.hospitality.BRIDGE_URL}/api/lock/clear_card`, {
+        const response = await frappe.hospitality._fetch_with_timeout(`${frappe.hospitality.BRIDGE_URL}/api/lock/clear_card`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });

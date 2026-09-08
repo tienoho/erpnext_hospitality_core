@@ -58,7 +58,7 @@
     <!-- ── RECEIPT INFO ── -->
     <div class="info-grid">
         <div class="info-left">
-            <div class="info-row"><span class="info-label">Guest:</span> {{ guest_display_name }}</div>
+            <div class="info-row"><span class="info-label">Guest:</span> {{ guest_display_name | e }}</div>
             {% if doc.hotel_reception %}<div class="info-row"><span class="info-label">Reception:</span> {{ doc.hotel_reception }}</div>{% endif %}
             <div class="info-row"><span class="info-label">Status:</span> 
                 <span class="status-badge {{ 'status-cancelled' if doc.docstatus==2 else 'status-submitted' }}">
@@ -89,7 +89,7 @@
         <thead>
             <tr>
                 <th>Allocated To</th>
-                <th class="text-right">Amount (₦)</th>
+                <th class="text-right">Amount</th>
             </tr>
         </thead>
         <tbody>

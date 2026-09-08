@@ -19,6 +19,9 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
     Receives only: folio, amount, mode of payment, and hotel reception.
     Automatically resolves: customer, account, poster name, room number, and submits.
     """
+    if not frappe.has_permission("Guest Folio", "write", doc=folio_name):
+        frappe.throw(_("Not permitted to record a payment on Folio {0}.").format(folio_name), frappe.PermissionError)
+
     amount = float(amount or 0)
     if amount <= 0:
         frappe.throw(_("Amount must be greater than zero."))
@@ -104,6 +107,13 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
         "reference_date": frappe.utils.nowdate(),
         "room_number": folio.room,
         "cashier": frappe.session.user,
+        # TRƯỚC ĐÂY: không set hospitality_property — Payment Entry (nằm
+        # trong CORE_SCOPED) mãi mãi NULL nếu KHÔNG đi qua property_accounting.py's
+        # payment_updated() (chỉ chạy khi hospitality_accounting_version=='Property
+        # v2') — luồng payment_bridge.py này chạy cho MỌI folio Legacy, kể cả
+        # folio ĐÃ có property riêng (property và accounting_version tách biệt),
+        # nên field này sẽ NULL vĩnh viễn nếu không set ở đây.
+        "hospitality_property": folio.get('property'),
         "remarks": (
             f"Payment by {poster_name} — Guest: {guest_name_display} "
             f"| Room: {folio.room} | Reception: {hotel_reception} | Folio: {folio_name}"
@@ -120,6 +130,9 @@ def issue_folio_refund(folio_name, amount, hotel_reception):
     Issues a refund to a guest with excess balance.
     Creates a Payment Entry of type 'Pay'.
     """
+    from hospitality_core.hospitality_core.api.folio_operations import _check_supervisor
+    _check_supervisor()
+
     amount = float(amount or 0)
     if amount <= 0:
         frappe.throw(_("Refund amount must be greater than zero."))
@@ -226,6 +239,10 @@ def issue_folio_refund(folio_name, amount, hotel_reception):
         "reference_date": frappe.utils.nowdate(),
         "room_number": folio.room,
         "cashier": frappe.session.user,
+        # Xem chú thích tương tự ở create_folio_payment() — folio Legacy vẫn có
+        # thể có property riêng, không set ở đây thì hospitality_property NULL
+        # vĩnh viễn với Payment Entry loại hoàn tiền này.
+        "hospitality_property": folio.get('property'),
         "remarks": (
             f"Refund by {poster_name} — Guest: {guest_name_display} "
             f"| Room: {folio.room} | Reception: {hotel_reception} | Folio: {folio_name}"
@@ -276,6 +293,8 @@ def process_payment_entry(doc, method=None):
     Hook: Payment Entry (on_submit, on_cancel)
     Logic: If Reference No matches a Guest Folio ID, post or void a credit transaction to that Folio.
     """
+    if doc.get('hospitality_accounting_version') == 'Property v2':
+        return
     # Check if linked to Folio via Reference No
     # We expect reference_no to hold the Folio ID (e.g., FOLIO-...)
     if not doc.reference_no or not frappe.db.exists("Guest Folio", doc.reference_no):
@@ -305,9 +324,17 @@ def process_payment_entry(doc, method=None):
             item.is_stock_item = 0
             item.insert(ignore_permissions=True)
         
-        # Determine bill_to based on whether this is a Company Master Folio
+        # Determine bill_to based on whether this is a Company or Group Master Folio
+        # TRƯỚC ĐÂY: chỉ kiểm tra is_company_master — group_booking.py's
+        # record_group_deposit()/create_company_folio_payment() giờ CŨNG tạo
+        # Payment Entry thẳng trên Master Folio của ĐOÀN (không bao giờ có
+        # is_company_master=1, xem ghi chú tương tự ở city_ledger.py), khiến
+        # giao dịch cọc đoàn bị gắn nhầm bill_to="Guest" thay vì "Group" —
+        # không khớp quy ước Company/Group/Guest dùng nhất quán ở mọi nơi
+        # khác (pos_bridge.py, folio.py, rate_plan.py).
         is_company_folio = frappe.db.get_value("Guest Folio", folio_name, "is_company_master")
-        bill_to = "Company" if is_company_folio else "Guest"
+        is_group_folio = frappe.db.exists("Hotel Group Booking", {"master_folio": folio_name})
+        bill_to = "Company" if is_company_folio else ("Group" if is_group_folio else "Guest")
 
         # Insert Transaction
         frappe.get_doc({
@@ -355,14 +382,25 @@ def create_company_folio_payment(folio_name, amount, mode_of_payment, hotel_rece
     Creates a proper Payment Entry (same as guest payments) so that accounting entries are
     generated correctly. The process_payment_entry hook then posts the credit Folio Transaction.
     """
+    from hospitality_core.hospitality_core.api.folio_operations import _check_supervisor
+    _check_supervisor()
+
     amount = float(amount or 0)
     if amount <= 0:
         frappe.throw(_("Amount must be greater than zero."))
 
     folio = frappe.get_doc("Guest Folio", folio_name)
 
-    if not folio.is_company_master:
-        frappe.throw(_("Record Payment to Company can only be used on a Company Master Folio."))
+    # Master Folio của ĐOÀN (Hotel Group Booking) không bao giờ được gán
+    # is_company_master=1 (chỉ Master Folio của Company mới có, xem
+    # ensure_company_folio() trong hotel_reservation.py) — dùng cùng cách
+    # nhận diện đã thiết lập cho city_ledger.py/ar_aging_summary.py để hàm
+    # này CŨNG dùng ghi nhận đặt cọc/thanh toán đoàn được (xem
+    # group_booking.py's record_group_deposit()), thay vì phải viết lại
+    # toàn bộ logic tạo Payment Entry lần thứ 2.
+    is_group_master = frappe.db.exists("Hotel Group Booking", {"master_folio": folio.name})
+    if not folio.is_company_master and not is_group_master:
+        frappe.throw(_("Record Payment to Company can only be used on a Company or Group Master Folio."))
 
     if folio.status != "Open":
         frappe.throw(_("Cannot record a payment on a folio with status: {0}").format(folio.status))
@@ -427,6 +465,9 @@ def create_company_folio_payment(folio_name, amount, mode_of_payment, hotel_rece
         "reference_no": folio_name,          # triggers process_payment_entry hook
         "reference_date": frappe.utils.nowdate(),
         "cashier": frappe.session.user,
+        # Xem chú thích tương tự ở create_folio_payment() — Master Folio công ty
+        # Legacy vẫn có thể có property riêng.
+        "hospitality_property": folio.get('property'),
         "remarks": narration
     })
     pe.insert(ignore_permissions=True)
@@ -445,6 +486,9 @@ def create_company_folio_transaction(folio_name, item, description, qty, amount,
     Manually posts a debit (charge) transaction to a Company Master Folio (City Ledger).
     Used for recording miscellaneous charges directly against a company account.
     """
+    from hospitality_core.hospitality_core.api.folio_operations import _check_supervisor
+    _check_supervisor()
+
     amount = float(amount or 0)
     qty = float(qty or 1)
 

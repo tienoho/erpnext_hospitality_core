@@ -91,7 +91,7 @@
         {% if guest_full_name %}
         <tr>
             <td><b>Guest:</b></td>
-            <td class="right">{{ guest_full_name }}</td>
+            <td class="right">{{ guest_full_name | e }}</td>
         </tr>
         {% endif %}
         {% if doc.hotel_room %}

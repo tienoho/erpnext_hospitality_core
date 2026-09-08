@@ -39,9 +39,13 @@ def setup():
         doc = frappe.new_doc("Room Rate Plan")
         doc.plan_name = "Standard Test"
         doc.room_type = "Test Single"
-        doc.rate = 150
-        doc.valid_from = add_days(nowdate(), -10)
-        doc.valid_to = add_days(nowdate(), 10)
+        doc.append("seasons", {
+            "season_name": "Test Season",
+            "valid_from": add_days(nowdate(), -10),
+            "valid_to": add_days(nowdate(), 10),
+            "weekday_rate": 150,
+            "weekend_rate": 150
+        })
         doc.insert()
         
     if not frappe.db.exists("Guest", "Date Test Guest"):

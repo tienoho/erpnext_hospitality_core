@@ -1,0 +1,53 @@
+{
+ "doctype": "DocType",
+ "name": "Hospitality Loyalty Tier",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "autoname": "hash",
+ "istable": 1,
+ "track_changes": 0,
+ "field_order": [
+  "tier_name",
+  "min_spend",
+  "room_discount_percent",
+  "breakfast_per_night",
+  "late_checkout",
+  "upgrade"
+ ],
+ "fields": [
+  {
+   "fieldname": "tier_name",
+   "label": "Tier Name",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "min_spend",
+   "label": "Min Spend",
+   "fieldtype": "Currency",
+   "reqd": 1,
+   "options": "currency"
+  },
+  {
+   "fieldname": "room_discount_percent",
+   "label": "Room Discount Percent",
+   "fieldtype": "Percent"
+  },
+  {
+   "fieldname": "breakfast_per_night",
+   "label": "Breakfast Per Night",
+   "fieldtype": "Int"
+  },
+  {
+   "fieldname": "late_checkout",
+   "label": "Late Checkout",
+   "fieldtype": "Check"
+  },
+  {
+   "fieldname": "upgrade",
+   "label": "Upgrade",
+   "fieldtype": "Check"
+  }
+ ],
+ "permissions": []
+}

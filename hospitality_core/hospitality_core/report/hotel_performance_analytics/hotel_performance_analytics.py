@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.utils import add_days, date_diff, getdate, flt
+from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
 
 def execute(filters=None):
     if not filters:
@@ -22,12 +23,19 @@ def execute(filters=None):
     end_date = getdate(filters.get("to_date"))
     reception = filters.get("hotel_reception")
     
+    # Lọc theo property được phép xem — xem report_scope.py để biết lý do
+    # (frappe.db.count() cũng là truy vấn cấp thấp, KHÔNG tự áp dụng
+    # permission_query_conditions như get_list/get_all).
+    allowed_properties = allowed_properties_for_report()
+
     # 1. Total Inventory (Count of enabled rooms)
     # Filter by reception if provided
     room_filters = {"is_enabled": 1}
     if reception:
         room_filters["hotel_reception"] = reception
-        
+    if allowed_properties is not None:
+        room_filters["property"] = ["in", allowed_properties or [""]]
+
     total_rooms_count = frappe.db.count("Hotel Room", filters=room_filters)
 
     # 2. Fetch all Room Revenue Transactions in range
@@ -41,14 +49,23 @@ def execute(filters=None):
     if reception:
         reception_condition = "AND gf.hotel_reception = %(reception)s"
         params["reception"] = reception
-        
+
+    if allowed_properties is not None:
+        reception_condition += " AND ft.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
     rev_sql = f"""
         SELECT ft.posting_date, SUM(ft.amount) as total
         FROM `tabFolio Transaction` ft
         JOIN `tabGuest Folio` gf ON ft.parent = gf.name
         WHERE ft.posting_date BETWEEN %(start)s AND %(end)s
         AND ft.is_void = 0
-        AND ft.item IN (SELECT name FROM `tabItem` WHERE item_code='ROOM-RENT' OR item_group='Accommodation')
+        AND COALESCE(ft.mirror_source, '') = ''
+        AND ft.reference_doctype != 'Folio Transaction'
+        AND (gf.is_company_master = 0 OR gf.is_company_master IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM `tabHotel Group Booking` hgb WHERE hgb.master_folio = gf.name)
+        AND (ft.item IN ('DISCOUNT', 'COMPLIMENTARY')
+             OR ft.item IN (SELECT name FROM `tabItem` WHERE item_code='ROOM-RENT' OR item_group='Accommodation'))
         {reception_condition}
         GROUP BY ft.posting_date
     """
@@ -70,7 +87,9 @@ def execute(filters=None):
         }
         if reception:
             res_filters["hotel_reception"] = reception
-            
+        if allowed_properties is not None:
+            res_filters["property"] = ["in", allowed_properties or [""]]
+
         occupied_count = frappe.db.count("Hotel Reservation", res_filters)
 
         revenue = revenue_map.get(str_date, 0.0)
