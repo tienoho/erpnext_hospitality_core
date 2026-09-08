@@ -114,7 +114,8 @@ function render_guest_profile(wrapper, guest) {
                                 <div style="margin-top: 6px; font-size: 13px; color: var(--text-muted, #6b7280); display: flex; gap: 18px; flex-wrap: wrap;">
                                     <span><i class="fa fa-phone" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.mobile_no || '—')}</span>
                                     <span><i class="fa fa-envelope" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.email_id || '—')}</span>
-                                    ${d.guest.id_passport_number ? `<span><i class="fa fa-id-card" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.id_passport_number)}</span>` : ''}
+                                    ${(d.guest.identification_no || d.guest.id_passport_number) ? `<span><i class="fa fa-id-card" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.identification_type ? d.guest.identification_type + ': ' : '')}${escape(d.guest.identification_no || d.guest.id_passport_number)}</span>` : ''}
+                                    ${d.guest.date_of_birth ? `<span><i class="fa fa-birthday-cake" style="color: #6366f1; margin-right: 5px;"></i>${frappe.datetime.str_to_user(d.guest.date_of_birth)}</span>` : ''}
                                     ${d.guest.nationality ? `<span><i class="fa fa-globe" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.nationality)}</span>` : ''}
                                 </div>
                             </div>
@@ -276,7 +277,7 @@ function render_guest_profile(wrapper, guest) {
                                             ${d.history.map(h => `
                                                 <tr>
                                                     <td>
-                                                        <a href="/app/hotel-reservation/${encodeURIComponent(h.name)}" style="font-weight: 700; color: #2563eb;">
+                                                        <a href="/app/hotel-reservation/${encodeURIComponent(h.name)}" onclick="frappe.set_route('Form', 'Hotel Reservation', '${escape(h.name)}'); return false;" style="font-weight: 700; color: #2563eb;">
                                                             ${escape(h.name)}
                                                         </a>
                                                     </td>
@@ -290,7 +291,7 @@ function render_guest_profile(wrapper, guest) {
                                                     </td>
                                                     <td style="text-align: center;">
                                                         ${h.folio ? `
-                                                            <a href="/app/guest-folio/${encodeURIComponent(h.folio)}" class="btn btn-xs btn-default" style="font-weight: 600;">
+                                                            <a href="/app/guest-folio/${encodeURIComponent(h.folio)}" onclick="frappe.set_route('Form', 'Guest Folio', '${escape(h.folio)}'); return false;" class="btn btn-xs btn-default" style="font-weight: 600;">
                                                                 <i class="fa fa-folder-open-o"></i> ${__('Folio')}
                                                             </a>
                                                         ` : '—'}
@@ -375,11 +376,11 @@ function render_guest_profile(wrapper, guest) {
                                             <div style="display: flex; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
                                                 <div>
                                                     <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">${__('Điểm Khả Dụng')}</div>
-                                                    <div style="font-size: 18px; font-weight: 800; color: #4f46e5; margin-top: 2px;">${format_number(m.available || 0)}</div>
+                                                    <div style="font-size: 18px; font-weight: 800; color: #4f46e5; margin-top: 2px;">${Number(m.available || 0).toLocaleString()}</div>
                                                 </div>
                                                 <div>
                                                     <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">${__('Đang Giữ')}</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #94a3b8; margin-top: 2px;">${format_number(m.held || 0)}</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #94a3b8; margin-top: 2px;">${Number(m.held || 0).toLocaleString()}</div>
                                                 </div>
                                                 <div>
                                                     <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700;">${__('Chi Tiêu Xét Hạng')}</div>

@@ -245,6 +245,8 @@ $(document).on('page-change', () => {
     }, 1000);
 });
 
-if (document.readyState === 'complete') {
-    window.hospitality_v13_manager = new frappe.hospitality.FinalAnalyticsV13();
-}
+$(() => {
+    if (!window.hospitality_v13_manager) {
+        window.hospitality_v13_manager = new frappe.hospitality.FinalAnalyticsV13();
+    }
+});

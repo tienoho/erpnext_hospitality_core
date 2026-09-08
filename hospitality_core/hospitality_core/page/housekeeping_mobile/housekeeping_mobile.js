@@ -1,7 +1,7 @@
 frappe.pages['housekeeping-mobile'].on_page_load = function (wrapper) {
     var page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: 'Housekeeping Mobile',
+        title: __('Buồng Phòng Di Động (Housekeeping Mobile)'),
         single_column: true
     });
 
@@ -37,36 +37,40 @@ frappe.pages['housekeeping-mobile'].on_page_load = function (wrapper) {
 
         <div id="hkm-section-minibar" class="hkm-section">
             <div class="form-group">
-                <label>${__('Room')}</label>
-                <input type="text" id="hkm-mb-room" class="form-control" placeholder="${__('Room number, e.g. 101')}">
+                <label>${__('Số Phòng')}</label>
+                <input type="text" id="hkm-mb-room" class="form-control" placeholder="${__('Nhập số phòng, ví dụ: 101')}">
             </div>
             <div id="hkm-mb-items"></div>
-            <button class="btn btn-default btn-sm" id="hkm-mb-add-row" style="margin-bottom:10px;">+ ${__('Add Item')}</button>
-            <button class="btn btn-primary btn-block" id="hkm-mb-submit">${__('Post to Folio')}</button>
+            <button class="btn btn-default btn-sm" id="hkm-mb-add-row" style="margin-bottom:10px;">+ ${__('Thêm Dòng')}</button>
+            <button class="btn btn-primary btn-block" id="hkm-mb-submit">${__('Ghi Vào Folio')}</button>
         </div>
 
         <div id="hkm-section-lostfound" class="hkm-section">
-            <div class="form-group"><label>${__('Item Description')}</label><input type="text" id="hkm-lf-item" class="form-control"></div>
-            <div class="form-group"><label>${__('Found Location')}</label><input type="text" id="hkm-lf-location" class="form-control"></div>
-            <button class="btn btn-primary btn-block" id="hkm-lf-submit">${__('Report Found Item')}</button>
+            <div class="form-group"><label>${__('Mô Tả Vật Phẩm')}</label><input type="text" id="hkm-lf-item" class="form-control"></div>
+            <div class="form-group"><label>${__('Vị Trí Tìm Thấy')}</label><input type="text" id="hkm-lf-location" class="form-control"></div>
+            <button class="btn btn-primary btn-block" id="hkm-lf-submit">${__('Gửi Báo Cáo Đồ Thất Lạc')}</button>
         </div>
 
         <div id="hkm-section-maintenance" class="hkm-section">
-            <div class="form-group"><label>${__('Room')}</label><input type="text" id="hkm-mnt-room" class="form-control"></div>
+            <div class="form-group"><label>${__('Số Phòng')}</label><input type="text" id="hkm-mnt-room" class="form-control"></div>
             <div class="form-group">
-                <label>${__('Issue Type')}</label>
+                <label>${__('Loại Sự Cố')}</label>
                 <select id="hkm-mnt-type" class="form-control">
-                    <option>Plumbing</option><option>Electrical</option><option>HVAC</option>
-                    <option>Furniture</option><option>Cleaning</option><option>Other</option>
+                    <option value="Plumbing">${__('Hệ thống nước (Plumbing)')}</option>
+                    <option value="Electrical">${__('Hệ thống điện (Electrical)')}</option>
+                    <option value="HVAC">${__('Điều hòa / Không khí (HVAC)')}</option>
+                    <option value="Furniture">${__('Nội thất / Giường tủ (Furniture)')}</option>
+                    <option value="Cleaning">${__('Vệ sinh phòng (Cleaning)')}</option>
+                    <option value="Other">${__('Khác (Other)')}</option>
                 </select>
             </div>
-            <div class="form-group"><label>${__('Description')}</label><textarea id="hkm-mnt-desc" class="form-control"></textarea></div>
+            <div class="form-group"><label>${__('Mô Tả Chi Tiết')}</label><textarea id="hkm-mnt-desc" class="form-control"></textarea></div>
             <div class="form-group">
-                <label>${__('Photo')}</label><br>
-                <button class="btn btn-default btn-sm" id="hkm-mnt-attach">${__('Attach Photo')}</button>
+                <label>${__('Hình Ảnh')}</label><br>
+                <button class="btn btn-default btn-sm" id="hkm-mnt-attach">${__('Đính Kèm Ảnh')}</button>
                 <div id="hkm-mnt-photo-preview" style="margin-top:8px;"></div>
             </div>
-            <button class="btn btn-primary btn-block" id="hkm-mnt-submit">${__('Send to Technical Team')}</button>
+            <button class="btn btn-primary btn-block" id="hkm-mnt-submit">${__('Gửi Báo Cáo Sang Đội Kỹ Thuật')}</button>
         </div>
     `);
 
@@ -92,6 +96,11 @@ const STATUS_COLORS = {
     'Cleaning': '#f2994a', 'Inspected': '#56ccf2', 'Out of Order': '#828282'
 };
 
+const STATUS_LABELS = {
+    'Available': __('Sạch'), 'Occupied': __('Đang ở'), 'Dirty': __('Cần dọn'),
+    'Cleaning': __('Đang dọn'), 'Inspected': __('Đã kiểm tra'), 'Out of Order': __('Khóa phòng')
+};
+
 // Dirty -> Cleaning -> Inspected -> Available
 const NEXT_STATUS = { 'Dirty': 'Cleaning', 'Cleaning': 'Inspected', 'Inspected': 'Available' };
 
@@ -99,8 +108,10 @@ function setup_rooms_tab() {
     frappe.call({
         method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.get_floors',
         callback: function (r) {
+            let $select = $('#hkm-floor-filter');
+            $select.empty().append(`<option value="">${__('Tất Cả Các Tầng')}</option>`);
             (r.message || []).forEach((floor) => {
-                $('#hkm-floor-filter').append(`<option value="${floor}">${floor}</option>`);
+                $select.append(`<option value="${floor}">${__('Tầng')} ${floor}</option>`);
             });
         }
     });
@@ -123,11 +134,11 @@ function load_room_board() {
                     <div class="hkm-room-card">
                         <div>
                             <div class="hkm-room-title">${room.room_number}</div>
-                            <div class="hkm-room-sub">${room.room_type || ''} ${room.floor ? '&middot; Floor ' + room.floor : ''}</div>
+                            <div class="hkm-room-sub">${room.room_type || ''} ${room.floor ? '&middot; ' + __('Tầng') + ' ' + room.floor : ''}</div>
                         </div>
                         <div style="text-align:right;">
-                            <span class="hkm-status-pill" style="background:${color}">${room.status}</span>
-                            ${next ? `<div class="hkm-btn-row"><button class="hkm-btn" style="background:${STATUS_COLORS[next]}" onclick="hkm_set_status('${room.name}','${next}')">${__('Mark')} ${next}</button></div>` : ''}
+                            <span class="hkm-status-pill" style="background:${color}">${STATUS_LABELS[room.status] || room.status}</span>
+                            ${next ? `<div class="hkm-btn-row"><button class="hkm-btn" style="background:${STATUS_COLORS[next]}" onclick="hkm_set_status('${room.name}','${next}')"><i class="fa fa-arrow-right" style="margin-right:4px;"></i>${STATUS_LABELS[next] || next}</button></div>` : ''}
                         </div>
                     </div>
                 `);

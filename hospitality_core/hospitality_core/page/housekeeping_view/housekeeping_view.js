@@ -306,7 +306,7 @@ function render_filtered_rooms() {
 
         let html = `
             <div class="col-xs-6 col-sm-4 col-md-3 col-lg-2" style="padding: 6px;">
-                <div class="hk-room-card ${is_selected}" id="card-room-${room.name}" style="border-top: 4px solid ${conf.border};">
+                <div class="hk-room-card ${is_selected}" id="card-room-${frappe.utils.escape_html(room.name)}" style="border-top: 4px solid ${conf.border}; cursor: pointer;" onclick="hk_toggle_room('${room.name}')">
                     <div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
                             <input type="checkbox" class="hk-room-checkbox" data-room="${room.name}" ${_hk_selected_rooms.has(room.name) ? 'checked' : ''} onclick="event.stopPropagation(); hk_toggle_room('${room.name}')">
@@ -329,15 +329,15 @@ function render_filtered_rooms() {
 
 function get_action_button(room) {
     if (room.status === 'Dirty') {
-        return `<button class="btn btn-success btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="update_room_status('${room.name}', 'Cleaning')"><i class="fa fa-broom"></i> ${__('Bắt Đầu Dọn')}</button>`;
+        return `<button class="btn btn-success btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="event.stopPropagation(); update_room_status('${room.name}', 'Cleaning')"><i class="fa fa-broom"></i> ${__('Bắt Đầu Dọn')}</button>`;
     } else if (room.status === 'Cleaning') {
-        return `<button class="btn btn-info btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="update_room_status('${room.name}', 'Inspected')"><i class="fa fa-shield-alt"></i> ${__('Dọn Xong')}</button>`;
+        return `<button class="btn btn-info btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="event.stopPropagation(); update_room_status('${room.name}', 'Inspected')"><i class="fa fa-shield-alt"></i> ${__('Dọn Xong')}</button>`;
     } else if (room.status === 'Inspected') {
-        return `<button class="btn btn-primary btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="update_room_status('${room.name}', 'Available')"><i class="fa fa-check"></i> ${__('Duyệt Sạch')}</button>`;
+        return `<button class="btn btn-primary btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="event.stopPropagation(); update_room_status('${room.name}', 'Available')"><i class="fa fa-check"></i> ${__('Duyệt Sạch')}</button>`;
     } else if (room.status === 'Available') {
-        return `<button class="btn btn-warning btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="update_room_status('${room.name}', 'Dirty')"><i class="fa fa-undo"></i> ${__('Báo Bẩn')}</button>`;
+        return `<button class="btn btn-warning btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="event.stopPropagation(); update_room_status('${room.name}', 'Dirty')"><i class="fa fa-undo"></i> ${__('Báo Bẩn')}</button>`;
     } else if (room.status === 'Occupied') {
-        return `<button class="btn btn-warning btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="update_room_status('${room.name}', 'Dirty')"><i class="fa fa-broom"></i> ${__('Yêu Cầu Dọn')}</button>`;
+        return `<button class="btn btn-warning btn-xs btn-block" style="border-radius:5px; font-weight:600;" onclick="event.stopPropagation(); update_room_status('${room.name}', 'Dirty')"><i class="fa fa-broom"></i> ${__('Yêu Cầu Dọn')}</button>`;
     } else {
         return `<button class="btn btn-default btn-xs btn-block disabled" style="border-radius:5px; font-size:11px;">${__('Đang Khóa')}</button>`;
     }

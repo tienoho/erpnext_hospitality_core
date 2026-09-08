@@ -854,14 +854,14 @@ function show_vietqr_dialog(frm) {
         return;
     }
 
-    frappe.dom.freeze(__('Đang tạo mã VietQR chuẩn NAPAS 247...'));
     frappe.call({
         method: 'hospitality_core.hospitality_core.api.vietqr_bridge.generate_vietqr_payload',
         args: {
             folio_name: frm.doc.name
         },
+        freeze: true,
+        freeze_message: __('Đang tạo mã VietQR chuẩn NAPAS 247...'),
         callback: function (r) {
-            frappe.dom.unfreeze();
             if (!r.exc && r.message) {
                 let data = r.message;
                 let d = new frappe.ui.Dialog({
@@ -960,14 +960,14 @@ function show_vietqr_dialog(frm) {
 }
 
 function show_split_tour_dialog(frm) {
-    frappe.dom.freeze(__('Đang phân tích dữ liệu phòng và dịch vụ đoàn...'));
     frappe.call({
         method: 'hospitality_core.hospitality_core.api.folio_operations.get_split_tour_preview',
         args: {
             folio_name: frm.doc.name
         },
+        freeze: true,
+        freeze_message: __('Đang phân tích dữ liệu phòng và dịch vụ đoàn...'),
         callback: function (r) {
-            frappe.dom.unfreeze();
             if (!r.exc && r.message) {
                 let data = r.message;
                 let inc_rows_html = data.incidental_charges.map(t => `
@@ -1049,7 +1049,6 @@ function show_split_tour_dialog(frm) {
                             return;
                         }
 
-                        frappe.dom.freeze(__('Đang chuyển giao dịch sang Sub-Folio...'));
                         frappe.call({
                             method: 'hospitality_core.hospitality_core.api.folio_operations.execute_split_tour_folio',
                             args: {
@@ -1057,8 +1056,9 @@ function show_split_tour_dialog(frm) {
                                 target_folio: vals.target_folio,
                                 move_txns: selected_txns
                             },
+                            freeze: true,
+                            freeze_message: __('Đang chuyển giao dịch sang Sub-Folio...'),
                             callback: function (res) {
-                                frappe.dom.unfreeze();
                                 if (!res.exc) {
                                     d.hide();
                                     frappe.show_alert({

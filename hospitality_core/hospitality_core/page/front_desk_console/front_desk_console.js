@@ -644,7 +644,7 @@ function render_arrivals(data, is_filtered = false) {
             <div class="fd-list-item">
                 <div style="flex:1;">
                     <div style="font-weight:700; font-size:14px; margin-bottom: 2px;">
-                        <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
+                        <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}'); return false;">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
                     </div>
                     <div style="font-size:12px; color:#64748b;">
                         <span class="fas fa-bed" style="color:#3b82f6;"></span> <b>${frappe.utils.escape_html(d.room || __('Chưa xếp phòng'))}</b> &middot; <span class="text-muted">${frappe.utils.escape_html(d.room_type || '')}</span>
@@ -685,7 +685,7 @@ function render_departures(data, is_filtered = false) {
             <div class="fd-list-item">
                 <div style="flex:1;">
                     <div style="font-weight:700; font-size:14px; margin-bottom: 2px;">
-                        <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
+                        <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}'); return false;">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
                     </div>
                     <div style="font-size:12px; color:#64748b;">
                         <span class="fas fa-door-open" style="color:#ef4444;"></span> <b>${frappe.utils.escape_html(d.room || '')}</b> &middot; <span class="text-muted">${frappe.utils.escape_html(d.room_type || '')}</span>
