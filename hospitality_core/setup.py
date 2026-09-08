@@ -8,6 +8,8 @@ def after_install():
     enable_vietnamese_language()
     from hospitality_core.migrations.property_v2 import execute
     execute()
+    from hospitality_core.migrations.fnb_v1 import execute as setup_fnb
+    setup_fnb()
 
 def enable_vietnamese_language():
     if frappe.db.exists("Language", "vi"):

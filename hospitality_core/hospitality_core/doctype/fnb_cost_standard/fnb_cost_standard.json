@@ -1,0 +1,153 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Cost Standard",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 0,
+ "track_changes": 1,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "options": "Hospitality Property",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "from_date",
+   "label": "From Date",
+   "fieldtype": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "to_date",
+   "label": "To Date",
+   "fieldtype": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "prices",
+   "label": "Prices",
+   "fieldtype": "Table",
+   "options": "FNB Standard Price"
+  },
+  {
+   "fieldname": "status",
+   "label": "Status",
+   "fieldtype": "Select",
+   "options": "Draft\nApproved\nSent\nPrepared\nServed\nReconciled\nCounting\nClosed\nCancelled",
+   "read_only": 1,
+   "default": "Draft"
+  },
+  {
+   "fieldname": "approved_by",
+   "label": "Approved By",
+   "fieldtype": "Link",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_at",
+   "label": "Approved At",
+   "fieldtype": "Datetime",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "label": "Reason",
+   "fieldtype": "Small Text"
+  }
+ ],
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "from_date",
+  "to_date",
+  "prices",
+  "status",
+  "approved_by",
+  "approved_at",
+  "reason"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Operator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Storekeeper",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Supervisor",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Finance Approver",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

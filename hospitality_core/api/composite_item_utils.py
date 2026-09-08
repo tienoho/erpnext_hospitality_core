@@ -23,6 +23,10 @@ def process_composite_items_in_invoice(doc, method=None):
 		doc: POS Invoice or Sales Invoice document
 		method: Event method (on_submit, on_cancel)
 	"""
+	if doc.get('fnb_version') == 'FNB v1':
+		from hospitality_core.hospitality_core.api.fnb.pos import process_invoice
+		if process_invoice(doc):
+			return
 	if is_consolidated_pos_sales_invoice(doc):
 		return
 

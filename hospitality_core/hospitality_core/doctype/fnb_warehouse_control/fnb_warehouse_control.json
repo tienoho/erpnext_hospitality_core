@@ -1,0 +1,126 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Warehouse Control",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 0,
+ "track_changes": 1,
+ "autoname": "field:warehouse",
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "options": "Hospitality Property",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "label": "Warehouse",
+   "fieldtype": "Link",
+   "options": "Warehouse",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "active_count",
+   "label": "Active Count",
+   "fieldtype": "Link",
+   "options": "FNB Stock Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_through",
+   "label": "Closed Through",
+   "fieldtype": "Datetime",
+   "read_only": 1
+  }
+ ],
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "warehouse",
+  "active_count",
+  "closed_through"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Operator",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Storekeeper",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Supervisor",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Finance Approver",
+   "read": 1,
+   "write": 0,
+   "create": 0,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

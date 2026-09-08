@@ -1,0 +1,125 @@
+{
+ "doctype": "Workspace",
+ "name": "F&B Cost Control",
+ "label": "F&B Cost Control",
+ "title": "F&B Cost Control",
+ "module": "Hospitality Core",
+ "public": 1,
+ "is_hidden": 0,
+ "icon": "stock",
+ "content": "[{\"id\": \"fnb-title\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\">F&amp;B Cost Control</span>\", \"col\": 12}}, {\"id\": \"fnb-0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"F&B Operations\", \"col\": 4}}, {\"id\": \"fnb-1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Settings\", \"col\": 4}}, {\"id\": \"fnb-2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Outlet\", \"col\": 4}}, {\"id\": \"fnb-3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Recipe Version\", \"col\": 4}}, {\"id\": \"fnb-4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Cost Standard\", \"col\": 4}}, {\"id\": \"fnb-5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Service Ticket\", \"col\": 4}}, {\"id\": \"fnb-6\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Production Batch\", \"col\": 4}}, {\"id\": \"fnb-7\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Service Session\", \"col\": 4}}, {\"id\": \"fnb-8\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Waste Record\", \"col\": 4}}, {\"id\": \"fnb-9\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Stock Count\", \"col\": 4}}, {\"id\": \"fnb-10\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"FNB Period Close\", \"col\": 4}}, {\"id\": \"fnb-11\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Material Request\", \"col\": 4}}, {\"id\": \"fnb-12\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Stock Entry\", \"col\": 4}}]",
+ "shortcuts": [
+  {
+   "label": "F&B Operations",
+   "type": "Page",
+   "link_to": "fnb-control",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Settings",
+   "type": "DocType",
+   "link_to": "FNB Settings",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Outlet",
+   "type": "DocType",
+   "link_to": "FNB Outlet",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Recipe Version",
+   "type": "DocType",
+   "link_to": "FNB Recipe Version",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Cost Standard",
+   "type": "DocType",
+   "link_to": "FNB Cost Standard",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Service Ticket",
+   "type": "DocType",
+   "link_to": "FNB Service Ticket",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Production Batch",
+   "type": "DocType",
+   "link_to": "FNB Production Batch",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Service Session",
+   "type": "DocType",
+   "link_to": "FNB Service Session",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Waste Record",
+   "type": "DocType",
+   "link_to": "FNB Waste Record",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Stock Count",
+   "type": "DocType",
+   "link_to": "FNB Stock Count",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "FNB Period Close",
+   "type": "DocType",
+   "link_to": "FNB Period Close",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "Material Request",
+   "type": "DocType",
+   "link_to": "Material Request",
+   "doc_view": "List",
+   "color": "Blue"
+  },
+  {
+   "label": "Stock Entry",
+   "type": "DocType",
+   "link_to": "Stock Entry",
+   "doc_view": "List",
+   "color": "Blue"
+  }
+ ],
+ "links": [],
+ "charts": [],
+ "roles": [
+  {
+   "role": "FNB Operator"
+  },
+  {
+   "role": "FNB Storekeeper"
+  },
+  {
+   "role": "FNB Supervisor"
+  },
+  {
+   "role": "FNB Cost Controller"
+  },
+  {
+   "role": "FNB Finance Approver"
+  },
+  {
+   "role": "System Manager"
+  }
+ ]
+}

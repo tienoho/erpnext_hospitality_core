@@ -1,0 +1,45 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Invoice Allocation",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 1,
+ "track_changes": 0,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "ticket",
+   "label": "Ticket",
+   "fieldtype": "Link",
+   "options": "FNB Service Ticket",
+   "reqd": 1
+  },
+  {
+   "fieldname": "ticket_line",
+   "label": "Ticket Line",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "invoice_line",
+   "label": "Invoice Line",
+   "fieldtype": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stock_qty",
+   "label": "Stock Qty",
+   "fieldtype": "Float",
+   "reqd": 1
+  }
+ ],
+ "field_order": [
+  "ticket",
+  "ticket_line",
+  "invoice_line",
+  "stock_qty"
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

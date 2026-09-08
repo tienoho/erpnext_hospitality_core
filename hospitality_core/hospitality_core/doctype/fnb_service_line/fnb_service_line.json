@@ -1,0 +1,109 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Service Line",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 1,
+ "track_changes": 0,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "item",
+   "label": "Item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "qty",
+   "label": "Qty",
+   "fieldtype": "Float",
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "label": "Uom",
+   "fieldtype": "Link",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stock_qty",
+   "label": "Stock Qty",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversion_factor",
+   "label": "Conversion Factor",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "batch_no",
+   "label": "Batch No",
+   "fieldtype": "Link",
+   "options": "Batch"
+  },
+  {
+   "fieldname": "notes",
+   "label": "Notes",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "recipe",
+   "label": "Recipe",
+   "fieldtype": "Link",
+   "options": "FNB Recipe Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "snapshot",
+   "label": "Snapshot",
+   "fieldtype": "Long Text",
+   "read_only": 1
+  },
+  {
+   "fieldname": "prepared_qty",
+   "label": "Prepared Qty",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "served_qty",
+   "label": "Served Qty",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "billed_qty",
+   "label": "Billed Qty",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancelled_qty",
+   "label": "Cancelled Qty",
+   "fieldtype": "Float",
+   "read_only": 1
+  }
+ ],
+ "field_order": [
+  "item",
+  "qty",
+  "uom",
+  "stock_qty",
+  "conversion_factor",
+  "batch_no",
+  "notes",
+  "recipe",
+  "snapshot",
+  "prepared_qty",
+  "served_qty",
+  "billed_qty",
+  "cancelled_qty"
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

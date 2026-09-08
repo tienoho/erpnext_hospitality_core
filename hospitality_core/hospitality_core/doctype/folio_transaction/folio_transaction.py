@@ -56,6 +56,14 @@ class FolioTransaction(Document):
         self.compute_debit_credit()
 
     def validate_inventory_source(self):
+        if self.meta.has_field('fnb_pos_key') and not self.flags.hospitality_service:
+            fields = ['fnb_pos_key','item','qty','amount','reference_doctype','reference_name','is_void']
+            source = frappe.db.get_value('Folio Transaction',self.name,fields,as_dict=True) if not self.is_new() else None
+            if source and source.fnb_pos_key:
+                if any(self.get(k)!=source.get(k) for k in fields):
+                    frappe.throw(_('Không sửa phí POS F&B đã ghi; điều chỉnh từ chứng từ nguồn.'))
+            elif self.get('fnb_pos_key'):
+                frappe.throw(_('Liên kết phí POS F&B chỉ được tạo bởi dịch vụ nguồn.'))
         keys = ['item', 'qty', 'reference_doctype', 'reference_name', 'is_void']
         old = frappe.db.get_value('Folio Transaction', self.name, keys, as_dict=True) if not self.is_new() else None
         if old:
@@ -100,6 +108,13 @@ class FolioTransaction(Document):
                     'is_cancelled': 0, 'actual_qty': ['!=', 0],
                 }):
                     return True
+            if invoice.doctype == 'POS Invoice' and invoice.get('fnb_version') == 'FNB v1':
+                entries = frappe.get_all('FNB Inventory Event', filters={'source_doctype':invoice.doctype,
+                    'source_name':invoice.name,'source_line':row.name,'event_type':['in',['Issue','Return']]},pluck='stock_entry')
+                for entry in entries:
+                    if entry and frappe.db.exists('Stock Ledger Entry',{'voucher_type':'Stock Entry','voucher_no':entry,
+                        'item_code':self.item,'is_cancelled':0,'actual_qty':['!=',0]}):
+                        return True
         return False
 
 

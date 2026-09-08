@@ -1,0 +1,10 @@
+{
+ "doctype": "Print Format",
+ "name": "FNB Kitchen Ticket",
+ "module": "Hospitality Core",
+ "doc_type": "FNB Service Ticket",
+ "standard": "Yes",
+ "custom_format": 1,
+ "print_format_type": "Jinja",
+ "html": "<!-- Template trong fnb_kitchen_ticket.html -->"
+}

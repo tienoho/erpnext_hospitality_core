@@ -6,6 +6,7 @@ def execute():
     
     if frappe.db.exists("DocType", doctype_name):
         print(f"DocType {doctype_name} already exists.")
+        ensure_adjustment_item()
         return
 
     doc = frappe.get_doc({
@@ -96,7 +97,11 @@ def execute():
     doc.insert(ignore_permissions=True)
     print(f"Created DocType {doctype_name}")
     
-    # Ensure MANUAL_DEBT item exists
+    ensure_adjustment_item()
+
+
+def ensure_adjustment_item():
+    # Item.stock_uom không có default trên ERPNext 16.
     item_code = "MANUAL_ADJUSTMENT"
     if not frappe.db.exists("Item", item_code):
         item = frappe.new_doc("Item")
@@ -104,6 +109,8 @@ def execute():
         item.item_name = "Manual Ledger Adjustment"
         item.item_group = "Services" if frappe.db.exists("Item Group", "Services") else "All Item Groups"
         item.is_stock_item = 0
+        if not frappe.db.exists('UOM','Nos'):
+            frappe.get_doc(dict(doctype='UOM',uom_name='Nos',must_be_whole_number=1)).insert(ignore_permissions=True)
+        item.stock_uom = 'Nos'
         item.insert(ignore_permissions=True)
         print(f"Created Item {item_code}")
-

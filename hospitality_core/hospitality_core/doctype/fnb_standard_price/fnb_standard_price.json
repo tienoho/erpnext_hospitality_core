@@ -1,0 +1,55 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Standard Price",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 1,
+ "track_changes": 0,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "item",
+   "label": "Item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rate",
+   "label": "Rate",
+   "fieldtype": "Currency",
+   "options": "parent.currency",
+   "reqd": 1
+  },
+  {
+   "fieldname": "price_date",
+   "label": "Price Date",
+   "fieldtype": "Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_doctype",
+   "label": "Source Doctype",
+   "fieldtype": "Link",
+   "options": "DocType",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_name",
+   "label": "Source Name",
+   "fieldtype": "Dynamic Link",
+   "options": "source_doctype",
+   "reqd": 1
+  }
+ ],
+ "field_order": [
+  "item",
+  "rate",
+  "price_date",
+  "source_doctype",
+  "source_name"
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

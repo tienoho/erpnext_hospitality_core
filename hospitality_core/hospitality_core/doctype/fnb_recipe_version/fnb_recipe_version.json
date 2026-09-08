@@ -1,0 +1,225 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Recipe Version",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 0,
+ "track_changes": 1,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "options": "Hospitality Property",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "is_group_template",
+   "label": "Is Group Template",
+   "fieldtype": "Check"
+  },
+  {
+   "fieldname": "outlet",
+   "label": "Outlet",
+   "fieldtype": "Link",
+   "options": "FNB Outlet"
+  },
+  {
+   "fieldname": "item",
+   "label": "Item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "template",
+   "label": "Template",
+   "fieldtype": "Link",
+   "options": "FNB Recipe Version"
+  },
+  {
+   "fieldname": "import_key",
+   "label": "Import Key",
+   "fieldtype": "Data",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "import_content_hash",
+   "label": "Import Content Hash",
+   "fieldtype": "Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "quantity",
+   "label": "Quantity",
+   "fieldtype": "Float",
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "label": "Uom",
+   "fieldtype": "Link",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "effective_from",
+   "label": "Effective From",
+   "fieldtype": "Datetime",
+   "reqd": 1
+  },
+  {
+   "fieldname": "effective_to",
+   "label": "Effective To",
+   "fieldtype": "Datetime"
+  },
+  {
+   "fieldname": "ingredients",
+   "label": "Ingredients",
+   "fieldtype": "Table",
+   "options": "FNB Recipe Ingredient"
+  },
+  {
+   "fieldname": "snapshot",
+   "label": "Snapshot",
+   "fieldtype": "Long Text",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bom",
+   "label": "Bom",
+   "fieldtype": "Link",
+   "options": "BOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "label": "Status",
+   "fieldtype": "Select",
+   "options": "Draft\nApproved\nSent\nPrepared\nServed\nReconciled\nCounting\nClosed\nCancelled",
+   "read_only": 1,
+   "default": "Draft"
+  },
+  {
+   "fieldname": "approved_by",
+   "label": "Approved By",
+   "fieldtype": "Link",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_at",
+   "label": "Approved At",
+   "fieldtype": "Datetime",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "label": "Reason",
+   "fieldtype": "Small Text"
+  }
+ ],
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "is_group_template",
+  "outlet",
+  "item",
+  "template",
+  "import_key",
+  "import_content_hash",
+  "quantity",
+  "uom",
+  "effective_from",
+  "effective_to",
+  "ingredients",
+  "snapshot",
+  "bom",
+  "status",
+  "approved_by",
+  "approved_at",
+  "reason"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Operator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Storekeeper",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Supervisor",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Finance Approver",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

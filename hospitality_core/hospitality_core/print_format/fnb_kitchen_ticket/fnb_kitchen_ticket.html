@@ -1,0 +1,15 @@
+<h2>{{ _("Phiếu bếp") }} · {{ doc.name | e }}</h2>
+<p>{{ doc.property | e }} · {{ frappe.db.get_value("FNB Outlet", doc.outlet, "outlet_name") | e }}<br>
+{{ _("Ngày kinh doanh") }}: {{ doc.business_date | e }} · {{ doc.posting_datetime | e }}<br>
+{{ _("Bàn / phòng") }}: {{ (doc.table_number or doc.room or "—") | e }}<br>
+{{ _("Mục đích") }}: {{ _(doc.purpose) | e }} · {{ _(doc.status) | e }}</p>
+<table class="table table-bordered">
+ <thead><tr><th>{{ _("Món") }}</th><th>{{ _("Lượng đặt") }}</th><th>{{ _("Đơn vị") }}</th><th>{{ _("Ghi chú") }}</th></tr></thead>
+ <tbody>{% for row in doc.items %}
+  <tr><td>{{ frappe.db.get_value("Item", row.item, "item_name") | e }}</td>
+  <td>{{ row.qty }}</td><td>{{ row.uom | e }}</td><td>{{ (row.notes or "") | e }}</td></tr>
+ {% endfor %}</tbody>
+</table>
+{% if doc.reason %}<p>{{ doc.reason | e }}</p>{% endif %}
+{% if doc.beneficiary %}<p>{{ _("Người/bộ phận hưởng") }}: {{ doc.beneficiary | e }}</p>{% endif %}
+<p>{{ _("Người lập") }}: {{ doc.owner | e }} · {{ _("Người duyệt") }}: {{ (doc.approved_by or "—") | e }}</p>

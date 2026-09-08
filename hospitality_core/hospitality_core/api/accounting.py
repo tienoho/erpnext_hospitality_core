@@ -275,6 +275,8 @@ def redirect_pos_income_to_suspense(pos_invoice, method=None):
     Redirects the portion charged to room from Income to Suspense.
     dr Income / cr Suspense
     """
+    if pos_invoice.get('fnb_version') == 'FNB v1':
+        return  # Thuế/doanh thu thuộc Sales Invoice hợp nhất của ERPNext.
     is_cancelled = False
     if method == "on_cancel" or pos_invoice.docstatus == 2:
         is_cancelled = True
@@ -336,6 +338,8 @@ def reclassify_pos_taxes(pos_invoice, method=None):
     Total = 1.225 * Net
     dr Income (or Suspense if Room Charge) / cr CT, VAT, SC
     """
+    if pos_invoice.get('fnb_version') == 'FNB v1':
+        return
     is_cancelled = False
     if method == "on_cancel" or pos_invoice.docstatus == 2:
         is_cancelled = True

@@ -1,0 +1,98 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Stock Line",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 1,
+ "track_changes": 0,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "item",
+   "label": "Item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "qty",
+   "label": "Qty",
+   "fieldtype": "Float",
+   "reqd": 1
+  },
+  {
+   "fieldname": "uom",
+   "label": "Uom",
+   "fieldtype": "Link",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stock_qty",
+   "label": "Stock Qty",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversion_factor",
+   "label": "Conversion Factor",
+   "fieldtype": "Float",
+   "read_only": 1
+  },
+  {
+   "fieldname": "batch_no",
+   "label": "Batch No",
+   "fieldtype": "Link",
+   "options": "Batch"
+  },
+  {
+   "fieldname": "notes",
+   "label": "Notes",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "counted_qty",
+   "label": "Counted Qty",
+   "fieldtype": "Float"
+  },
+  {
+   "fieldname": "recounted_qty",
+   "label": "Recounted Qty",
+   "fieldtype": "Float"
+  },
+  {
+   "fieldname": "count_entered",
+   "label": "Count Entered",
+   "fieldtype": "Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "recount_entered",
+   "label": "Recount Entered",
+   "fieldtype": "Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expiry_date",
+   "label": "Expiry Date",
+   "fieldtype": "Date"
+  }
+ ],
+ "field_order": [
+  "item",
+  "qty",
+  "uom",
+  "stock_qty",
+  "conversion_factor",
+  "batch_no",
+  "notes",
+  "counted_qty",
+  "recounted_qty",
+  "count_entered",
+  "recount_entered",
+  "expiry_date"
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

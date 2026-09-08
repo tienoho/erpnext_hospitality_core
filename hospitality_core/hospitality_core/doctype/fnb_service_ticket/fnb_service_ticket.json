@@ -1,0 +1,195 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Service Ticket",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 0,
+ "track_changes": 1,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "options": "Hospitality Property",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outlet",
+   "label": "Outlet",
+   "fieldtype": "Link",
+   "options": "FNB Outlet",
+   "reqd": 1
+  },
+  {
+   "fieldname": "posting_datetime",
+   "label": "Posting Datetime",
+   "fieldtype": "Datetime",
+   "reqd": 1
+  },
+  {
+   "fieldname": "business_date",
+   "label": "Business Date",
+   "fieldtype": "Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "label": "Status",
+   "fieldtype": "Select",
+   "options": "Draft\nApproved\nSent\nPrepared\nServed\nReconciled\nCounting\nClosed\nCancelled",
+   "read_only": 1,
+   "default": "Draft"
+  },
+  {
+   "fieldname": "approved_by",
+   "label": "Approved By",
+   "fieldtype": "Link",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_at",
+   "label": "Approved At",
+   "fieldtype": "Datetime",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "label": "Reason",
+   "fieldtype": "Small Text"
+  },
+  {
+   "fieldname": "table_number",
+   "label": "Table Number",
+   "fieldtype": "Data"
+  },
+  {
+   "fieldname": "room",
+   "label": "Room",
+   "fieldtype": "Link",
+   "options": "Hotel Room"
+  },
+  {
+   "fieldname": "reservation",
+   "label": "Reservation",
+   "fieldtype": "Link",
+   "options": "Hotel Reservation"
+  },
+  {
+   "fieldname": "purpose",
+   "label": "Purpose",
+   "fieldtype": "Select",
+   "options": "Sale\nStaff\nComplimentary",
+   "reqd": 1
+  },
+  {
+   "fieldname": "beneficiary",
+   "label": "Beneficiary",
+   "fieldtype": "Data"
+  },
+  {
+   "fieldname": "items",
+   "label": "Items",
+   "fieldtype": "Table",
+   "options": "FNB Service Line"
+  }
+ ],
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "outlet",
+  "posting_datetime",
+  "business_date",
+  "status",
+  "approved_by",
+  "approved_at",
+  "reason",
+  "table_number",
+  "room",
+  "reservation",
+  "purpose",
+  "beneficiary",
+  "items"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Operator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Storekeeper",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Supervisor",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Finance Approver",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

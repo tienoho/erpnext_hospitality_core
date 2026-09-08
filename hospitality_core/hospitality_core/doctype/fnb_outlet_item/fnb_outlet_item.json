@@ -1,0 +1,46 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Outlet Item",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 1,
+ "track_changes": 0,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "item",
+   "label": "Item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "stock_mode",
+   "label": "Stock Mode",
+   "fieldtype": "Select",
+   "options": "Recipe\nStock\nSession\nNonStock",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cost_group",
+   "label": "Cost Group",
+   "fieldtype": "Select",
+   "options": "Food\nBeverage\nOther",
+   "reqd": 1
+  },
+  {
+   "fieldname": "par_qty",
+   "label": "Par Qty",
+   "fieldtype": "Float"
+  }
+ ],
+ "field_order": [
+  "item",
+  "stock_mode",
+  "cost_group",
+  "par_qty"
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

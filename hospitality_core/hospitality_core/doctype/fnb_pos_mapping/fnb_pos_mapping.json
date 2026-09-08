@@ -1,0 +1,24 @@
+{
+ "doctype": "DocType",
+ "name": "FNB POS Mapping",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 1,
+ "track_changes": 0,
+ "autoname": "hash",
+ "fields": [
+  {
+   "fieldname": "pos_profile",
+   "label": "Pos Profile",
+   "fieldtype": "Link",
+   "options": "POS Profile",
+   "reqd": 1
+  }
+ ],
+ "field_order": [
+  "pos_profile"
+ ],
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

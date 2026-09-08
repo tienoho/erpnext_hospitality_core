@@ -1,0 +1,6 @@
+{
+ "doctype": "Page", "name": "fnb-control", "page_name": "fnb-control", "module": "Hospitality Core",
+ "standard": "Yes", "title": "F&B Cost Control",
+ "roles": [{"role":"FNB Operator"},{"role":"FNB Storekeeper"},{"role":"FNB Supervisor"},
+           {"role":"FNB Cost Controller"},{"role":"FNB Finance Approver"},{"role":"System Manager"}]
+}

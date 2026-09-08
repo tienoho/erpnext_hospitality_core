@@ -11,7 +11,8 @@ app_include_js = [
     "/assets/hospitality_core/js/pos_invoice_auto_print.js",
     "/assets/hospitality_core/js/payment_entry_auto_print.js",
     "/assets/hospitality_core/js/pos_payment_control.js",
-    "/assets/hospitality_core/js/keycard_encoder_bridge.js"
+    "/assets/hospitality_core/js/keycard_encoder_bridge.js",
+    "/assets/hospitality_core/js/fnb_control.js"
 ]
 
 app_include_css = [
@@ -106,7 +107,14 @@ fixtures = [
 # Phạm vi v2 được kiểm tra trước controller và áp dụng cho cả REST lẫn Desk.
 from hospitality_core.hospitality_core.api.property_scope import SCOPED, COMPANY_SCOPED, CORE_SCOPED
 
+SCOPED.update({'FNB Settings','FNB Outlet','FNB Recipe Version','FNB Cost Standard','FNB Service Ticket',
+    'FNB Production Batch','FNB Service Session','FNB Waste Record','FNB Stock Count','FNB Period Close',
+    'FNB Inventory Event','FNB Warehouse Control'})
+CORE_SCOPED.update({'Warehouse','BOM','Material Request','Purchase Order','Purchase Receipt',
+    'Purchase Invoice','Stock Entry','Stock Reconciliation','Delivery Note'})
+
 permission_query_conditions = {"*": "hospitality_core.hospitality_core.api.property_scope.conditions"}
+permission_query_conditions['*']='hospitality_core.hospitality_core.api.fnb.guards.conditions'
 has_permission = {dt: "hospitality_core.hospitality_core.api.property_scope.has_permission"
     for dt in SCOPED | COMPANY_SCOPED | CORE_SCOPED | {"Hospitality Property", "Guest Preference", "File"}}
 doc_events["*"] = {
@@ -133,3 +141,18 @@ _add_event("Payment Entry", "on_cancel", "hospitality_core.hospitality_core.api.
 
 after_migrate = ["hospitality_core.migrations.property_v2.execute"]
 scheduler_events.setdefault("hourly", []).append("hospitality_core.hospitality_core.api.guest_loyalty.scheduled")
+
+after_migrate.append('hospitality_core.migrations.fnb_v1.execute')
+_add_event('*','before_validate','hospitality_core.hospitality_core.api.fnb.guards.native_validate')
+for _dt in ['Stock Entry','Stock Reconciliation','Purchase Receipt','Purchase Invoice','Delivery Note',
+            'POS Invoice','Sales Invoice','Material Request','Purchase Order','Landed Cost Voucher']:
+    _add_event(_dt,'before_submit','hospitality_core.hospitality_core.api.fnb.guards.stock_gate')
+    _add_event(_dt,'before_cancel','hospitality_core.hospitality_core.api.fnb.guards.stock_gate')
+    has_permission[_dt]='hospitality_core.hospitality_core.api.fnb.guards.scoped_permission'
+for _dt in ['POS Invoice','Sales Invoice']:
+    _add_event(_dt,'before_validate','hospitality_core.hospitality_core.api.fnb.pos.before_validate')
+    _add_event(_dt,'before_submit','hospitality_core.hospitality_core.api.fnb.pos.validate_return_approval')
+    _add_event(_dt,'before_submit','hospitality_core.hospitality_core.api.fnb.pos.check_reserved_stock')
+doc_events['POS Invoice']['on_submit'].insert(0,'hospitality_core.hospitality_core.api.fnb.pos.prepare_pos_stock')
+for _dt in {dt for dt in SCOPED if dt.startswith('FNB ')} | {'Warehouse'}:
+    has_permission[_dt]='hospitality_core.hospitality_core.api.fnb.guards.scoped_permission'

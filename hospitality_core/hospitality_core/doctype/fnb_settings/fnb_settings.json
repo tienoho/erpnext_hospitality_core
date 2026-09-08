@@ -1,0 +1,206 @@
+{
+ "doctype": "DocType",
+ "name": "FNB Settings",
+ "module": "Hospitality Core",
+ "engine": "InnoDB",
+ "istable": 0,
+ "track_changes": 1,
+ "autoname": "field:property",
+ "fields": [
+  {
+   "fieldname": "property",
+   "label": "Property",
+   "fieldtype": "Link",
+   "options": "Hospitality Property",
+   "reqd": 1
+  },
+  {
+   "fieldname": "operating_company",
+   "label": "Operating Company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency",
+   "label": "Currency",
+   "fieldtype": "Link",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "enabled",
+   "label": "Enabled",
+   "fieldtype": "Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cutover_at",
+   "label": "Cutover At",
+   "fieldtype": "Datetime"
+  },
+  {
+   "fieldname": "main_warehouse",
+   "label": "Main Warehouse",
+   "fieldtype": "Link",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "transit_warehouse",
+   "label": "Transit Warehouse",
+   "fieldtype": "Link",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cost_center",
+   "label": "Cost Center",
+   "fieldtype": "Link",
+   "options": "Cost Center",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cogs_account",
+   "label": "Cogs Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "staff_account",
+   "label": "Staff Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "complimentary_account",
+   "label": "Complimentary Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "waste_account",
+   "label": "Waste Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "variance_account",
+   "label": "Variance Account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "allow_direct_receipt",
+   "label": "Allow Direct Receipt",
+   "fieldtype": "Check"
+  },
+  {
+   "fieldname": "price_tolerance_percent",
+   "label": "Price Tolerance Percent",
+   "fieldtype": "Percent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "quantity_tolerance_percent",
+   "label": "Quantity Tolerance Percent",
+   "fieldtype": "Percent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "setup_verified",
+   "label": "Setup Verified",
+   "fieldtype": "Check",
+   "read_only": 1
+  }
+ ],
+ "field_order": [
+  "property",
+  "operating_company",
+  "currency",
+  "enabled",
+  "cutover_at",
+  "main_warehouse",
+  "transit_warehouse",
+  "cost_center",
+  "cogs_account",
+  "staff_account",
+  "complimentary_account",
+  "waste_account",
+  "variance_account",
+  "allow_direct_receipt",
+  "price_tolerance_percent",
+  "quantity_tolerance_percent",
+  "setup_verified"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Operator",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Storekeeper",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Supervisor",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Finance Approver",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "FNB Cost Controller",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
