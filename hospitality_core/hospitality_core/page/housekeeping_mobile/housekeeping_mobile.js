@@ -150,9 +150,12 @@ window.hkm_set_status = function (room, status) {
     frappe.call({
         method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.update_room_status',
         args: { room: room, status: status },
+        freeze: true,
+        freeze_message: __('Đang cập nhật...'),
         callback: function (r) {
             if (!r || !r.exc) {
                 trigger_haptic(50);
+                frappe.show_alert({ message: __('Đã đổi trạng thái phòng thành công.'), indicator: 'green' });
             }
             load_room_board();
         }

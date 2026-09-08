@@ -1,5 +1,7 @@
 var _tc_days_span = 14;
 var _tc_data_cache = null;
+var _tc_wrapper = null;
+var _tc_page = null;
 
 const HK_BADGES = {
     'Available': { label: 'Sạch', bg: '#10b981', color: '#fff' },
@@ -16,6 +18,8 @@ frappe.pages['tape-chart'].on_page_load = function (wrapper) {
         title: __('Tape Chart 2.0 (Sơ Đồ Buồng Phòng Trực Quan)'),
         single_column: true
     });
+    _tc_wrapper = wrapper;
+    _tc_page = page;
 
     // 1. Start Date Field
     page.add_field({
@@ -431,7 +435,9 @@ function attach_drag_handlers() {
                         freeze_message: __('Đang đổi buồng phòng...'),
                         callback: function (r) {
                             if (!r.exc) {
-                                frappe.pages['tape-chart'].get_primary_action().trigger('click');
+                                if (_tc_wrapper && _tc_page) {
+                                    render_tape_chart(_tc_wrapper, _tc_page);
+                                }
                             }
                         }
                     });
@@ -442,6 +448,7 @@ function attach_drag_handlers() {
 
 // Quick View Popover / Drawer for Fast Actions
 window.tc_open_booking_drawer = function (res_name) {
+    $('#tc-tooltip').hide();
     if (!_tc_data_cache) return;
     let b = (_tc_data_cache.bookings || []).find(x => x.name === res_name);
     if (!b) return;

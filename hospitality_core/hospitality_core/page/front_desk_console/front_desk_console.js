@@ -567,6 +567,8 @@ function setup_kpi_filters() {
 function reset_kpi_filters() {
     _active_kpi_filter = null;
     $('.fd-stat-card').removeClass('active-filter');
+    $('#fd-omni-search').val('');
+    $('#fd-omni-results').hide().empty();
     render_arrivals(_fd_cache.arrivals);
     render_departures(_fd_cache.departures);
 }

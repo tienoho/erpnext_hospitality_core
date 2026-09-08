@@ -362,8 +362,9 @@ function update_selection_ui() {
         $('#hk-batch-bar').hide();
     }
 
+    const escape_selector = (id) => (window.CSS && CSS.escape) ? CSS.escape(id) : String(id).replace(/([ #;&,.+*~':"!^$[\]()=>|/@])/g, '\\$1');
     _hk_rooms_cache.forEach(r => {
-        let card = $(`#card-room-${CSS.escape(r.name)}`);
+        let card = $(`#card-room-${escape_selector(r.name)}`);
         let cb = card.find('.hk-room-checkbox');
         if (_hk_selected_rooms.has(r.name)) {
             card.addClass('selected');
