@@ -58,7 +58,7 @@ frappe.pages['availability-tool'].on_page_load = function (wrapper) {
             padding: 12px 10px;
             text-align: center;
             background: #fff;
-            transition: all 0.2s ease-in-out;
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
             min-height: 96px;
             position: relative;
             display: flex;
@@ -68,6 +68,9 @@ frappe.pages['availability-tool'].on_page_load = function (wrapper) {
         .room-card-box:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        .room-card-box:active {
+            transform: scale(0.97);
         }
         .room-card-avail {
             background: #f0faf4;
@@ -102,7 +105,7 @@ frappe.pages['availability-tool'].on_page_load = function (wrapper) {
             font-size: 13px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -110,6 +113,9 @@ frappe.pages['availability-tool'].on_page_load = function (wrapper) {
         .filter-pill-btn:hover {
             background: #f8f9fa;
             border-color: #adb5bd;
+        }
+        .filter-pill-btn:active {
+            transform: scale(0.95);
         }
         .filter-pill-btn.active {
             background: #1f272e;
@@ -124,15 +130,34 @@ frappe.pages['availability-tool'].on_page_load = function (wrapper) {
             padding: 6px 12px;
             font-size: 13px;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
         }
         .view-switch-btn:first-child { border-radius: 6px 0 0 6px; }
         .view-switch-btn:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+        .view-switch-btn:active {
+            transform: scale(0.95);
+        }
         .view-switch-btn.active {
             background: #2f80ed;
             color: #fff;
             border-color: #2f80ed;
             font-weight: 600;
+        }
+        #avail-search-input:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+            outline: none !important;
+        }
+        @keyframes avail-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .avail-skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: avail-shimmer 1.5s infinite;
+            border-radius: 4px;
+            display: inline-block;
         }
     </style>`).appendTo(wrapper);
 
@@ -149,6 +174,33 @@ var _avail_state = {
     start_date: '',
     end_date: ''
 };
+
+function show_avail_skeletons() {
+    let statsSkel = `
+        <div class="row" style="margin-bottom: 20px;">
+            ${[1,2,3,4].map(() => `
+                <div class="col-md-3 col-xs-6" style="margin-bottom: 10px;">
+                    <div style="background:#fff; border:1px solid #d1d8dd; border-radius:8px; padding:15px; text-align:center;">
+                        <div class="avail-skeleton" style="width: 80px; height: 14px; margin: 0 auto 8px;"></div>
+                        <div class="avail-skeleton" style="width: 60px; height: 32px; margin: 0 auto 8px;"></div>
+                        <div class="avail-skeleton" style="width: 100px; height: 12px; margin: 0 auto;"></div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    $('#avail-stats-section').html(statsSkel);
+    $('#avail-rooms-section').html(`
+        <div style="background:#fff; border:1px solid #d1d8dd; border-radius:8px; padding:20px;">
+            <div class="avail-skeleton" style="width: 150px; height: 20px; margin-bottom: 15px;"></div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap:10px;">
+                ${[1,2,3,4,5,6,7,8].map(() => `
+                    <div class="avail-skeleton" style="height: 96px; border-radius: 8px;"></div>
+                `).join('')}
+            </div>
+        </div>
+    `);
+}
 
 function load_availability(wrapper, page) {
     let dates = page.fields_dict.date_range.get_value();
@@ -167,10 +219,11 @@ function load_availability(wrapper, page) {
     _avail_state.start_date = start;
     _avail_state.end_date = end;
 
+    show_avail_skeletons();
+
     frappe.call({
         method: "hospitality_core.hospitality_core.page.availability_tool.availability_tool.check_availability_counts",
         args: { start_date: start, end_date: end },
-        freeze: true,
         callback: function (r) {
             if (r.message) {
                 _avail_state.data = r.message;
@@ -325,10 +378,12 @@ function render_controls_bar(data) {
             <!-- Right: Search & View Toggle -->
             <div style="display:flex; align-items:center; gap:12px;">
                 <div style="position:relative; width:220px;">
+                    <i class="fa fa-search" style="position:absolute; left:10px; top:8px; color:#94a3b8; font-size:12px;"></i>
                     <input type="text" id="avail-search-input" class="form-control input-sm" 
                            placeholder="${__('Tìm số phòng, tên khách...')}" 
                            value="${_avail_state.search_query}"
-                           style="border-radius:20px; padding-left:12px; font-size:12px;">
+                           style="border-radius:20px; padding-left:28px; padding-right:24px; font-size:12px; transition:all 0.2s ease;">
+                    ${_avail_state.search_query ? `<span id="avail-search-clear" style="position:absolute; right:8px; top:5px; cursor:pointer; color:#94a3b8; font-size:12px;" title="${__('Xóa')}"><i class="fa fa-times-circle"></i></span>` : ''}
                 </div>
                 <div style="display:inline-flex;">
                     <button class="view-switch-btn ${view === 'grid' ? 'active' : ''}" onclick="change_view_mode('grid')" title="${__('Xem dạng lưới ô thẻ')}">
@@ -347,6 +402,27 @@ function render_controls_bar(data) {
     // Bind real-time search input
     $('#avail-search-input').on('keyup', function () {
         _avail_state.search_query = $(this).val().toLowerCase().trim();
+        let clear = $('#avail-search-clear');
+        if (_avail_state.search_query) {
+            if (!clear.length) {
+                $('#avail-search-input').after(`<span id="avail-search-clear" style="position:absolute; right:8px; top:5px; cursor:pointer; color:#94a3b8; font-size:12px;" title="${__('Xóa')}"><i class="fa fa-times-circle"></i></span>`);
+                $('#avail-search-clear').on('click', function () {
+                    _avail_state.search_query = '';
+                    $('#avail-search-input').val('').focus();
+                    $(this).remove();
+                    render_rooms_view(_avail_state.data.room_details);
+                });
+            }
+        } else {
+            clear.remove();
+        }
+        render_rooms_view(_avail_state.data.room_details);
+    });
+
+    $('#avail-search-clear').on('click', function () {
+        _avail_state.search_query = '';
+        $('#avail-search-input').val('').focus();
+        $(this).remove();
         render_rooms_view(_avail_state.data.room_details);
     });
 }
@@ -388,14 +464,34 @@ function render_rooms_view(rooms) {
     }
 }
 
+function get_smart_empty_html() {
+    return `
+        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:48px 20px; text-align:center;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #f1f5f9; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                <i class="fa fa-search" style="font-size: 22px; color: #94a3b8;"></i>
+            </div>
+            <h4 style="font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">${__('Không tìm thấy phòng phù hợp')}</h4>
+            <p style="font-size: 13px; color: #64748b; max-width: 420px; margin: 0 auto 16px;">${__('Không có phòng nào thỏa mãn bộ lọc hiện tại. Thử chọn lại khoảng ngày hoặc đổi tiêu chí tìm kiếm.')}</p>
+            <button class="btn btn-default btn-sm" onclick="reset_avail_filters()" style="border-radius:6px; font-weight:600;">
+                <i class="fa fa-undo"></i> ${__('Xem Tất Cả Phòng')}
+            </button>
+        </div>
+    `;
+}
+
+window.reset_avail_filters = function () {
+    _avail_state.status_filter = 'all';
+    _avail_state.search_query = '';
+    $('#avail-search-input').val('');
+    if (_avail_state.data) {
+        render_controls_bar(_avail_state.data);
+        render_rooms_view(_avail_state.data.room_details || []);
+    }
+};
+
 function render_matrix_grid(rooms) {
     if (rooms.length === 0) {
-        $('#avail-rooms-section').html(`
-            <div style="background:#fff; border:1px solid #d1d8dd; border-radius:8px; padding:40px; text-align:center; color:#8d99a6;">
-                <i class="fa fa-bed" style="font-size:32px; margin-bottom:10px;"></i>
-                <div>${__('Không tìm thấy phòng nào phù hợp với bộ lọc hiện tại.')}</div>
-            </div>
-        `);
+        $('#avail-rooms-section').html(get_smart_empty_html());
         return;
     }
 
@@ -502,11 +598,7 @@ function render_matrix_grid(rooms) {
 
 function render_table_view(rooms) {
     if (rooms.length === 0) {
-        $('#avail-rooms-section').html(`
-            <div style="background:#fff; border:1px solid #d1d8dd; border-radius:8px; padding:40px; text-align:center; color:#8d99a6;">
-                ${__('Không tìm thấy phòng nào phù hợp.')}
-            </div>
-        `);
+        $('#avail-rooms-section').html(get_smart_empty_html());
         return;
     }
 

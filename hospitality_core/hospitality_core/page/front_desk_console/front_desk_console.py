@@ -30,7 +30,7 @@ def get_console_data(target_date=None):
     # 1. Fetch Arrivals for specific date
     # Include 'Checked Out' in arrivals list if they arrived AND left on the target date (Day Use)
     arrivals = frappe.db.sql(f"""
-        SELECT res.name, g.full_name as guest_name, res.status, COALESCE(r.room_number, res.room) as room, res.room_type, res.arrival_date
+        SELECT res.name, g.full_name as guest_name, res.status, COALESCE(r.room_number, res.room) as room, res.room_type, res.arrival_date, r.status as room_hk_status
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
         LEFT JOIN `tabHotel Room` r ON res.room = r.name
@@ -42,7 +42,7 @@ def get_console_data(target_date=None):
 
     # 2. Fetch Departures for specific date
     departures = frappe.db.sql(f"""
-        SELECT res.name, g.full_name as guest_name, res.status, COALESCE(r.room_number, res.room) as room, res.room_type, res.departure_date
+        SELECT res.name, g.full_name as guest_name, res.status, COALESCE(r.room_number, res.room) as room, res.room_type, res.departure_date, r.status as room_hk_status
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
         LEFT JOIN `tabHotel Room` r ON res.room = r.name

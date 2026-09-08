@@ -9,15 +9,36 @@ frappe.pages['housekeeping-mobile'].on_page_load = function (wrapper) {
         .hkm-tabs { display:flex; position: sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid #e2e8f0; margin-bottom:12px; }
         .hkm-tab { flex:1; text-align:center; padding:14px 4px; font-size:13px; font-weight:700; color:#64748b; cursor:pointer; }
         .hkm-tab.active { color:#2563eb; border-bottom:3px solid #2563eb; }
-        .hkm-room-card { border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,0.04); background:#fff; }
+        .hkm-room-card { border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,0.04); background:#fff; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+        .hkm-room-card:active { transform: scale(0.99); }
         .hkm-room-title { font-size:20px; font-weight:800; color:#1e293b; }
         .hkm-room-sub { font-size:12px; color:#64748b; margin-top:2px; }
         .hkm-status-pill { font-size:11px; padding:4px 12px; border-radius:12px; font-weight:700; color:#fff; }
         .hkm-btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-        .hkm-btn { flex:1; min-width:80px; min-height:44px; padding:10px 14px; border-radius:8px; border:none; font-size:13px; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center; }
+        .hkm-btn {
+            flex:1; min-width:80px; min-height:44px; padding:10px 14px; border-radius:8px; border:none; font-size:13px; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center;
+            transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), filter 0.12s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .hkm-btn:active {
+            transform: scale(0.96);
+            filter: brightness(0.92);
+        }
         .hkm-section { display:none; }
         .hkm-section.active { display:block; }
         .hkm-floor-filter { margin-bottom:12px; height:42px; border-radius:8px; font-size:14px; font-weight:600; }
+        @keyframes hkm-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .hkm-skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: hkm-shimmer 1.5s infinite;
+            border-radius: 4px;
+            display: inline-block;
+        }
     </style>`).appendTo(wrapper);
 
     $(wrapper).find('.layout-main-section').append(`
@@ -121,27 +142,76 @@ function setup_rooms_tab() {
 }
 
 function load_room_board() {
+    let list = $('#hkm-room-list');
+    list.html(`
+        <div class="hkm-room-card" style="opacity:0.75;">
+            <div style="flex:1;">
+                <div class="hkm-skeleton" style="width: 70px; height: 24px; margin-bottom: 6px;"></div>
+                <div class="hkm-skeleton" style="width: 130px; height: 14px;"></div>
+            </div>
+            <div class="hkm-skeleton" style="width: 70px; height: 26px; border-radius: 12px;"></div>
+        </div>
+        <div class="hkm-room-card" style="opacity:0.75;">
+            <div style="flex:1;">
+                <div class="hkm-skeleton" style="width: 70px; height: 24px; margin-bottom: 6px;"></div>
+                <div class="hkm-skeleton" style="width: 130px; height: 14px;"></div>
+            </div>
+            <div class="hkm-skeleton" style="width: 70px; height: 26px; border-radius: 12px;"></div>
+        </div>
+        <div class="hkm-room-card" style="opacity:0.75;">
+            <div style="flex:1;">
+                <div class="hkm-skeleton" style="width: 70px; height: 24px; margin-bottom: 6px;"></div>
+                <div class="hkm-skeleton" style="width: 130px; height: 14px;"></div>
+            </div>
+            <div class="hkm-skeleton" style="width: 70px; height: 26px; border-radius: 12px;"></div>
+        </div>
+    `);
+
     frappe.call({
         method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.get_my_board',
         args: { floor: $('#hkm-floor-filter').val() || null },
         callback: function (r) {
-            let list = $('#hkm-room-list');
             list.empty();
-            (r.message || []).forEach((room) => {
+            let rooms = r.message || [];
+            let dirtyCount = rooms.filter(rm => rm.status === 'Dirty').length;
+            let $roomTab = $('.hkm-tab[data-tab="rooms"]');
+            $roomTab.html(`<i class="fa fa-bed"></i> ${__('Buồng Phòng')}` + (dirtyCount > 0 ? ` <span class="badge" style="background:#ef4444; color:#fff; font-size:10px; border-radius:10px; padding:2px 6px; margin-left:4px;">${dirtyCount}</span>` : ''));
+
+            if (rooms.length === 0) {
+                list.html(`
+                    <div style="text-align:center; padding:40px 16px; background:#fff; border:1px solid #e2e8f0; border-radius:10px;">
+                        <i class="fa fa-check-circle" style="font-size:36px; color:#10b981; margin-bottom:12px;"></i>
+                        <h4 style="font-size:16px; font-weight:700; color:#1e293b; margin-bottom:4px;">${__('Không có phòng nào')}</h4>
+                        <p style="font-size:12px; color:#64748b; margin:0;">${__('Tất cả phòng trong tầng đã được xử lý hoặc không có dữ liệu.')}</p>
+                    </div>
+                `);
+                return;
+            }
+
+            rooms.forEach((room) => {
                 let color = STATUS_COLORS[room.status] || '#828282';
                 let next = NEXT_STATUS[room.status];
                 list.append(`
-                    <div class="hkm-room-card">
+                    <div class="hkm-room-card" id="hkm-card-${frappe.utils.escape_html(room.name)}">
                         <div>
-                            <div class="hkm-room-title">${room.room_number}</div>
-                            <div class="hkm-room-sub">${room.room_type || ''} ${room.floor ? '&middot; ' + __('Tầng') + ' ' + room.floor : ''}</div>
+                            <div class="hkm-room-title">${frappe.utils.escape_html(room.room_number)}</div>
+                            <div class="hkm-room-sub">${frappe.utils.escape_html(room.room_type || '')} ${room.floor ? '&middot; ' + __('Tầng') + ' ' + room.floor : ''}</div>
                         </div>
                         <div style="text-align:right;">
                             <span class="hkm-status-pill" style="background:${color}">${STATUS_LABELS[room.status] || room.status}</span>
-                            ${next ? `<div class="hkm-btn-row"><button class="hkm-btn" style="background:${STATUS_COLORS[next]}" onclick="hkm_set_status('${room.name}','${next}')"><i class="fa fa-arrow-right" style="margin-right:4px;"></i>${STATUS_LABELS[next] || next}</button></div>` : ''}
+                            ${next ? `<div class="hkm-btn-row"><button class="hkm-btn hkm-status-btn" style="background:${STATUS_COLORS[next]}" data-room="${frappe.utils.escape_html(room.name)}" data-next="${next}"><i class="fa fa-arrow-right" style="margin-right:4px;"></i>${STATUS_LABELS[next] || next}</button></div>` : ''}
                         </div>
                     </div>
                 `);
+            });
+
+            list.off('click', '.hkm-status-btn').on('click', '.hkm-status-btn', function (e) {
+                e.stopPropagation();
+                let $btn = $(this);
+                let room = $btn.data('room');
+                let next = $btn.data('next');
+                $btn.prop('disabled', true).css('opacity', '0.85').html(`<i class="fa fa-spinner fa-spin" style="margin-right:4px;"></i>${STATUS_LABELS[next] || next}`);
+                hkm_set_status(room, next);
             });
         }
     });

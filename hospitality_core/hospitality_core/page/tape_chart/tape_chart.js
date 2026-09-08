@@ -68,6 +68,16 @@ frappe.pages['tape-chart'].on_page_load = function (wrapper) {
     });
     page.add_inner_button(__('Hôm Nay'), function () {
         page.fields_dict.start_date.set_value(frappe.datetime.now_date());
+        setTimeout(() => {
+            let today_th = $('#tape-chart-container th').filter(function () {
+                return $(this).text().includes('Hôm nay');
+            });
+            if (today_th.length) {
+                let container = $('#tape-chart-container');
+                let scrollLeft = today_th.position().left - container.width() / 2 + today_th.width() / 2;
+                container.animate({ scrollLeft: container.scrollLeft() + scrollLeft }, 300);
+            }
+        }, 350);
     });
     page.add_inner_button(__('Tuần Sau ▶'), function () {
         let cur = page.fields_dict.start_date.get_value() || frappe.datetime.now_date();
@@ -125,23 +135,54 @@ frappe.pages['tape-chart'].on_page_load = function (wrapper) {
             border: 1px solid #e2e8f0;
         }
         .tc-room-row.tc-drop-hover {
-            outline: 2px dashed #2563eb;
+            outline: 2px solid #10b981;
             outline-offset: -2px;
-            background: #eff6ff !important;
+            background: #ecfdf5 !important;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.25) inset;
+        }
+        .tc-room-row.tc-drop-conflict {
+            outline: 2px solid #ef4444;
+            outline-offset: -2px;
+            background: #fef2f2 !important;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.25) inset;
+        }
+        .tc-empty-cell {
+            cursor: pointer;
+            position: relative;
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+        }
+        .tc-empty-cell:hover {
+            background: #e0f2fe !important;
+            box-shadow: inset 0 0 0 1.5px #0284c7;
+        }
+        .tc-empty-cell:active {
+            transform: scale(0.98);
+        }
+        @keyframes tc-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .tc-skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: tc-shimmer 1.5s infinite;
+            border-radius: 4px;
+            display: inline-block;
         }
         .tc-booking-block {
             color: #fff;
             font-weight: 700;
             text-align: center;
             vertical-align: middle;
-            cursor: pointer;
+            cursor: grab;
+            cursor: -webkit-grab;
             border-radius: 5px;
             padding: 4px 8px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
         }
         .tc-booking-block:hover {
             transform: translateY(-1px);
@@ -149,6 +190,8 @@ frappe.pages['tape-chart'].on_page_load = function (wrapper) {
         }
         .tc-booking-block:active {
             cursor: grabbing;
+            cursor: -webkit-grabbing;
+            transform: scale(0.98);
         }
         #tc-tooltip {
             position: fixed;
@@ -175,18 +218,52 @@ frappe.pages['tape-chart'].on_page_load = function (wrapper) {
     $('body').find('#tc-tooltip').remove();
     $('body').append('<div id="tc-tooltip"></div>');
 
+    // Hotkeys: ArrowLeft/ArrowRight to navigate weeks, Escape to dismiss tooltip
+    $(document).off('keydown.tc_hotkey').on('keydown.tc_hotkey', function (e) {
+        if (!$('#tape-chart-container').is(':visible')) return;
+        if ($(e.target).is('input, textarea, select, [contenteditable]')) return;
+        if ($('.modal.show, .modal.in').length) return;
+
+        if (e.key === 'ArrowLeft') {
+            let cur = page.fields_dict.start_date.get_value() || frappe.datetime.now_date();
+            page.fields_dict.start_date.set_value(frappe.datetime.add_days(cur, -7));
+        } else if (e.key === 'ArrowRight') {
+            let cur = page.fields_dict.start_date.get_value() || frappe.datetime.now_date();
+            page.fields_dict.start_date.set_value(frappe.datetime.add_days(cur, 7));
+        } else if (e.key === 'Escape') {
+            $('#tc-tooltip').hide();
+        }
+    });
+
     render_tape_chart(wrapper, page);
 };
+
+function show_tape_chart_skeleton() {
+    let container = $('#tape-chart-container');
+    let rows = Array(8).fill(0).map(() => `
+        <tr>
+            <td style="width:140px; padding:8px;"><span class="tc-skeleton" style="width:90px; height:18px;"></span></td>
+            ${Array(14).fill(0).map(() => `<td><span class="tc-skeleton" style="width:100%; height:28px;"></span></td>`).join('')}
+        </tr>
+    `).join('');
+    container.html(`
+        <table class="table table-bordered table-sm" style="margin-bottom:0; background:#fff;">
+            <thead><tr><th style="width:140px;"><span class="tc-skeleton" style="width:80px; height:16px;"></span></th>${Array(14).fill(0).map(() => `<th><span class="tc-skeleton" style="width:36px; height:16px;"></span></th>`).join('')}</tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `);
+}
 
 function render_tape_chart(wrapper, page) {
     let start_date = page.fields_dict.start_date.get_value() || frappe.datetime.now_date();
     let end_date = frappe.datetime.add_days(start_date, _tc_days_span);
 
+    // Hiển thị khung xương Shimmer tạo cảm giác mượt mà tức thì
+    show_tape_chart_skeleton();
+
     frappe.call({
         method: "hospitality_core.hospitality_core.page.tape_chart.tape_chart.get_chart_data",
         args: { start_date: start_date, end_date: end_date },
-        freeze: true,
-        freeze_message: __('Đang tải sơ đồ buồng phòng...'),
         callback: function (r) {
             if (r.message) {
                 _tc_data_cache = r.message;
@@ -326,7 +403,8 @@ function draw_grid(data, start, end) {
                 let bg = is_today ? '#f0f9ff' : (is_weekend ? '#fafbfc' : '#fff');
                 let border = is_today ? 'border-left: 2px solid #0284c7; border-right: 2px solid #0284c7;' : '';
 
-                html += `<td style="background:${bg}; ${border}"></td>`;
+                let cell_title = __('Bấm để tạo đặt phòng: Phòng {0} - Ngày {1}', [room.room_number || room.name, date]);
+                html += `<td class="tc-empty-cell" data-room="${frappe.utils.escape_html(room.name)}" data-room-number="${frappe.utils.escape_html(room.room_number || room.name)}" data-room-type="${frappe.utils.escape_html(room.room_type || '')}" data-date="${date}" style="background:${bg}; ${border}" title="${cell_title}"></td>`;
                 date_idx += 1;
                 continue;
             }
@@ -347,10 +425,9 @@ function draw_grid(data, start, end) {
             html += `<td colspan="${span}" style="padding: 2px; vertical-align: middle;">
                 <div class="tc-booking-block"
                      draggable="true"
-                     data-reservation="${booking.name}"
-                     data-source-room="${room.name}"
-                     style="background:${booking.color}; opacity:${opacity};"
-                     onclick="tc_open_booking_drawer('${booking.name}')">
+                     data-reservation="${frappe.utils.escape_html(booking.name)}"
+                     data-source-room="${frappe.utils.escape_html(room.name)}"
+                     style="background:${booking.color}; opacity:${opacity};">
                     ${frappe.utils.escape_html(booking.guest_name || booking.guest || __('Khách vãng lai'))}
                 </div>
             </td>`;
@@ -362,6 +439,21 @@ function draw_grid(data, start, end) {
 
     html += `</tbody></table>`;
     container.html(html);
+
+    container.find('.tc-booking-block').on('click', function () {
+        tc_open_booking_drawer($(this).data('reservation'));
+    });
+
+    container.off('click', '.tc-empty-cell').on('click', '.tc-empty-cell', function () {
+        let $cell = $(this);
+        let room_name = $cell.data('room');
+        let room_number = $cell.data('room-number') || room_name;
+        let room_type = $cell.data('room-type');
+        let date = $cell.data('date');
+        let next_date = frappe.datetime.add_days(date, 1);
+
+        tc_open_quick_booking_dialog(room_name, room_number, room_type, date, next_date);
+    });
 
     attach_tooltip_handlers(bookings);
     attach_drag_handlers();
@@ -396,24 +488,37 @@ function attach_tooltip_handlers(bookings) {
 }
 
 function attach_drag_handlers() {
-    $('.tc-booking-block').on('dragstart', function (e) {
-        e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify({
-            reservation: $(this).data('reservation'),
-            source_room: $(this).data('source-room')
-        }));
-    });
+    $('.tc-booking-block')
+        .on('dragstart', function (e) {
+            $(this).css('opacity', '0.45');
+            $('#tc-tooltip').hide();
+            e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify({
+                reservation: $(this).data('reservation'),
+                source_room: $(this).data('source-room')
+            }));
+        })
+        .on('dragend', function () {
+            $(this).css('opacity', '');
+            $('.tc-room-row').removeClass('tc-drop-hover tc-drop-conflict');
+        });
 
     $('.tc-room-row')
         .on('dragover', function (e) {
             e.preventDefault();
-            $(this).addClass('tc-drop-hover');
+            let target_room = $(this).data('room');
+            let room_obj = (_tc_data_cache && _tc_data_cache.rooms ? _tc_data_cache.rooms : []).find(r => r.name === target_room);
+            if (room_obj && (room_obj.status === 'Out of Order' || room_obj.status === 'Out of Service')) {
+                $(this).addClass('tc-drop-conflict').removeClass('tc-drop-hover');
+            } else {
+                $(this).addClass('tc-drop-hover').removeClass('tc-drop-conflict');
+            }
         })
         .on('dragleave', function () {
-            $(this).removeClass('tc-drop-hover');
+            $(this).removeClass('tc-drop-hover tc-drop-conflict');
         })
         .on('drop', function (e) {
             e.preventDefault();
-            $(this).removeClass('tc-drop-hover');
+            $(this).removeClass('tc-drop-hover tc-drop-conflict');
 
             let payload;
             try {
@@ -504,5 +609,54 @@ window.tc_open_booking_drawer = function (res_name) {
         });
     }
 
+    d.show();
+};
+
+window.tc_open_quick_booking_dialog = function (room_name, room_number, room_type, arr_date, dep_date) {
+    let d = new frappe.ui.Dialog({
+        title: __('⚡ Tạo Đặt Phòng Nhanh - Phòng {0}', [room_number]),
+        fields: [
+            {
+                fieldname: 'info_html',
+                fieldtype: 'HTML',
+                options: `
+                    <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:14px; margin-bottom:14px;">
+                        <div style="font-size:14px; color:#0369a1; font-weight:700; margin-bottom:4px;">
+                            <i class="fa fa-bed"></i> ${__('Phòng')} <b>${frappe.utils.escape_html(room_number)}</b> &middot; <span style="font-weight:normal;">${frappe.utils.escape_html(room_type)}</span>
+                        </div>
+                        <div style="font-size:13px; color:#0284c7;">
+                            <i class="fa fa-calendar-alt"></i> ${arr_date} &rarr; ${dep_date} (1 ${__('đêm')})
+                        </div>
+                    </div>
+                `
+            },
+            {
+                fieldname: 'guest',
+                fieldtype: 'Link',
+                options: 'Guest',
+                label: __('Khách Hàng'),
+                reqd: 1
+            },
+            {
+                fieldname: 'rate_plan',
+                fieldtype: 'Link',
+                options: 'Room Rate Plan',
+                label: __('Gói Giá (Rate Plan)'),
+                get_query: () => ({ filters: { room_type: room_type, active: 1 } })
+            }
+        ],
+        primary_action_label: __('Mở Form Chi Tiết'),
+        primary_action(vals) {
+            d.hide();
+            frappe.new_doc('Hotel Reservation', {
+                room: room_name,
+                room_type: room_type,
+                arrival_date: arr_date,
+                departure_date: dep_date,
+                guest: vals.guest,
+                rate_plan: vals.rate_plan || undefined
+            });
+        }
+    });
     d.show();
 };

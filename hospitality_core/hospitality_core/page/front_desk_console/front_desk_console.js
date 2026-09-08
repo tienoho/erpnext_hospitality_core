@@ -82,6 +82,9 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
             transform: translateY(-2px);
             box-shadow: 0 4px 10px rgba(59,130,246,0.12);
         }
+        .fd-toolbar-btn:active {
+            transform: scale(0.96) translateY(0);
+        }
         .fd-toolbar-icon {
             font-size: 22px;
             margin-bottom: 8px;
@@ -90,6 +93,73 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
         }
         .fd-toolbar-btn:hover .fd-toolbar-icon {
             transform: scale(1.1);
+        }
+
+        /* Skeleton Shimmer Loading */
+        @keyframes fd-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .skeleton-shimmer {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: fd-shimmer 1.5s infinite;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        .skeleton-card-num {
+            width: 52px;
+            height: 32px;
+            margin-bottom: 4px;
+        }
+        .skeleton-list-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Smart Empty States */
+        .smart-empty-state {
+            text-align: center;
+            padding: 38px 20px;
+            color: #64748b;
+        }
+        .smart-empty-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            font-size: 22px;
+            color: #94a3b8;
+        }
+        .smart-empty-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 4px;
+        }
+        .smart-empty-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+        .smart-empty-badge {
+            display: inline-block;
+            margin-top: 10px;
+            background: #f1f5f9;
+            color: #475569;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
         }
 
         .fd-stat-card {
@@ -134,6 +204,13 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
             align-items: center;
             justify-content: center;
             font-size: 16px;
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .fd-stat-card:hover .fd-stat-icon-wrap {
+            transform: scale(1.12) rotate(4deg);
+        }
+        .fd-stat-card:active {
+            transform: scale(0.98);
         }
         .fd-stat-number {
             font-size: 32px;
@@ -174,10 +251,54 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            transition: background 0.15s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-left: 3px solid transparent;
         }
-        .fd-list-item:hover { background: #f8fafc; }
+        .fd-list-item:hover {
+            background: #f8fafc;
+            border-left: 3px solid #3b82f6;
+            padding-left: 21px;
+        }
         .fd-list-item:last-child { border-bottom: none; }
+        .fd-list-item .btn {
+            transition: transform 0.12s ease;
+        }
+        .fd-list-item .btn:active {
+            transform: scale(0.94);
+        }
+
+        /* Omni Search Micro-interactions */
+        #fd-omni-search {
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        #fd-omni-search:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+            outline: none !important;
+        }
+        #fd-search-clear {
+            transition: color 0.15s ease, transform 0.15s ease;
+        }
+        #fd-search-clear:hover {
+            color: #475569 !important;
+            transform: scale(1.15);
+        }
+        .fd-omni-result-item {
+            transition: all 0.15s ease;
+            border-left: 3px solid transparent;
+        }
+        .fd-omni-result-item:hover, .fd-omni-result-item.active-result {
+            background: #eff6ff !important;
+            border-left: 3px solid #2563eb !important;
+            padding-left: 21px;
+        }
+
+        #btn-reset-filters {
+            transition: all 0.15s ease;
+        }
+        #btn-reset-filters:active {
+            transform: scale(0.96);
+        }
         
         .badge-pending {
             background: #fffbeb;
@@ -206,20 +327,73 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
             font-size: 11px;
             font-weight: 600;
         }
+
+        /* Live Clock & Filter Pills */
+        @keyframes fd-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .fd-pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            display: inline-block;
+            animation: fd-pulse 2s infinite;
+        }
+        .fd-filter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            margin-left: 6px;
+        }
+        .fd-filter-pill:hover {
+            background: #dbeafe;
+            color: #1d4ed8;
+            transform: scale(1.03);
+        }
     </style>`).appendTo(wrapper);
 
     // Main Layout Skeleton
     $(wrapper).find('.layout-main-section').append(`
         <div id="fd-content" style="padding-top: 10px;">
+            <!-- Live Ticker Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 0 4px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; font-weight: 600;">
+                    <span class="fd-pulse-dot" title="${__('Hệ thống hoạt động trực tuyến')}"></span>
+                    <span style="color:#047857; font-weight:700; letter-spacing: 0.5px;">LIVE</span>
+                    <span style="color:#cbd5e1;">&bull;</span>
+                    <i class="fa fa-clock" style="color:#64748b;"></i>
+                    <span id="fd-live-clock" style="font-family: monospace; font-size: 13px; font-weight: 700; color: #1e293b;">--:--:--</span>
+                </div>
+                <div style="font-size: 12px; color: #64748b;">
+                    <span style="color: #94a3b8;">${__('Đồng bộ gần nhất:')}</span> <b id="fd-last-synced" style="color:#334155;">${__('Đang cập nhật...')}</b>
+                </div>
+            </div>
+
             <!-- Omni Search Bar -->
             <div class="row" style="margin-bottom: 20px;">
                 <div class="col-md-9 col-xs-12" style="position: relative;">
                     <div style="position: relative;">
-                        <span class="fas fa-search" style="position: absolute; left: 14px; top: 13px; color: #94a3b8; font-size: 14px;"></span>
-                        <input type="text" id="fd-omni-search" class="form-control" style="padding-left: 38px; height: 42px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;"
+                        <span id="fd-search-icon" class="fas fa-search" style="position: absolute; left: 14px; top: 13px; color: #94a3b8; font-size: 14px; transition: color 0.2s;"></span>
+                        <input type="text" id="fd-omni-search" class="form-control" style="padding-left: 38px; padding-right: 70px; height: 42px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;"
                             placeholder="${__('Tìm kiếm thông minh: Tên khách, Số điện thoại, Số phòng, CCCD/Hộ chiếu, Mã đặt phòng OTA...')}">
+                        <div style="position: absolute; right: 12px; top: 9px; display: flex; align-items: center; gap: 8px;">
+                            <span id="fd-search-clear" style="display:none; cursor:pointer; color:#94a3b8; font-size:15px; padding: 2px 4px;" title="${__('Xóa tìm kiếm')}"><i class="fas fa-times-circle"></i></span>
+                            <kbd style="font-size: 11px; padding: 2px 7px; border-radius: 5px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #64748b; font-family: inherit; font-weight: 700; cursor: default;" title="${__('Phím tắt mở tìm kiếm')}">/</kbd>
+                        </div>
                     </div>
-                    <div id="fd-omni-results" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#fff; border:1px solid #cbd5e1; border-radius:0 0 8px 8px; max-height:320px; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.1);"></div>
+                    <div id="fd-omni-results" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#fff; border:1px solid #cbd5e1; border-radius:0 0 8px 8px; max-height:340px; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.1);"></div>
                 </div>
                 <div class="col-md-3 col-xs-12 text-right">
                     <button class="btn btn-default btn-sm" id="btn-reset-filters" style="height: 42px; width: 100%; border-radius: 8px; font-weight: 600;">
@@ -321,7 +495,10 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
                 <!-- Arrivals Column -->
                 <div class="col-md-6" style="margin-bottom: 20px;">
                     <div class="fd-list-header">
-                        <span><i class="fas fa-plane-arrival" style="color:#d97706; margin-right:8px;"></i>${__('Danh Sách Khách Đến (Arrivals)')}</span>
+                        <span>
+                            <i class="fas fa-plane-arrival" style="color:#d97706; margin-right:8px;"></i>${__('Danh Sách Khách Đến (Arrivals)')}
+                            <span id="arrivals-filter-indicator"></span>
+                        </span>
                         <span id="arrivals-count-badge" class="badge" style="background:#f1f5f9; color:#475569; font-size:11px;">0</span>
                     </div>
                     <div id="list-arrivals" class="fd-list-container">
@@ -332,7 +509,10 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
                 <!-- Departures Column -->
                 <div class="col-md-6" style="margin-bottom: 20px;">
                     <div class="fd-list-header">
-                        <span><i class="fas fa-plane-departure" style="color:#dc2626; margin-right:8px;"></i>${__('Danh Sách Khách Đi (Departures)')}</span>
+                        <span>
+                            <i class="fas fa-plane-departure" style="color:#dc2626; margin-right:8px;"></i>${__('Danh Sách Khách Đi (Departures)')}
+                            <span id="departures-filter-indicator"></span>
+                        </span>
                         <span id="departures-count-badge" class="badge" style="background:#f1f5f9; color:#475569; font-size:11px;">0</span>
                     </div>
                     <div id="list-departures" class="fd-list-container">
@@ -346,34 +526,138 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
     setup_kpi_filters();
     render_console(wrapper, page);
     setup_omni_search();
+    start_live_clock();
+    setup_list_actions();
 }
 
 function setup_omni_search() {
     let input = $('#fd-omni-search');
     let results = $('#fd-omni-results');
+    let icon = $('#fd-search-icon');
+    let clearBtn = $('#fd-search-clear');
     let debounce_timer = null;
+    let selected_index = -1;
+
+    function get_items() {
+        return results.find('.fd-omni-result-item');
+    }
+
+    function set_active_item(idx) {
+        let items = get_items();
+        items.removeClass('active-result');
+        if (idx >= 0 && idx < items.length) {
+            selected_index = idx;
+            let active = items.eq(idx).addClass('active-result');
+            let container = results;
+            let activeTop = active.position().top;
+            let activeBottom = activeTop + active.outerHeight();
+            if (activeBottom > container.innerHeight()) {
+                container.scrollTop(container.scrollTop() + activeBottom - container.innerHeight());
+            } else if (activeTop < 0) {
+                container.scrollTop(container.scrollTop() + activeTop);
+            }
+        } else {
+            selected_index = -1;
+        }
+    }
 
     input.on('input', function () {
         let query = $(this).val();
+        selected_index = -1;
         clearTimeout(debounce_timer);
+
+        if (query && query.length > 0) {
+            clearBtn.show();
+        } else {
+            clearBtn.hide();
+        }
+
         if (!query || query.length < 2) {
             results.hide().empty();
+            icon.removeClass('fa-spinner fa-spin').addClass('fa-search').css('color', '#94a3b8');
             return;
         }
+
+        // Real-time spinner micro-interaction
+        icon.removeClass('fa-search').addClass('fa-spinner fa-spin').css('color', '#3b82f6');
+
         debounce_timer = setTimeout(() => {
             frappe.call({
                 method: 'hospitality_core.hospitality_core.api.folio_operations.omni_search',
                 args: { query: query },
                 callback: function (r) {
+                    icon.removeClass('fa-spinner fa-spin').addClass('fa-search').css('color', '#94a3b8');
                     render_omni_results(r.message || []);
                 }
             });
-        }, 300);
+        }, 280);
+    });
+
+    clearBtn.on('click', function () {
+        input.val('').focus();
+        clearBtn.hide();
+        results.hide().empty();
+        icon.removeClass('fa-spinner fa-spin').addClass('fa-search').css('color', '#94a3b8');
     });
 
     $(document).on('click', function (e) {
-        if (!$(e.target).closest('#fd-omni-search, #fd-omni-results').length) {
+        if (!$(e.target).closest('#fd-omni-search, #fd-omni-results, #fd-search-clear').length) {
             results.hide();
+        }
+    });
+
+    // Arrow navigation & Enter key handling in Omni-Search
+    input.on('keydown', function (e) {
+        if (!results.is(':visible')) return;
+        let items = get_items();
+        if (!items.length) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            let next = selected_index + 1;
+            if (next >= items.length) next = 0;
+            set_active_item(next);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            let prev = selected_index - 1;
+            if (prev < 0) prev = items.length - 1;
+            set_active_item(prev);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selected_index >= 0 && selected_index < items.length) {
+                items.eq(selected_index).click();
+            } else if (items.length > 0) {
+                items.first().click();
+            }
+        }
+    });
+
+    // Hover sync with keyboard index
+    results.on('mouseenter', '.fd-omni-result-item', function () {
+        get_items().removeClass('active-result');
+        selected_index = $(this).index();
+        $(this).addClass('active-result');
+    });
+
+    // Receptionist Hotkeys: Press '/' to focus search, 'Escape' to dismiss
+    $(document).off('keydown.fd_hotkey').on('keydown.fd_hotkey', function (e) {
+        if (!$('#fd-omni-search').is(':visible')) return;
+        if ($('.modal.show, .modal.in').length) return;
+
+        if (e.key === 'Escape') {
+            if ($('#fd-omni-results').is(':visible') || $(e.target).is('#fd-omni-search')) {
+                $('#fd-omni-results').hide();
+                $('#fd-omni-search').blur();
+                e.preventDefault();
+            }
+            return;
+        }
+
+        if ($(e.target).is('input, textarea, select, [contenteditable]')) return;
+
+        if (e.key === '/') {
+            e.preventDefault();
+            $('#fd-omni-search').focus().select();
         }
     });
 }
@@ -381,20 +665,39 @@ function setup_omni_search() {
 function render_omni_results(rows) {
     let results = $('#fd-omni-results');
     if (!rows.length) {
-        results.html(`<div class="p-3 text-muted">${__('No matches found.')}</div>`).show();
+        results.html(`
+            <div style="padding: 24px 18px; text-align: center; color: #64748b;">
+                <div style="width:44px; height:44px; border-radius:50%; background:#f1f5f9; display:inline-flex; align-items:center; justify-content:center; margin-bottom:10px; border:1px solid #e2e8f0;">
+                    <i class="fas fa-search" style="font-size:18px; color:#94a3b8;"></i>
+                </div>
+                <div style="font-weight:700; font-size:13px; color:#1e293b; margin-bottom:4px;">${__('Không tìm thấy kết quả phù hợp')}</div>
+                <div style="font-size:12px; color:#64748b; margin-bottom:12px;">${__('Không có đặt phòng nào khớp với từ khóa vừa nhập.')}</div>
+                <div style="display:flex; flex-direction:column; gap:5px; font-size:11px; color:#64748b; text-align:left; background:#f8fafc; padding:10px 14px; border-radius:6px; border:1px dashed #cbd5e1;">
+                    <div style="font-weight:700; color:#334155;">💡 ${__('Gợi ý tra cứu nhanh:')}</div>
+                    <div>&bull; ${__('Nhập số phòng thực tế')} (ví dụ: <code>101</code>, <code>202</code>)</div>
+                    <div>&bull; ${__('Nhập số điện thoại khách')} (ví dụ: <code>0912...</code>)</div>
+                    <div>&bull; ${__('Nhập số CCCD hoặc Hộ chiếu')}</div>
+                    <div>&bull; ${__('Nhập mã đặt phòng OTA')} (ví dụ: <code>BK-01...</code>)</div>
+                </div>
+            </div>
+        `).show();
         return;
     }
     let html = rows.map((r) => `
-        <div class="fd-list-item" style="cursor:pointer;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${r.reservation}')">
+        <div class="fd-list-item fd-omni-result-item" style="cursor:pointer;" data-res="${frappe.utils.escape_html(r.reservation)}">
             <div style="flex:1;">
                 <div style="font-weight:600;">${frappe.utils.escape_html(r.guest_name || '')}</div>
                 <div style="font-size:12px; color:#6c757d;">
-                    ${frappe.utils.escape_html(r.room || __('Unassigned'))} &middot; ${frappe.utils.escape_html(r.status || '')} &middot; ${r.arrival_date} &rarr; ${r.departure_date}
+                    ${frappe.utils.escape_html(r.room || __('Unassigned'))} &middot; ${frappe.utils.escape_html(r.status || '')} &middot; ${frappe.utils.escape_html(r.arrival_date || '')} &rarr; ${frappe.utils.escape_html(r.departure_date || '')}
                     ${r.external_booking_id ? ' &middot; Ref: ' + frappe.utils.escape_html(r.external_booking_id) : ''}
                 </div>
             </div>
         </div>`).join('');
     results.html(html).show();
+    results.find('.fd-omni-result-item').off('click').on('click', function () {
+        let res = $(this).data('res');
+        if (res) frappe.set_route('Form', 'Hotel Reservation', res);
+    });
 }
 
 function open_id_scanner_dialog() {
@@ -588,16 +891,21 @@ function apply_kpi_filters() {
 function render_console(wrapper, page) {
     let selected_date = page.fields_dict.console_date.get_value();
 
+    // Hiển thị khung xương Shimmer tạo cảm giác mượt mà tức thì
+    show_console_skeletons();
+
     frappe.call({
         method: "hospitality_core.hospitality_core.page.front_desk_console.front_desk_console.get_console_data",
         args: { target_date: selected_date },
-        freeze: true,
-        freeze_message: __('Đang làm mới bàn lễ tân...'),
         callback: function (r) {
             if (r.message) {
                 _fd_cache.stats = r.message.stats || {};
                 _fd_cache.arrivals = r.message.arrivals || [];
                 _fd_cache.departures = r.message.departures || [];
+
+                let now = new Date();
+                let sync_time = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2) + ':' + ('0' + now.getSeconds()).slice(-2);
+                $('#fd-last-synced').text(sync_time);
 
                 update_stats(_fd_cache.stats);
                 if (_active_kpi_filter) {
@@ -609,6 +917,26 @@ function render_console(wrapper, page) {
             }
         }
     });
+}
+
+function show_console_skeletons() {
+    $('#stat-arr-pending').html('<span class="skeleton-shimmer skeleton-card-num"></span>');
+    $('#stat-dep-pending').html('<span class="skeleton-shimmer skeleton-card-num"></span>');
+    $('#stat-occupancy').html('<span class="skeleton-shimmer skeleton-card-num"></span>');
+    $('#stat-occ-pct').html('<span class="skeleton-shimmer" style="width:72px; height:14px; margin-top:2px;"></span>');
+    $('#stat-available').html('<span class="skeleton-shimmer skeleton-card-num"></span>');
+
+    let skeletonList = Array(4).fill(0).map(() => `
+        <div class="skeleton-list-item">
+            <div style="flex:1;">
+                <div class="skeleton-shimmer" style="width:130px; height:15px; margin-bottom:6px;"></div>
+                <div class="skeleton-shimmer" style="width:85px; height:12px;"></div>
+            </div>
+            <div class="skeleton-shimmer" style="width:78px; height:24px; border-radius:12px;"></div>
+        </div>
+    `).join('');
+    $('#list-arrivals').html(skeletonList);
+    $('#list-departures').html(skeletonList);
 }
 
 function update_stats(stats) {
@@ -624,8 +952,20 @@ function render_arrivals(data, is_filtered = false) {
     let count_text = is_filtered ? `${data.length} / ${_fd_cache.arrivals.length} ${__('chờ')}` : `${data.length}`;
     $('#arrivals-count-badge').text(count_text);
 
+    if (is_filtered) {
+        $('#arrivals-filter-indicator').html(`<span class="fd-filter-pill" onclick="reset_kpi_filters();" title="${__('Bấm để hủy lọc')}"><i class="fa fa-filter"></i> ${__('Đang lọc chờ')} <i class="fa fa-times"></i></span>`);
+    } else {
+        $('#arrivals-filter-indicator').empty();
+    }
+
     if (data.length === 0) {
-        html = `<div class="text-center p-4 text-muted">${is_filtered ? __('Không có khách nào đang chờ check-in.') : __('Không có khách đến trong ngày đã chọn.')}</div>`;
+        html = `
+        <div class="smart-empty-state">
+            <div class="smart-empty-icon"><i class="fas fa-plane-arrival"></i></div>
+            <div class="smart-empty-title">${is_filtered ? __('Không có khách nào đang chờ check-in') : __('Không có khách đến trong ngày')}</div>
+            <div class="smart-empty-subtitle">${is_filtered ? __('Toàn bộ khách đến hôm nay đã hoàn tất nhận phòng.') : __('Không có đặt phòng nào có ngày đến vào ngày đã chọn.')}</div>
+            <span class="smart-empty-badge">✓ ${__('Đã đồng bộ')}</span>
+        </div>`;
     } else {
         data.forEach(d => {
             let is_pending = d.status === 'Reserved';
@@ -640,19 +980,31 @@ function render_arrivals(data, is_filtered = false) {
                 else badge = `<span class="badge-pending"><i class="fa fa-clock"></i> ${__('Chờ Check-in')}</span>`;
             }
 
+            let hk_badge = '';
+            if (d.room && d.room_hk_status) {
+                if (d.room_hk_status === 'Available' || d.room_hk_status === 'Inspected') {
+                    hk_badge = `<span class="badge" style="background:#ecfdf5; color:#047857; font-size:10px; border:1px solid #a7f3d0; padding:2px 6px; border-radius:4px; font-weight:600; margin-left:6px;" title="${__('Phòng đã dọn sạch sẵn sàng đón khách')}"><i class="fa fa-check-circle"></i> ${__('Sạch')}</span>`;
+                } else if (d.room_hk_status === 'Dirty') {
+                    hk_badge = `<span class="badge" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:600; margin-left:6px;" title="${__('Phòng chưa dọn - Cần báo Housekeeping')}"><i class="fa fa-exclamation-circle"></i> ${__('Chưa dọn')}</span>`;
+                } else if (d.room_hk_status === 'Cleaning') {
+                    hk_badge = `<span class="badge" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:600; margin-left:6px;" title="${__('Housekeeping đang dọn dẹp')}"><i class="fa fa-broom"></i> ${__('Đang dọn')}</span>`;
+                }
+            }
+
             html += `
             <div class="fd-list-item">
                 <div style="flex:1;">
                     <div style="font-weight:700; font-size:14px; margin-bottom: 2px;">
                         <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}'); return false;">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
                     </div>
-                    <div style="font-size:12px; color:#64748b;">
-                        <span class="fas fa-bed" style="color:#3b82f6;"></span> <b>${frappe.utils.escape_html(d.room || __('Chưa xếp phòng'))}</b> &middot; <span class="text-muted">${frappe.utils.escape_html(d.room_type || '')}</span>
+                    <div style="font-size:12px; color:#64748b; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+                        <span class="fas fa-bed" style="color:#3b82f6;"></span>
+                        <b>${frappe.utils.escape_html(d.room || __('Chưa xếp phòng'))}</b>${hk_badge} &middot; <span class="text-muted">${frappe.utils.escape_html(d.room_type || '')}</span>
                     </div>
                 </div>
                 <div class="text-right">
                     <div style="margin-bottom:6px;">${badge}</div>
-                    ${d.status === 'Reserved' ? `<button class="btn btn-xs btn-primary" style="font-weight:600; border-radius:4px;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')"><i class="fa fa-sign-in-alt"></i> ${__('Check-in')}</button>` : ''}
+                    ${d.status === 'Reserved' ? `<button class="btn btn-xs btn-primary fd-action-checkin" style="font-weight:600; border-radius:4px;" data-res="${frappe.utils.escape_html(d.name)}"><i class="fa fa-sign-in-alt"></i> ${__('Check-in')}</button>` : ''}
                 </div>
             </div>`;
         });
@@ -665,8 +1017,20 @@ function render_departures(data, is_filtered = false) {
     let count_text = is_filtered ? `${data.length} / ${_fd_cache.departures.length} ${__('chờ')}` : `${data.length}`;
     $('#departures-count-badge').text(count_text);
 
+    if (is_filtered) {
+        $('#departures-filter-indicator').html(`<span class="fd-filter-pill" onclick="reset_kpi_filters();" title="${__('Bấm để hủy lọc')}"><i class="fa fa-filter"></i> ${__('Đang lọc chờ')} <i class="fa fa-times"></i></span>`);
+    } else {
+        $('#departures-filter-indicator').empty();
+    }
+
     if (data.length === 0) {
-        html = `<div class="text-center p-4 text-muted">${is_filtered ? __('Không có khách nào đang chờ check-out.') : __('Không có khách đi trong ngày đã chọn.')}</div>`;
+        html = `
+        <div class="smart-empty-state">
+            <div class="smart-empty-icon"><i class="fas fa-plane-departure"></i></div>
+            <div class="smart-empty-title">${is_filtered ? __('Không có khách nào đang chờ check-out') : __('Không có khách đi trong ngày')}</div>
+            <div class="smart-empty-subtitle">${is_filtered ? __('Toàn bộ khách trả phòng hôm nay đã làm thủ tục xong.') : __('Không có đặt phòng nào có ngày trả phòng vào ngày đã chọn.')}</div>
+            <span class="smart-empty-badge">✓ ${__('Đã hoàn tất')}</span>
+        </div>`;
     } else {
         data.forEach(d => {
             let is_left = d.status === 'Checked Out';
@@ -693,12 +1057,41 @@ function render_departures(data, is_filtered = false) {
                 </div>
                 <div class="text-right">
                     <div style="margin-bottom:6px;">${badge}</div>
-                    ${d.status === 'Checked In' ? `<button class="btn btn-xs btn-danger" style="font-weight:600; border-radius:4px;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')"><i class="fa fa-sign-out-alt"></i> ${__('Check-out')}</button>` : ''}
+                    ${d.status === 'Checked In' ? `<button class="btn btn-xs btn-danger fd-action-checkout" style="font-weight:600; border-radius:4px;" data-res="${frappe.utils.escape_html(d.name)}"><i class="fa fa-sign-out-alt"></i> ${__('Check-out')}</button>` : ''}
                 </div>
             </div>`;
         });
     }
     $('#list-departures').html(html);
+}
+
+function start_live_clock() {
+    if (window._fd_clock_interval) clearInterval(window._fd_clock_interval);
+    const update_time = () => {
+        let now = new Date();
+        let time_str = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2) + ':' + ('0' + now.getSeconds()).slice(-2);
+        $('#fd-live-clock').text(time_str);
+    };
+    update_time();
+    window._fd_clock_interval = setInterval(update_time, 1000);
+}
+
+function setup_list_actions() {
+    $('#list-arrivals').off('click', '.fd-action-checkin').on('click', '.fd-action-checkin', function (e) {
+        e.preventDefault();
+        let $btn = $(this);
+        let res = $btn.data('res');
+        $btn.prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i> ${__('Mở...')}`);
+        frappe.set_route('Form', 'Hotel Reservation', res);
+    });
+
+    $('#list-departures').off('click', '.fd-action-checkout').on('click', '.fd-action-checkout', function (e) {
+        e.preventDefault();
+        let $btn = $(this);
+        let res = $btn.data('res');
+        $btn.prop('disabled', true).html(`<i class="fa fa-spinner fa-spin"></i> ${__('Mở...')}`);
+        frappe.set_route('Form', 'Hotel Reservation', res);
+    });
 }
 
 function open_quick_vietqr_dialog() {
@@ -775,11 +1168,11 @@ function open_quick_vietqr_dialog() {
                                         <div style="text-align: center; padding: 10px;">
                                             <img src="${data.vietqr_image_url}" style="max-width: 260px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" />
                                             <div style="font-size: 20px; font-weight: 800; color: #0284c7; margin-top: 10px;">${data.formatted_amount}</div>
-                                            <div style="font-size: 13px; color: #475569; margin-top: 6px; cursor: pointer;" onclick="navigator.clipboard.writeText('${data.account_number}'); frappe.show_alert({message: __('Đã sao chép STK!'), indicator: 'green'});">
-                                                STK: <b>${data.account_number}</b> (${data.account_name}) <i class="fa fa-copy text-primary" style="margin-left: 4px;"></i>
+                                            <div class="qr-copy-stk" style="font-size: 13px; color: #475569; margin-top: 8px; cursor: pointer; padding: 4px; border-radius: 6px; background: #f8fafc; border: 1px solid #e2e8f0; display: inline-block;">
+                                                STK: <b>${frappe.utils.escape_html(data.account_number)}</b> (${frappe.utils.escape_html(data.account_name)}) <i class="fa fa-copy text-primary" style="margin-left: 4px;"></i>
                                             </div>
-                                            <div style="font-size: 12px; color: #e11d48; margin-top: 6px; cursor: pointer;" onclick="navigator.clipboard.writeText('${data.description}'); frappe.show_alert({message: __('Đã sao chép Nội dung CK!'), indicator: 'green'});">
-                                                Nội dung: <b>${data.description}</b> <i class="fa fa-copy text-danger" style="margin-left: 4px;"></i>
+                                            <div class="qr-copy-desc" style="font-size: 12px; color: #e11d48; margin-top: 8px; cursor: pointer; padding: 4px; border-radius: 6px; background: #fff5f5; border: 1px solid #fed7d7; display: block;">
+                                                Nội dung: <b>${frappe.utils.escape_html(data.description)}</b> <i class="fa fa-copy text-danger" style="margin-left: 4px;"></i>
                                             </div>
                                         </div>
                                     `
@@ -788,6 +1181,52 @@ function open_quick_vietqr_dialog() {
                             primary_action_label: __('Đóng')
                         });
                         qr_d.show();
+
+                        const safe_copy = (text, msg) => {
+                            if (!text) return;
+                            if (navigator.clipboard && window.isSecureContext) {
+                                navigator.clipboard.writeText(text).then(() => {
+                                    frappe.show_alert({ message: msg, indicator: 'green' });
+                                }).catch(() => fallback_copy(text, msg));
+                            } else {
+                                fallback_copy(text, msg);
+                            }
+                        };
+                        const fallback_copy = (text, msg) => {
+                            let ta = document.createElement("textarea");
+                            ta.value = text;
+                            ta.style.position = "fixed";
+                            ta.style.left = "-9999px";
+                            document.body.appendChild(ta);
+                            ta.focus();
+                            ta.select();
+                            try {
+                                document.execCommand('copy');
+                                frappe.show_alert({ message: msg, indicator: 'green' });
+                            } catch (e) {
+                                frappe.show_alert({ message: __('Không thể tự động sao chép'), indicator: 'orange' });
+                            }
+                            ta.remove();
+                        };
+
+                        qr_d.$wrapper.find('.qr-copy-stk').on('click', function () {
+                            let $btn = $(this);
+                            safe_copy(data.account_number, __('Đã sao chép STK!'));
+                            let $icon = $btn.find('i');
+                            $icon.removeClass('fa-copy text-primary').addClass('fa-check text-success');
+                            setTimeout(() => {
+                                $icon.removeClass('fa-check text-success').addClass('fa-copy text-primary');
+                            }, 1500);
+                        });
+                        qr_d.$wrapper.find('.qr-copy-desc').on('click', function () {
+                            let $btn = $(this);
+                            safe_copy(data.description, __('Đã sao chép Nội dung CK!'));
+                            let $icon = $btn.find('i');
+                            $icon.removeClass('fa-copy text-danger').addClass('fa-check text-success');
+                            setTimeout(() => {
+                                $icon.removeClass('fa-check text-success').addClass('fa-copy text-danger');
+                            }, 1500);
+                        });
                     }
                 }
             });

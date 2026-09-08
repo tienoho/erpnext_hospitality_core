@@ -84,12 +84,20 @@ def run():
     # hospitality_core theo đúng nguyên tắc này) — nên khi vietnam_einvoice đã
     # cài, bộ field/local Mock provider của CHÍNH module này không còn được
     # dùng tới nữa (dead code), và không nên tự tạo/ghi đè field cạnh tranh.
-    try:
-        import vietnam_einvoice  # noqa: F401
+    # TRƯỚC ĐÂY: kiểm tra bằng `try: import vietnam_einvoice` — SAI, đã tự
+    # xác minh thật khi test trên Docker: import chỉ kiểm tra package có nằm
+    # trên sys.path hay không (đúng với MỌI site dùng chung 1 bench, vì
+    # docker-compose luôn mount sẵn source vietnam_einvoice vào mọi bench bất
+    # kể site nào thực sự cài app đó) — KHÔNG phản ánh app này có thực sự
+    # được `bench install-app` cho ĐÚNG SITE hiện tại hay không. Hậu quả thật
+    # đã tái hiện: 1 site có hospitality_core nhưng CHƯA `install-app
+    # vietnam_einvoice` vẫn bị hàm này bỏ qua tạo field — vì vietnam_einvoice
+    # chưa cài cho site đó, hook after_migrate của NÓ cũng không hề chạy —
+    # kết quả CẢ HAI app đều không tạo field, Sales Invoice mất trắng field
+    # HĐĐT. Phải kiểm tra đúng danh sách app đã cài của SITE HIỆN TẠI.
+    if "vietnam_einvoice" in frappe.get_installed_apps():
         print("vietnam_einvoice đã cài đặt — bỏ qua, dùng bộ field/logic HĐĐT của app đó.")
         return
-    except ImportError:
-        pass
 
     for field in FIELDS:
         if frappe.db.exists("Custom Field", {"dt": "Sales Invoice", "fieldname": field["fieldname"]}):

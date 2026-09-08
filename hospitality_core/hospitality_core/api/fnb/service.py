@@ -263,6 +263,7 @@ def session_action(name, action, request_id, items=None, actual_covers=None):
     # khác nhau. Đã thêm option Approve/Close vào Select event_type, dùng đúng
     # tên hành động thay vì gộp vào 'Serve'.
     event_type=action if action in ('Approve','Issue','Close') else 'Serve'
+    parsed=parse_payload(items, list, empty=list, label='Danh sách hàng cấp')
     existing,key,sig=event_existing(doc,event_type,request_id,
         dict(action=action,items=parsed,actual_covers=actual_covers))
     if existing:

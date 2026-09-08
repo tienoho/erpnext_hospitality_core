@@ -3,6 +3,56 @@ frappe.pages['guest-360'].on_page_load = function(wrapper) {
     wrapper.guest_content = $('<div class="guest-360-wrapper p-3"></div>').appendTo($(wrapper).find('.layout-main-section'));
     wrapper.guest_request = 0;
     
+    $(`<style>
+        @keyframes g360-fade-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .guest-360-dashboard .tab-pane.active {
+            animation: g360-fade-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes g360-shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .g360-skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: g360-shimmer 1.5s infinite;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .g360-copyable {
+            cursor: pointer;
+            padding: 3px 7px;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+            background: rgba(99, 102, 241, 0.06);
+            display: inline-flex;
+            align-items: center;
+        }
+        .g360-copyable:hover {
+            background: rgba(99, 102, 241, 0.15);
+            color: #4338ca !important;
+        }
+        .g360-copyable:active {
+            transform: scale(0.96);
+        }
+        .g360-action-btn {
+            transition: transform 0.12s ease, box-shadow 0.15s ease;
+        }
+        .g360-action-btn:active {
+            transform: scale(0.95);
+        }
+        .nav-tabs > li > a {
+            transition: background 0.15s ease, color 0.15s ease;
+            font-weight: 600;
+        }
+        .nav-tabs > li > a:hover {
+            background: #f8fafc;
+        }
+    </style>`).appendTo(wrapper);
+
     // Add Guest Link selector
     const guest_field = page.add_field({
         fieldname: 'guest', 
@@ -32,21 +82,37 @@ function render_guest_profile(wrapper, guest) {
     const request = ++wrapper.guest_request;
     const body = wrapper.guest_content;
     body.empty();
-    if (!guest) {
-        body.html(`
-            <div style="text-align: center; padding: 60px 20px; color: var(--text-muted, #6b7280);">
-                <div style="font-size: 48px; margin-bottom: 16px;">👤</div>
-                <h4 style="color: var(--text-color, #374151); font-weight: 600;">${__('Chưa Chọn Hồ Sơ Khách Hàng')}</h4>
-                <p style="max-width: 460px; margin: 0 auto; font-size: 13px;">${__('Vui lòng chọn một khách hàng từ ô tìm kiếm phía trên.')}</p>
-            </div>
-        `);
-        return;
-    }
+    if (!guest) return;
     
     body.html(`
-        <div style="text-align: center; padding: 40px; color: var(--text-muted, #6b7280);">
-            <i class="fa fa-spinner fa-spin fa-2x"></i>
-            <div style="margin-top: 10px; font-weight: 600;">${__('Đang tải hồ sơ 360°…')}</div>
+        <div class="guest-360-dashboard" style="opacity:0.85;">
+            <div class="card mb-4" style="background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div style="display: flex; gap: 16px; align-items: center;">
+                        <div class="g360-skeleton" style="width: 56px; height: 56px; border-radius: 50%;"></div>
+                        <div>
+                            <div class="g360-skeleton" style="width: 180px; height: 22px; margin-bottom: 8px;"></div>
+                            <div class="g360-skeleton" style="width: 320px; height: 16px;"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <div class="g360-skeleton" style="width: 90px; height: 32px; border-radius: 6px;"></div>
+                        <div class="g360-skeleton" style="width: 110px; height: 32px; border-radius: 6px;"></div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f3f4f6;">
+                    <div class="g360-skeleton" style="height: 65px; border-radius: 8px;"></div>
+                    <div class="g360-skeleton" style="height: 65px; border-radius: 8px;"></div>
+                    <div class="g360-skeleton" style="height: 65px; border-radius: 8px;"></div>
+                    <div class="g360-skeleton" style="height: 65px; border-radius: 8px;"></div>
+                </div>
+            </div>
+            <div class="card p-4" style="background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb;">
+                <div class="g360-skeleton" style="width: 240px; height: 24px; margin-bottom: 16px;"></div>
+                <div class="g360-skeleton" style="width: 100%; height: 28px; margin-bottom: 10px;"></div>
+                <div class="g360-skeleton" style="width: 100%; height: 28px; margin-bottom: 10px;"></div>
+                <div class="g360-skeleton" style="width: 85%; height: 28px;"></div>
+            </div>
         </div>
     `);
     
@@ -62,6 +128,7 @@ function render_guest_profile(wrapper, guest) {
                 body.html(`<div class="alert alert-warning">${__('Không tìm thấy thông tin hồ sơ cho khách hàng này.')}</div>`);
                 return;
             }
+            const to_flt = (val) => (typeof flt !== 'undefined' ? flt(val) : (parseFloat(val) || 0));
 
             // Calculations & formatting
             const initials = (d.guest.full_name || 'G').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
@@ -84,7 +151,7 @@ function render_guest_profile(wrapper, guest) {
 
             // Balance formatting
             const balanceEntries = Object.entries(d.balances_by_currency || {});
-            const hasOutstanding = balanceEntries.some(([_, val]) => flt(val) > 0);
+            const hasOutstanding = balanceEntries.some(([_, val]) => to_flt(val) > 0);
             const balanceSummary = balanceEntries.length ? balanceEntries.map(([curr, val]) => format_currency(val, curr)).join('<br>') : '0 ₫';
 
             // Status Badge Helper
@@ -94,6 +161,12 @@ function render_guest_profile(wrapper, guest) {
                 if (st === 'Checked Out') return `<span class="badge badge-default" style="background:#f3f4f6; color:#4b5563; border:none; padding:4px 8px;">${__('Đã trả')}</span>`;
                 if (st === 'Cancelled') return `<span class="badge badge-danger" style="background:#fee2e2; color:#991b1b; border:none; padding:4px 8px;">${__('Đã hủy')}</span>`;
                 return `<span class="badge">${escape(st)}</span>`;
+            };
+
+            const stats = d.stats || {};
+            const format_user_date = (dt) => {
+                if (!dt) return '—';
+                return (frappe.datetime && frappe.datetime.str_to_user) ? frappe.datetime.str_to_user(dt) : dt;
             };
 
             // Build HTML
@@ -111,20 +184,20 @@ function render_guest_profile(wrapper, guest) {
                                     <h3 style="margin: 0; font-size: 20px; font-weight: 700; color: var(--text-color, #111827);">${escape(d.guest.full_name)}</h3>
                                     ${badgeHtml}
                                 </div>
-                                <div style="margin-top: 6px; font-size: 13px; color: var(--text-muted, #6b7280); display: flex; gap: 18px; flex-wrap: wrap;">
-                                    <span><i class="fa fa-phone" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.mobile_no || '—')}</span>
-                                    <span><i class="fa fa-envelope" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.email_id || '—')}</span>
-                                    ${(d.guest.identification_no || d.guest.id_passport_number) ? `<span><i class="fa fa-id-card" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.identification_type ? d.guest.identification_type + ': ' : '')}${escape(d.guest.identification_no || d.guest.id_passport_number)}</span>` : ''}
-                                    ${d.guest.date_of_birth ? `<span><i class="fa fa-birthday-cake" style="color: #6366f1; margin-right: 5px;"></i>${frappe.datetime.str_to_user(d.guest.date_of_birth)}</span>` : ''}
+                                <div style="margin-top: 6px; font-size: 13px; color: var(--text-muted, #6b7280); display: flex; gap: 10px; flex-wrap: wrap;">
+                                    ${d.guest.mobile_no ? `<span class="g360-copyable" data-copy-val="${escape(d.guest.mobile_no)}" title="${__('Nhấn để sao chép SĐT')}"><i class="fa fa-phone" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.mobile_no)} <i class="fa fa-clone" style="font-size: 10px; margin-left: 4px; opacity: 0.6;"></i></span>` : `<span><i class="fa fa-phone" style="color: #6366f1; margin-right: 5px;"></i>—</span>`}
+                                    ${d.guest.email_id ? `<span class="g360-copyable" data-copy-val="${escape(d.guest.email_id)}" title="${__('Nhấn để sao chép Email')}"><i class="fa fa-envelope" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.email_id)} <i class="fa fa-clone" style="font-size: 10px; margin-left: 4px; opacity: 0.6;"></i></span>` : `<span><i class="fa fa-envelope" style="color: #6366f1; margin-right: 5px;"></i>—</span>`}
+                                    ${(d.guest.identification_no || d.guest.id_passport_number) ? `<span class="g360-copyable" data-copy-val="${escape(d.guest.identification_no || d.guest.id_passport_number)}" title="${__('Nhấn để sao chép CCCD/Hộ chiếu')}"><i class="fa fa-id-card" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.identification_type ? d.guest.identification_type + ': ' : '')}${escape(d.guest.identification_no || d.guest.id_passport_number)} <i class="fa fa-clone" style="font-size: 10px; margin-left: 4px; opacity: 0.6;"></i></span>` : ''}
+                                    ${d.guest.date_of_birth ? `<span><i class="fa fa-birthday-cake" style="color: #6366f1; margin-right: 5px;"></i>${format_user_date(d.guest.date_of_birth)}</span>` : ''}
                                     ${d.guest.nationality ? `<span><i class="fa fa-globe" style="color: #6366f1; margin-right: 5px;"></i>${escape(d.guest.nationality)}</span>` : ''}
                                 </div>
                             </div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-default btn-sm" data-guest-edit style="font-weight: 600; border-radius: 6px;">
+                            <button class="btn btn-default btn-sm g360-action-btn" data-guest-edit style="font-weight: 600; border-radius: 6px;">
                                 <i class="fa fa-pencil" style="margin-right: 4px;"></i>${__('Sửa Hồ Sơ')}
                             </button>
-                            <button class="btn btn-primary btn-sm" data-new-res style="font-weight: 600; border-radius: 6px;">
+                            <button class="btn btn-primary btn-sm g360-action-btn" data-new-res style="font-weight: 600; border-radius: 6px;">
                                 <i class="fa fa-calendar-plus-o" style="margin-right: 4px;"></i>${__('Đặt Phòng Mới')}
                             </button>
                         </div>
@@ -134,7 +207,7 @@ function render_guest_profile(wrapper, guest) {
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color, #f3f4f6);">
                         <div style="background: var(--bg-color, #f9fafb); border-radius: 8px; padding: 12px 14px; border: 1px solid var(--border-color, #f3f4f6);">
                             <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted, #6b7280); font-weight: 700;">🏨 ${__('Tổng Lượt Ở')}</div>
-                            <div style="font-size: 20px; font-weight: 700; color: #2563eb; margin-top: 4px;">${d.stats.total_stays || 0} <span style="font-size: 12px; font-weight: 500; color: #6b7280;">lượt</span></div>
+                            <div style="font-size: 20px; font-weight: 700; color: #2563eb; margin-top: 4px;">${stats.total_stays || 0} <span style="font-size: 12px; font-weight: 500; color: #6b7280;">lượt</span></div>
                         </div>
                         <div style="background: var(--bg-color, #f9fafb); border-radius: 8px; padding: 12px 14px; border: 1px solid var(--border-color, #f3f4f6);">
                             <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted, #6b7280); font-weight: 700;">💰 ${__('Tổng Chi Tiêu')}</div>
@@ -147,8 +220,8 @@ function render_guest_profile(wrapper, guest) {
                         <div style="background: var(--bg-color, #f9fafb); border-radius: 8px; padding: 12px 14px; border: 1px solid var(--border-color, #f3f4f6);">
                             <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted, #6b7280); font-weight: 700;">🗓️ ${__('Lần Đến Gần Nhất')}</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-color, #374151); margin-top: 4px;">
-                                ${d.stats.last_visit ? frappe.datetime.str_to_user(d.stats.last_visit) : '—'}
-                                ${d.stats.last_room ? `<span class="badge badge-info" style="margin-left: 4px;">P.${escape(d.stats.last_room)}</span>` : ''}
+                                ${format_user_date(stats.last_visit)}
+                                ${stats.last_room ? `<span class="badge badge-info" style="margin-left: 4px;">P.${escape(stats.last_room)}</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -283,10 +356,10 @@ function render_guest_profile(wrapper, guest) {
                                                     </td>
                                                     <td>${escape(h.property || '—')}</td>
                                                     <td><span class="badge badge-info" style="font-weight: 700;">${escape(h.room_number || h.room || 'Chưa gán')}</span></td>
-                                                    <td>${h.arrival_date ? frappe.datetime.str_to_user(h.arrival_date) : '—'}</td>
-                                                    <td>${h.departure_date ? frappe.datetime.str_to_user(h.departure_date) : '—'}</td>
+                                                    <td>${format_user_date(h.arrival_date)}</td>
+                                                    <td>${format_user_date(h.departure_date)}</td>
                                                     <td>${getStatusBadge(h.status)}</td>
-                                                    <td style="text-align: right; font-weight: 700; color: ${flt(h.balance) > 0 ? '#e11d48' : '#059669'};">
+                                                    <td style="text-align: right; font-weight: 700; color: ${to_flt(h.balance) > 0 ? '#e11d48' : '#059669'};">
                                                         ${h.balance === null ? '—' : format_currency(h.balance, h.currency)}
                                                     </td>
                                                     <td style="text-align: center;">
@@ -344,7 +417,7 @@ function render_guest_profile(wrapper, guest) {
                                                     ${balanceEntries.map(([c, val]) => `
                                                         <tr>
                                                             <td style="font-weight: 700;">${escape(c)}</td>
-                                                            <td style="text-align: right; font-weight: 700; font-size: 15px; color: ${flt(val) > 0 ? '#e11d48' : '#10b981'};">${format_currency(val, c)}</td>
+                                                            <td style="text-align: right; font-weight: 700; font-size: 15px; color: ${to_flt(val) > 0 ? '#e11d48' : '#10b981'};">${format_currency(val, c)}</td>
                                                         </tr>
                                                     `).join('')}
                                                 </tbody>
@@ -411,6 +484,47 @@ function render_guest_profile(wrapper, guest) {
             });
 
             // Bind actions
+            body.find('.g360-copyable').on('click', function (e) {
+                e.preventDefault();
+                let $chip = $(this);
+                let val = $chip.attr('data-copy-val');
+                if (!val) return;
+
+                // In-place tactile visual feedback
+                let $icon = $chip.find('.fa-clone');
+                $icon.removeClass('fa-clone').addClass('fa-check text-success');
+                $chip.css({ 'background': 'rgba(16, 185, 129, 0.15)', 'color': '#047857' });
+                setTimeout(() => {
+                    $icon.removeClass('fa-check text-success').addClass('fa-clone');
+                    $chip.css({ 'background': '', 'color': '' });
+                }, 1400);
+
+                const fallback_copy = () => {
+                    let ta = document.createElement("textarea");
+                    ta.value = val;
+                    ta.style.position = "fixed";
+                    ta.style.left = "-9999px";
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        frappe.show_alert({ message: __('✓ Đã sao chép: {0}', [val]), indicator: 'green' });
+                    } catch (err) {
+                        frappe.show_alert({ message: __('Không thể sao chép tự động'), indicator: 'orange' });
+                    }
+                    ta.remove();
+                };
+
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(val).then(() => {
+                        frappe.show_alert({ message: __('✓ Đã sao chép: {0}', [val]), indicator: 'green' });
+                    }).catch(fallback_copy);
+                } else {
+                    fallback_copy();
+                }
+            });
+
             body.find('[data-guest-edit]').on('click', () => frappe.set_route('Form', 'Guest', d.guest.name));
             body.find('[data-new-res]').on('click', () => frappe.new_doc('Hotel Reservation', { guest: d.guest.name }));
         },

@@ -167,13 +167,21 @@ def issue_einvoice(sales_invoice):
         ))
 
     # Ưu tiên ủy quyền (delegate) xử lý sang App chuyên biệt erpnext_vietnam_einvoice nếu có.
-    # Chỉ rơi xuống provider cục bộ khi App đó CHƯA được cài đặt (ImportError). Mọi lỗi
-    # nghiệp vụ/xác thực thật (frappe.throw từ einvoice_core) phải được ném lại, không được
-    # nuốt và âm thầm phát hành hóa đơn Mock giả đè lên trạng thái thật.
-    try:
+    # Chỉ rơi xuống provider cục bộ khi App đó CHƯA được cài đặt cho ĐÚNG SITE hiện tại.
+    # Mọi lỗi nghiệp vụ/xác thực thật (frappe.throw từ einvoice_core) phải được ném lại,
+    # không được nuốt và âm thầm phát hành hóa đơn Mock giả đè lên trạng thái thật.
+    #
+    # TRƯỚC ĐÂY: kiểm tra bằng `try: import vietnam_einvoice...except ImportError` — SAI,
+    # đã tự tái hiện lỗi thật khi test trên Docker: `import` chỉ xác nhận package có nằm
+    # trên sys.path (đúng ngay cả khi app đó CHƯA được `bench install-app` cho site này —
+    # nhiều site dùng chung 1 bench, code luôn có sẵn trên đĩa cho MỌI site). Hậu quả thật
+    # đã tái hiện: gọi einvoice_core.issue_einvoice() cho 1 site chưa cài vietnam_einvoice
+    # sẽ crash ngay (DocType "Vietnam E-Invoice Config" không tồn tại trong DB site đó) thay
+    # vì rơi đúng về provider Mock cục bộ như thiết kế. Phải kiểm tra đúng site hiện tại đã
+    # thật sự cài app đó chưa.
+    vn_issue_einvoice = None
+    if "vietnam_einvoice" in frappe.get_installed_apps():
         from vietnam_einvoice.vietnam_einvoice.api.einvoice_core import issue_einvoice as vn_issue_einvoice
-    except ImportError:
-        vn_issue_einvoice = None
 
     if vn_issue_einvoice:
         vn_result = vn_issue_einvoice(invoice_name=sales_invoice, doctype="Sales Invoice")
@@ -230,12 +238,12 @@ def get_einvoice_status(sales_invoice):
     # về "einvoice_issued_on" = None dù hóa đơn ĐÃ được phát hành thật qua
     # vietnam_einvoice — bất kỳ nơi nào gọi API này (bên ngoài Desk, vì Desk
     # tự có JS/field riêng của từng app) sẽ thấy dữ liệu sai. Đọc field đúng
-    # theo đúng app nào thực sự đang xử lý (cùng cách nhận diện try/except
-    # ImportError đã dùng trong issue_einvoice()).
-    try:
-        import vietnam_einvoice  # noqa: F401
+    # theo đúng app nào thực sự đang xử lý SITE HIỆN TẠI (dùng
+    # frappe.get_installed_apps(), không phải try/except ImportError — xem
+    # chú thích đầy đủ ở issue_einvoice()).
+    if "vietnam_einvoice" in frappe.get_installed_apps():
         issued_on = invoice_doc.get("einvoice_issued_at")
-    except ImportError:
+    else:
         issued_on = invoice_doc.get("einvoice_issued_on")
 
     return {
