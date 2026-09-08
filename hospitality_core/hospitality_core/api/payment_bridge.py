@@ -336,7 +336,15 @@ def process_payment_entry(doc, method=None):
         bill_to = "Company" if is_company_folio else ("Group" if is_group_folio else "Guest")
 
         # Insert Transaction
-        frappe.get_doc({
+        # TRƯỚC ĐÂY: thiếu flags.hospitality_service — property_scope.py's
+        # validate_document() bắt buộc 1 trong 3 flag cho MỌI Folio Transaction
+        # ghi vào folio Property v2. Đây là hàm hook on_submit của MỌI Payment
+        # Entry liên kết folio (thanh toán/hoàn tiền khách) — thiếu flag này sẽ
+        # chặn đứng TOÀN BỘ việc ghi nhận thanh toán khách ngay khi property
+        # đầu tiên cutover Property v2, nghiêm trọng hơn cả lỗi tương tự đã
+        # tìm thấy ở pos_bridge.py's process_room_charge() vì đây là luồng
+        # thanh toán chạy hàng ngày, không riêng ký nợ phòng qua POS.
+        payment_txn = frappe.get_doc({
             "doctype": "Folio Transaction",
             "parent": folio_name,
             "parenttype": "Guest Folio",
@@ -350,7 +358,9 @@ def process_payment_entry(doc, method=None):
             "reference_doctype": "Payment Entry",
             "reference_name": doc.name,
             "is_invoiced": 0  # Payments are not invoices
-        }).insert(ignore_permissions=True)
+        })
+        payment_txn.flags.hospitality_service = True
+        payment_txn.insert(ignore_permissions=True)
         
         # Handle Accounting: Suspense -> Income transfer
         from hospitality_core.hospitality_core.api.accounting import handle_payment_income_realization
@@ -529,6 +539,7 @@ def create_company_folio_transaction(folio_name, item, description, qty, amount,
         "is_void": 0,
         "is_invoiced": 0
     })
+    txn.flags.hospitality_service = True  # xem chú thích ở process_payment_entry()
     txn.insert(ignore_permissions=True)
 
     # Sync Company Folio Balance

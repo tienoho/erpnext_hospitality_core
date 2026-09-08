@@ -120,7 +120,9 @@ def approve_count(name, request_id):
         cost_center=cfg.cost_center,hospitality_property=doc.property,fnb_outlet=doc.outlet,
         fnb_version='FNB v1',fnb_source_event=event.name))
     for row in doc.items:
-        baseline=original[(row.item,row.batch_no or None)]
+        baseline=original.get((row.item,row.batch_no or None))
+        if baseline is None:
+            frappe.throw(_('Dòng {0}/{1} không khớp snapshot lúc bắt đầu kiểm kê; không được thêm/sửa dòng khi đang kiểm kê.').format(row.item,row.batch_no or ''))
         if abs(flt(row.recounted_qty)-flt(baseline['qty']))>1e-9:
             if not doc.reason:
                 frappe.throw(_('Cần lý do/phân tích chênh lệch kiểm kê.'))

@@ -202,6 +202,15 @@ def process_room_charge(doc, method=None):
             "reference_name": doc.name,
             "is_invoiced": 1
         })
+        # TRƯỚC ĐÂY: thiếu flags.hospitality_service — property_scope.py's
+        # validate_document() bắt buộc 1 trong 3 flag (hospitality_service/
+        # from_rate_plan/from_folio_mirror) cho MỌI Folio Transaction ghi vào
+        # folio Property v2, nếu không sẽ throw. Đây là 1 trong các "chỗ tạo
+        # Folio Transaction thô" mà vòng review LOGIC & LUỒNG trước đó đã tìm
+        # và vá cho City Ledger/Group Master/Refund transfer + surcharge_engine
+        # — nhưng bỏ sót đúng hàm này. Sẽ chặn đứng việc ghi phí phòng qua POS
+        # ngay khi property đầu tiên cutover Property v2.
+        txn.flags.hospitality_service = True
         txn.insert(ignore_permissions=True)
 
         if bill_to == "Company":
@@ -226,6 +235,7 @@ def process_room_charge(doc, method=None):
                 "reference_name": doc.name,
                 "is_invoiced": 1
             })
+            txn.flags.hospitality_service = True  # xem chú thích nhánh group_item ở trên
             txn.insert(ignore_permissions=True)
 
             if bill_to == "Company":

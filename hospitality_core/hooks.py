@@ -55,6 +55,15 @@ doc_events = {
             "hospitality_core.hospitality_core.api.pos_bridge.enforce_payment_mode_rules"
         ],
         "on_submit": [
+            # QUAN TRỌNG VỀ THỨ TỰ: deduct_stock_items_for_pos_invoice() phải
+            # chạy TRƯỚC process_room_charge() — process_room_charge() tạo
+            # Folio Transaction cho từng dòng Item, và validate() của Folio
+            # Transaction (folio_transaction.py's invoice_has_stock_source())
+            # kiểm tra NGAY LÚC insert() xem Item tồn kho đã có Stock Entry
+            # thật hay chưa. Nếu Stock Entry của dòng dưới chưa kịp tạo, kiểm
+            # tra đó sẽ luôn thất bại (không tìm thấy bằng chứng xuất kho)
+            # dù Stock Entry SẼ được tạo ngay sau đó trong cùng lượt on_submit.
+            "hospitality_core.hospitality_core.api.stock.deduct_stock_items_for_pos_invoice",
             "hospitality_core.hospitality_core.api.pos_bridge.process_room_charge",
             "hospitality_core.hospitality_core.api.accounting.redirect_pos_income_to_suspense",
             "hospitality_core.hospitality_core.api.accounting.reclassify_pos_taxes",
@@ -64,7 +73,8 @@ doc_events = {
             "hospitality_core.hospitality_core.api.pos_bridge.void_room_charge",
             "hospitality_core.hospitality_core.api.accounting.redirect_pos_income_to_suspense",
             "hospitality_core.hospitality_core.api.accounting.reclassify_pos_taxes",
-            "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice"
+            "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
+            "hospitality_core.hospitality_core.api.stock.deduct_stock_items_for_pos_invoice"
         ]
     },
     "Payment Entry": {

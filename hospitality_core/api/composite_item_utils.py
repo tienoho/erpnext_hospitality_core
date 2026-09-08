@@ -50,11 +50,20 @@ def process_composite_items_in_invoice(doc, method=None):
 			# "is_stock_item==0" trên form chỉ là gợi ý ẩn/hiện phía client,
 			# KHÔNG chặn được ở server — bulk edit/Data Import/API vẫn có
 			# thể tạo ra tổ hợp này) sẽ bị trừ kho HAI LẦN cho cùng 1 lần
-			# bán: 1 lần chính nó qua Stock Ledger chuẩn (ERPNext core tự
-			# làm lúc on_submit() vì stock.py's enable_stock_update_for_pos_invoice
-			# đã set update_stock=1 từ before_validate), 1 lần nữa qua
-			# nguyên liệu composite ở đây — âm thầm lệch tồn kho không ai
-			# phát hiện. Chặn rõ ràng thay vì âm thầm trừ trùng.
+			# bán: 1 lần chính nó, 1 lần nữa qua nguyên liệu composite ở đây
+			# — âm thầm lệch tồn kho không ai phát hiện. Với Sales Invoice
+			# thường, lần trừ "chính nó" đi qua Stock Ledger chuẩn của
+			# ERPNext (update_stock=1 thật sự có tác dụng ở đó — xem
+			# `stock.py`'s `disable_stock_for_consolidated_pos_sales_invoice`);
+			# với POS Invoice, lần trừ "chính nó" đi qua
+			# `stock.py`'s `deduct_stock_items_for_pos_invoice()` (Stock Entry
+			# thủ công — ĐÃ xác minh trực tiếp mã nguồn ERPNext rằng
+			# `POSInvoice.on_submit()`/`validate()` tự nhảy qua
+			# `SalesInvoice`'s override bằng `super(SalesInvoice, self)`,
+			# nên field `update_stock` không hề được core xử lý cho riêng
+			# POS Invoice). Dù cơ chế trừ khác nhau giữa 2 doctype, kết quả
+			# double-deduction nếu Item vừa composite vừa stock là như
+			# nhau — chặn rõ ràng thay vì âm thầm trừ trùng.
 			frappe.throw(_(
 				"Item {0} được đánh dấu VỪA LÀ composite item VỪA LÀ stock item — sẽ bị trừ kho HAI LẦN mỗi "
 				"lần bán (1 lần chính nó, 1 lần qua nguyên liệu composite). Composite item phải có Is Stock "

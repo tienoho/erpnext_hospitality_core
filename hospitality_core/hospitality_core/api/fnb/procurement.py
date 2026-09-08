@@ -11,7 +11,7 @@ def suggest_request(outlet_name,session=None):
     from erpnext.stock.utils import get_stock_balance
     from .service import reserved_stock
     from .recipes import select_recipe,ingredients
-    targets={row.item:row.par_qty for row in out.menu if row.stock_mode=='Stock' and row.par_qty>0}
+    targets={row.item:row.par_qty for row in out.menu if row.stock_mode=='Stock' and flt(row.par_qty)>0}
     demand={}
     if session:
         service=load('FNB Service Session',session,'read')
@@ -50,8 +50,8 @@ def create_request(outlet_name, items, required_date, purpose,request_id,request
     if not purpose:
         frappe.throw(_('Cần mục đích cấp hàng.'))
     items=frappe.parse_json(items) if isinstance(items,str) else items
-    if not items:
-        frappe.throw(_('Cần danh sách hàng.'))
+    if not items or not isinstance(items,list) or any(not isinstance(r,dict) or not r.get('item') or not r.get('qty') or not r.get('uom') for r in items):
+        frappe.throw(_('Danh sách hàng không hợp lệ; mỗi dòng cần item/qty/uom.'))
     payload=dict(items=items,required_date=str(required_date),purpose=purpose,request_type=request_type)
     existing,key,sig=event_existing(out,'Request',request_id,payload)
     if existing:
@@ -116,6 +116,8 @@ def dispatch_request(name, quantities, request_id):
     doc.check_permission('read')
     out,cfg=outlet(doc.fnb_outlet)
     quantities=frappe.parse_json(quantities) if isinstance(quantities,str) else quantities
+    if not isinstance(quantities,dict):
+        frappe.throw(_('Số lượng giao phải là ánh xạ mã dòng → số lượng.'))
     existing,key,sig=event_existing(doc,'Transfer',request_id,quantities)
     if existing:
         return existing.name
@@ -163,6 +165,8 @@ def receive_transfer(stock_entry, quantities, request_id):
     doc.check_permission('read')
     out,cfg=outlet(doc.fnb_outlet)
     quantities=frappe.parse_json(quantities) if isinstance(quantities,str) else quantities
+    if not isinstance(quantities,dict):
+        frappe.throw(_('Số lượng nhận phải là ánh xạ mã dòng → số lượng.'))
     existing,key,sig=event_existing(doc,'Receive',request_id,quantities)
     if existing:
         return existing.name

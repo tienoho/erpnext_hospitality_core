@@ -115,6 +115,25 @@ class FolioTransaction(Document):
                     if entry and frappe.db.exists('Stock Ledger Entry',{'voucher_type':'Stock Entry','voucher_no':entry,
                         'item_code':self.item,'is_cancelled':0,'actual_qty':['!=',0]}):
                         return True
+            # TRƯỚC ĐÂY: nhánh POS Invoice không-FNB chỉ kiểm tra SLE gắn TRỰC
+            # TIẾP vào invoice (voucher_type=invoice.doctype) — đúng khi
+            # update_stock=1 khiến CORE tự ghi SLE thẳng lên invoice. Đã xác
+            # minh trực tiếp mã nguồn `pos_invoice.py` thật: `POSInvoice.
+            # on_submit()` không hề gọi `super().on_submit()`, nên core KHÔNG
+            # BAO GIỜ tự ghi SLE cho POS Invoice — `stock.py`'s
+            # `deduct_stock_items_for_pos_invoice()` (hook on_submit) tự tạo
+            # 1 Stock Entry THẬT riêng (voucher_type='Stock Entry', không
+            # phải 'POS Invoice') để bù đắp. Thiếu nhánh này, MỌI phí phòng
+            # cho hàng tồn kho bán qua POS Invoice thường (ngoài FNB) sẽ luôn
+            # bị chặn nhầm ở đây dù kho đã thực sự được trừ đúng.
+            if invoice.doctype == 'POS Invoice' and invoice.get('fnb_version') != 'FNB v1':
+                entries = frappe.get_all('Stock Entry', filters={
+                    'custom_source_invoice': invoice.name, 'custom_invoice_type': invoice.doctype,
+                    'docstatus': 1}, pluck='name')
+                for entry in entries:
+                    if frappe.db.exists('Stock Ledger Entry', {'voucher_type': 'Stock Entry', 'voucher_no': entry,
+                        'item_code': self.item, 'is_cancelled': 0, 'actual_qty': ['!=', 0]}):
+                        return True
         return False
 
 

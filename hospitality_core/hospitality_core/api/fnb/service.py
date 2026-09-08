@@ -2,7 +2,7 @@ import json
 import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
-from .common import (load, save, outlet, positive, approve_actor, event_existing, make_event, atomic, role)
+from .common import (load, save, outlet, positive, approve_actor, event_existing, make_event, atomic, role, parse_payload)
 from .recipes import select_recipe, ingredients
 from .inventory import post_stock, rows_from_doc
 from .guards import lock_warehouses
@@ -25,13 +25,21 @@ def reserved_stock(warehouse,item):
 
 
 def ticket_status(doc):
-    if all(r.cancelled_qty>=r.stock_qty for r in doc.items):
+    # TRƯỚC ĐÂY: so sánh >= không dung sai — prepared_qty/served_qty/
+    # cancelled_qty được cộng dồn qua nhiều lần xác nhận từng phần
+    # (confirm_ticket's row.xxx_qty += qty), có thể lệch phần triệu do
+    # cộng dồn số thực (VD served_qty=2.9999999999997 thay vì 3.0) — khiến
+    # điều kiện >= không bao giờ đúng dù phiếu đã thực sự hoàn tất, kẹt vĩnh
+    # viễn ở trạng thái cũ. Các chỗ khác trong cùng file (kiểm tra "vượt
+    # lượng còn lại") đã dùng dung sai +1e-9, riêng hàm này thì chưa — thêm
+    # cho nhất quán.
+    if all(r.cancelled_qty+1e-9>=r.stock_qty for r in doc.items):
         return 'Cancelled'
-    if all(r.served_qty+r.cancelled_qty>=r.stock_qty for r in doc.items):
-        if doc.purpose!='Sale' or all(r.billed_qty+r.cancelled_qty>=r.stock_qty for r in doc.items):
+    if all(r.served_qty+r.cancelled_qty+1e-9>=r.stock_qty for r in doc.items):
+        if doc.purpose!='Sale' or all(r.billed_qty+r.cancelled_qty+1e-9>=r.stock_qty for r in doc.items):
             return 'Reconciled'
         return 'Served'
-    if all(r.prepared_qty+r.cancelled_qty>=r.stock_qty for r in doc.items):
+    if all(r.prepared_qty+r.cancelled_qty+1e-9>=r.stock_qty for r in doc.items):
         return 'Prepared'
     return 'Sent'
 
@@ -91,7 +99,7 @@ def confirm_ticket(name, line, quantity, action, request_id, batches=None):
         frappe.throw(_('Thao tác phiếu phục vụ không hợp lệ.'))
     doc=load('FNB Service Ticket',name)
     qty=positive(quantity)
-    batches=frappe.parse_json(batches) if isinstance(batches,str) else (batches or {})
+    batches=parse_payload(batches, dict, empty=dict, label='Danh sách lô hàng')
     payload=dict(line=line,quantity=qty,action=action,batches=batches)
     existing,key,signature=event_existing(doc,action,request_id,payload)
     if existing:
@@ -202,7 +210,7 @@ def approve_waste(name, request_id):
         ticket=load('FNB Service Ticket',origin.source_name)
         row=next(r for r in ticket.items if r.name==origin.source_line)
         qty=sum(r.stock_qty for r in doc.items)
-        if len(doc.items)!=1 or doc.items[0].item!=row.item or qty>origin.quantity or qty>row.prepared_qty-row.served_qty+1e-9:
+        if len(doc.items)!=1 or doc.items[0].item!=row.item or qty>origin.quantity+1e-9 or qty>row.prepared_qty-row.served_qty+1e-9:
             frappe.throw(_('Vượt lượng món đã làm chưa phục vụ.'))
         prior=frappe.db.sql('SELECT COALESCE(SUM(quantity),0) FROM `tabFNB Inventory Event` WHERE origin=%s AND event_type=\'Waste\'',origin.name)[0][0]
         if qty+flt(prior)>origin.quantity:
@@ -247,8 +255,15 @@ def session_action(name, action, request_id, items=None, actual_covers=None):
     doc=load('FNB Service Session',name)
     if action not in ('Approve','Issue','Close'):
         frappe.throw(_('Thao tác phiên phục vụ không hợp lệ.'))
-    parsed=frappe.parse_json(items) if isinstance(items,str) else (items or [])
-    existing,key,sig=event_existing(doc,'Issue' if action=='Issue' else 'Serve',request_id,
+    # TRƯỚC ĐÂY: 'Approve' và 'Close' (chuyển trạng thái, không cấp/phục vụ gì)
+    # đều bị gắn chung event_type='Serve' — trộn lẫn với sự kiện phục vụ thật
+    # trong FNB Inventory Event, và khiến 1 request_id vô tình dùng lại cho cả
+    # Approve lẫn Close (cùng action_string 'Serve' trong digest chống trùng)
+    # bị báo "khóa chống trùng đã dùng với nội dung khác" dù là 2 nghiệp vụ
+    # khác nhau. Đã thêm option Approve/Close vào Select event_type, dùng đúng
+    # tên hành động thay vì gộp vào 'Serve'.
+    event_type=action if action in ('Approve','Issue','Close') else 'Serve'
+    existing,key,sig=event_existing(doc,event_type,request_id,
         dict(action=action,items=parsed,actual_covers=actual_covers))
     if existing:
         return existing.name
@@ -272,7 +287,7 @@ def session_action(name, action, request_id, items=None, actual_covers=None):
         doc.approved_at=now_datetime()
     elif doc.status!='Approved':
         frappe.throw(_('Phiên chưa duyệt hoặc đã chốt.'))
-    event=make_event(doc,'Issue' if action=='Issue' else 'Serve',key,sig,purpose=doc.service_type,
+    event=make_event(doc,event_type,key,sig,purpose=doc.service_type,
         snapshot=frappe.as_json(dict(action=action,items=parsed,actual_covers=actual_covers)))
     if action=='Issue':
         if not parsed:
@@ -280,6 +295,8 @@ def session_action(name, action, request_id, items=None, actual_covers=None):
         normalized=[]
         from .common import stock_quantity
         for row in parsed:
+            if not isinstance(row,dict) or not row.get('item') or not row.get('qty') or not row.get('uom'):
+                frappe.throw(_('Danh sách hàng cấp không hợp lệ; mỗi dòng cần item/qty/uom.'))
             qty,conversion_factor,uom=stock_quantity(row['item'],row['qty'],row['uom'])
             normalized.append(dict(item=row['item'],qty=qty,uom=uom,batch_no=row.get('batch_no')))
         post_stock(event,out,cfg,normalized)
@@ -315,13 +332,23 @@ def use_breakfast(name, entitlement, quantity, request_id):
     benefit.check_permission('read')
     if benefit.property!=session.property or benefit.benefit_type!='Breakfast' or str(benefit.benefit_date)!=str(session.business_date) or benefit.status!='Confirmed':
         frappe.throw(_('Quyền lợi không khớp cơ sở, ngày phục vụ hoặc đã hết hiệu lực.'))
-    previous=frappe.get_all('FNB Inventory Event',filters={'property':session.property,'event_type':'Benefit'},fields=['quantity','snapshot'])
+    # TRƯỚC ĐÂY: chỉ lọc property+event_type — quét TOÀN BỘ lịch sử "Benefit"
+    # của cả cơ sở (không giới hạn ngày), càng vận hành lâu càng chậm dần.
+    # `entitlement` không phải field riêng trên FNB Inventory Event (nằm
+    # trong snapshot JSON) nên vẫn cần lọc lại bằng Python, nhưng benefit_date
+    # của entitlement đã bắt buộc khớp đúng business_date của phiên (dòng
+    # kiểm tra ngay phía trên) — mọi lần dùng entitlement này chỉ có thể ghi
+    # nhận trong đúng business_date đó, nên thu hẹp truy vấn về đúng 1 ngày
+    # là an toàn, không bỏ sót.
+    previous=frappe.get_all('FNB Inventory Event',
+        filters={'property':session.property,'event_type':'Benefit','business_date':session.business_date},
+        fields=['quantity','snapshot'])
     used=sum(r.quantity for r in previous if json.loads(r.snapshot).get('entitlement')==entitlement)
-    if qty+used>benefit.quantity:
+    if qty+used>benefit.quantity+1e-9:
         frappe.throw(_('Vượt số suất bữa sáng còn lại.'))
     event=make_event(session,'Benefit',key,sig,quantity=qty,purpose='Breakfast',
         snapshot=frappe.as_json(dict(entitlement=entitlement,quantity=qty)))
-    if qty+used==benefit.quantity:
+    if qty+used>=benefit.quantity-1e-9:
         benefit.status='Used'
         benefit.flags.hospitality_service=True
         benefit.save(ignore_permissions=True)

@@ -162,6 +162,10 @@ def log_minibar_consumption(room, items):
             "bill_to": "Guest",
             "is_void": 0,
         })
+        # Xem chú thích tại payment_bridge.py's process_payment_entry() —
+        # thiếu flags.hospitality_service sẽ chặn đứng việc ghi phí minibar
+        # ngay khi property cutover Property v2.
+        txn.flags.hospitality_service = True
         txn.insert(ignore_permissions=True)
         posted.append(txn.name)
 

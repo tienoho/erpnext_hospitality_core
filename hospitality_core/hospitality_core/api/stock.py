@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 def deduct_inventory(doc, method=None):
     """
@@ -82,44 +83,135 @@ def enable_stock_update_for_pos_invoice(doc, method=None):
     """
     Hook: POS Invoice (before_validate)
 
-    TRƯỚC ĐÂY: 2 hàm `post_pos_invoice_stock()`/`cancel_pos_invoice_stock()`
-    (hook ở on_submit/on_cancel) tự set `doc.update_stock = 1` CHỈ TRONG BỘ
-    NHỚ (không lưu xuống DB) rồi tự tay gọi `update_stock_ledger()` — nhưng
-    KHÔNG BAO GIỜ trigger lại `make_gl_entries()` cho phần định giá tồn kho
-    (Stock-in-Hand/COGS), vì controller GỐC của ERPNext (`SalesInvoice.on_submit()`,
-    chạy TRƯỚC hook app-level cùng tên) đã tự gọi `make_gl_entries()` từ
-    TRƯỚC ĐÓ, lúc `update_stock` vẫn = 0 (giá trị đã lưu DB) — `get_gl_entries()`
-    của ERPNext chỉ thêm dòng GL định giá tồn kho khi `update_stock` = 1
-    NGAY TẠI THỜI ĐIỂM ghi GL. Kết quả: Stock Ledger Entry được tạo (tồn
-    kho thật đổi), nhưng sổ sách kế toán KHÔNG BAO GIỜ ghi nhận — lệch tồn
-    kho vs sổ sách VĨNH VIỄN với công ty bật perpetual inventory.
+    TRƯỚC ĐÂY (2 lần liền, cả 2 lần đều dựa trên giả định SAI chưa từng đọc
+    trực tiếp `pos_invoice.py` thật của ERPNext 16.34.1): hàm này set
+    `doc.update_stock = 1` ở before_validate, với lý do "core tự lo SLE+GL
+    lúc on_submit() y hệt Sales Invoice, khớp idiom
+    `disable_stock_for_consolidated_pos_sales_invoice` đã dùng".
 
-    Đã xác minh trực tiếp mã nguồn ERPNext (`general_ledger.py`'s
-    `make_entry()`) rằng gọi lại `make_gl_entries()` LẦN THỨ 2 để vá thêm
-    sẽ KHÔNG an toàn — hàm này insert() vô điều kiện, không có cơ chế
-    chống ghi trùng theo voucher, nên sẽ ghi TRÙNG cả Debtors/Income/Thuế
-    (core đã ghi 1 lần rồi) — tệ hơn cả lỗi đang sửa.
+    ĐÃ XÁC MINH TRỰC TIẾP mã nguồn thật
+    (`erpnext/accounts/doctype/pos_invoice/pos_invoice.py`) và phát hiện giả
+    định trên SAI HOÀN TOÀN cho riêng POS Invoice: `POSInvoice.validate()`
+    gọi `super(SalesInvoice, self).validate()` — dùng cú pháp Python nhảy
+    THẲNG qua `SalesInvoice.validate()` để gọi `SellingController.validate()`
+    (ông của SalesInvoice) — và `POSInvoice.on_submit()` KHÔNG hề gọi
+    `super().on_submit()` ở bất kỳ dạng nào. Cả 2 override này chặn đứng
+    hoàn toàn logic của `SalesInvoice.on_submit()` (dòng ~493-509 file thật:
+    `if self.update_stock == 1: ... self.update_stock_ledger(); ...
+    self.make_gl_entries()`) — nơi DUY NHẤT trong toàn bộ codebase ERPNext xử
+    lý field `update_stock`. Kết quả: set `update_stock=1` trên POS Invoice
+    KHÔNG CÓ TÁC DỤNG GÌ — không tạo Stock Ledger Entry, không tạo GL Entry,
+    dù giá trị field vẫn được lưu đúng vào DB.
 
-    Sửa TẬN GỐC: set `update_stock=1` ở before_validate — TRƯỚC KHI
-    validate()/on_submit() GỐC của ERPNext chạy — để chính core tự lo TOÀN
-    BỘ (validate_warehouse()/update_current_stock() lúc validate(), rồi SLE
-    + GL đúng 1 lượt lúc on_submit(), rồi tự đảo đúng cả 2 lúc on_cancel())
-    qua đúng luồng nó đã thiết kế và tự kiểm thử — khớp CHÍNH XÁC idiom app
-    này đã tự dùng cho Sales Invoice
-    (`disable_stock_for_consolidated_pos_sales_invoice`, cũng set
-    `update_stock` ở before_submit, TRƯỚC KHI submit chạy, không phải sau).
-    Không còn cần 2 hàm post/cancel thủ công nữa — core tự làm đúng cả 2
-    chiều một cách đối xứng.
+    Hậu quả THẬT của lần sửa trước (không phải giả thuyết): mọi Item
+    `is_stock_item=1` (không phải composite) bán qua POS Invoice hoàn toàn
+    KHÔNG bị trừ kho — tệ hơn cả lỗi ban đầu (lỗi cũ ít nhất còn trừ kho
+    đúng, chỉ sai GL; lần sửa trước làm CẢ HAI đều sai — tồn kho báo cáo
+    sai, sổ sách cũng không có gì). `composite_item_utils.py`'s comment giải
+    thích lý do chặn Item vừa composite vừa stock ("1 lần chính nó qua Stock
+    Ledger chuẩn... vì stock.py đã set update_stock=1") cũng dựa trên đúng
+    giả định sai này — bản thân việc chặn đó vẫn ĐÚNG cho Sales Invoice
+    thường (nơi update_stock=1 thật sự có tác dụng), chỉ riêng lời giải
+    thích không còn đúng cho nhánh POS Invoice.
 
-    LƯU Ý VẬN HÀNH: `update_stock=1` khiến `validate_warehouse()` (chạy
-    trong validate() gốc của ERPNext) bắt buộc MỌI dòng item của POS
-    Invoice phải có warehouse — TRƯỚC ĐÂY luồng thủ công bỏ qua kiểm tra
-    này. Đây là siết chặt ĐÚNG Ý (khớp quy tắc ERPNext áp cho mọi hóa đơn
-    có cập nhật tồn kho khác), nhưng cần xác nhận mọi Item/POS Profile thật
-    đã có warehouse cấu hình trước khi áp dụng, kẻo POS Invoice không lưu
-    được vì thiếu warehouse.
+    Sửa TẬN GỐC lần này: KHÔNG còn ép `update_stock=1` (vô nghĩa với POS
+    Invoice, chỉ gây hiểu nhầm khi đọc dữ liệu sau này) — để field này ở giá
+    trị tự nhiên từ POS Profile. Thay vào đó, dùng hàm mới
+    `deduct_stock_items_for_pos_invoice()` (đăng ký ở on_submit/on_cancel)
+    tự tạo Stock Entry THẬT cho từng Item `is_stock_item=1` không phải
+    composite — đúng cơ chế `Stock Entry.submit()` (StockController's own
+    on_submit) đã CHỨNG MINH hoạt động đúng trong chính app này (dùng y hệt
+    idiom `create_ingredient_consumption_entry()` của
+    `composite_item_utils.py` đã áp dụng cho nguyên liệu composite từ trước).
+
+    Hàm này giữ lại làm no-op có chủ đích (không xóa hẳn, vì hooks.py có thể
+    còn tham chiếu qua bản build cũ) — không set gì cả.
     """
-    doc.update_stock = 1
+    return
+
+
+def deduct_stock_items_for_pos_invoice(doc, method=None):
+    """
+    Hook: POS Invoice (on_submit/on_cancel).
+
+    Trừ/hoàn kho THẬT cho từng dòng Item `is_stock_item=1` (không phải
+    composite — composite đã có `composite_item_utils.py` xử lý nguyên liệu
+    riêng) bán trực tiếp qua POS Invoice — xem chú thích tại
+    `enable_stock_update_for_pos_invoice()` để biết lý do `update_stock=1`
+    không có tác dụng cho POS Invoice, khiến các Item này TRƯỚC ĐÂY hoàn
+    toàn không bị trừ kho.
+
+    Bỏ qua hóa đơn do FNB Cost Control quản lý (`fnb_version=='FNB v1'`) —
+    module đó đã tự tạo Stock Entry riêng qua `api/fnb/pos.py`'s
+    `post_stock()`, tạo ở đây nữa sẽ trừ kho HAI LẦN.
+
+    Dùng đúng field `custom_source_invoice`/`custom_invoice_type` (đã có sẵn
+    trên Stock Entry qua `composite_item_setup.py`) làm khóa chống ghi
+    trùng/idempotent, để trống `custom_composite_item` (Item nào KHÔNG phải
+    composite) để phân biệt với Stock Entry của nguyên liệu composite.
+    """
+    if doc.doctype != "POS Invoice" or doc.get("fnb_version") == "FNB v1":
+        return
+
+    is_cancel = doc.docstatus == 2
+
+    existing = frappe.get_all("Stock Entry", filters={
+        "custom_source_invoice": doc.name,
+        "custom_invoice_type": doc.doctype,
+        "custom_composite_item": ["in", ["", None]],
+        "docstatus": 1,
+    }, pluck="name")
+
+    if is_cancel:
+        for name in existing:
+            entry = frappe.get_doc("Stock Entry", name)
+            if entry.docstatus == 1:
+                entry.cancel()
+        return
+
+    if existing:
+        # Đã ghi kho cho hóa đơn này (retry/gọi lại on_submit) — không trừ trùng.
+        return
+
+    rows = []
+    for item in doc.items:
+        flags = frappe.db.get_value("Item", item.item_code, ["is_stock_item", "is_composite_item"], as_dict=True)
+        if flags and flags.is_stock_item and not flags.is_composite_item:
+            rows.append(item)
+
+    if not rows:
+        return
+
+    # Hóa đơn hoàn hàng (is_return=1): quy ước ERPNext ghi qty/amount ÂM trên
+    # dòng item để phản chiếu đúng hóa đơn gốc — nếu tạo "Material Issue" với
+    # qty âm, Stock Entry Item sẽ từ chối (bắt buộc qty > 0). Đổi sang
+    # "Material Receipt" (nhập lại kho) với qty dương cho đúng chiều hoàn trả.
+    is_return = bool(doc.get("is_return"))
+    se = frappe.new_doc("Stock Entry")
+    se.stock_entry_type = "Material Receipt" if is_return else "Material Issue"
+    se.purpose = "Material Receipt" if is_return else "Material Issue"
+    se.company = doc.company
+    se.posting_date = doc.posting_date
+    se.posting_time = doc.posting_time
+    se.set_posting_time = 1
+    se.custom_source_invoice = doc.name
+    se.custom_invoice_type = doc.doctype
+
+    cost_center = frappe.get_cached_value("Company", doc.company, "cost_center")
+    for row in rows:
+        if not row.warehouse:
+            frappe.throw(_("Item {0} trên POS Invoice thiếu Warehouse — không thể ghi kho.").format(row.item_code))
+        warehouse_field = "t_warehouse" if is_return else "s_warehouse"
+        se.append("items", {
+            "item_code": row.item_code,
+            "qty": abs(flt(row.stock_qty)),
+            "uom": row.stock_uom or row.uom,
+            warehouse_field: row.warehouse,
+            "cost_center": cost_center,
+        })
+
+    se.insert(ignore_permissions=True)
+    se.submit()
 
 
 def disable_stock_for_consolidated_pos_sales_invoice(doc, method=None):

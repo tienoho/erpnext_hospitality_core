@@ -82,6 +82,11 @@ def split_transaction(transaction_name, splits):
             "reference_name": original.name,
             "is_void": 0,
         })
+        # Xem chú thích tại payment_bridge.py's process_payment_entry() —
+        # cùng lớp lỗi: thiếu flags.hospitality_service sẽ chặn đứng thao
+        # tác tách giao dịch (split_transaction) ngay khi property cutover
+        # Property v2.
+        new_txn.flags.hospitality_service = True
         new_txn.insert(ignore_permissions=True)
         new_transactions.append(new_txn.name)
         affected_folios.add(target_folio)

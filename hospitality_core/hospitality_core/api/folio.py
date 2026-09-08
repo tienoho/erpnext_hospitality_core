@@ -511,7 +511,12 @@ def transfer_existing_balances(folio_doc):
         # Ensure BALANCE-TRANSFER item exists with proper UOM
         from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
         ensure_item_exists("BALANCE-TRANSFER", "Guest Balance Transfer")
-            
+
+        # Xem chú thích tại payment_bridge.py's process_payment_entry() —
+        # thiếu flags.hospitality_service sẽ chặn đứng việc tự động chuyển
+        # số dư tín dụng cũ của khách sang folio mới ngay khi property
+        # cutover Property v2.
+        txn.flags.hospitality_service = True
         txn.insert(ignore_permissions=True)
         
         # Update Ledger Status
@@ -555,7 +560,11 @@ def process_ledger_adjustment(doc, method=None):
         "reference_name": doc.name,
         "is_void": 0
     })
-    
+
+    # Xem chú thích tại payment_bridge.py's process_payment_entry() — thiếu
+    # flags.hospitality_service sẽ chặn đứng việc điều chỉnh sổ cái thủ công
+    # ngay khi property cutover Property v2.
+    txn.flags.hospitality_service = True
     txn.insert(ignore_permissions=True)
     
 def cancel_ledger_adjustment(doc, method=None):

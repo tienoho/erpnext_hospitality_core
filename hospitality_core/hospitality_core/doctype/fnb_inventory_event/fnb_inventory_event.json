@@ -70,7 +70,7 @@
    "fieldname": "event_type",
    "label": "Event Type",
    "fieldtype": "Select",
-   "options": "Prepare\nServe\nCancel\nProduce\nIssue\nWaste\nReturn\nAllocate\nRelease\nCount\nBenefit\nTransfer\nReceive\nRequest",
+   "options": "Prepare\nServe\nCancel\nProduce\nIssue\nWaste\nReturn\nAllocate\nRelease\nCount\nBenefit\nTransfer\nReceive\nRequest\nApprove\nClose",
    "reqd": 1
   },
   {
