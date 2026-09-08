@@ -6,31 +6,31 @@ frappe.pages['housekeeping-mobile'].on_page_load = function (wrapper) {
     });
 
     $(`<style>
-        .hkm-tabs { display:flex; position: sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid #e0e4e8; margin-bottom:10px; }
-        .hkm-tab { flex:1; text-align:center; padding:12px 4px; font-size:13px; font-weight:600; color:#8d99a6; cursor:pointer; }
-        .hkm-tab.active { color:#2f80ed; border-bottom:2px solid #2f80ed; }
-        .hkm-room-card { border:1px solid #e0e4e8; border-radius:8px; padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; }
-        .hkm-room-title { font-size:18px; font-weight:700; }
-        .hkm-room-sub { font-size:12px; color:#8d99a6; }
-        .hkm-status-pill { font-size:11px; padding:3px 10px; border-radius:12px; font-weight:600; color:#fff; }
-        .hkm-btn-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-        .hkm-btn { flex:1; min-width:70px; padding:10px 6px; border-radius:6px; border:none; font-size:12px; font-weight:600; color:#fff; }
+        .hkm-tabs { display:flex; position: sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid #e2e8f0; margin-bottom:12px; }
+        .hkm-tab { flex:1; text-align:center; padding:14px 4px; font-size:13px; font-weight:700; color:#64748b; cursor:pointer; }
+        .hkm-tab.active { color:#2563eb; border-bottom:3px solid #2563eb; }
+        .hkm-room-card { border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,0.04); background:#fff; }
+        .hkm-room-title { font-size:20px; font-weight:800; color:#1e293b; }
+        .hkm-room-sub { font-size:12px; color:#64748b; margin-top:2px; }
+        .hkm-status-pill { font-size:11px; padding:4px 12px; border-radius:12px; font-weight:700; color:#fff; }
+        .hkm-btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        .hkm-btn { flex:1; min-width:80px; min-height:44px; padding:10px 14px; border-radius:8px; border:none; font-size:13px; font-weight:700; color:#fff; display:flex; align-items:center; justify-content:center; }
         .hkm-section { display:none; }
         .hkm-section.active { display:block; }
-        .hkm-floor-filter { margin-bottom:10px; }
+        .hkm-floor-filter { margin-bottom:12px; height:42px; border-radius:8px; font-size:14px; font-weight:600; }
     </style>`).appendTo(wrapper);
 
     $(wrapper).find('.layout-main-section').append(`
         <div class="hkm-tabs">
-            <div class="hkm-tab active" data-tab="rooms">${__('Rooms')}</div>
-            <div class="hkm-tab" data-tab="minibar">${__('Minibar')}</div>
-            <div class="hkm-tab" data-tab="lostfound">${__('Lost & Found')}</div>
-            <div class="hkm-tab" data-tab="maintenance">${__('Maintenance')}</div>
+            <div class="hkm-tab active" data-tab="rooms"><i class="fa fa-bed"></i> ${__('Buồng Phòng')}</div>
+            <div class="hkm-tab" data-tab="minibar"><i class="fa fa-cocktail"></i> ${__('Minibar')}</div>
+            <div class="hkm-tab" data-tab="lostfound"><i class="fa fa-box-open"></i> ${__('Đồ Thất Lạc')}</div>
+            <div class="hkm-tab" data-tab="maintenance"><i class="fa fa-tools"></i> ${__('Báo Hỏng')}</div>
         </div>
 
         <div id="hkm-section-rooms" class="hkm-section active">
             <select id="hkm-floor-filter" class="form-control hkm-floor-filter">
-                <option value="">${__('All Floors')}</option>
+                <option value="">${__('Tất Cả Các Tầng')}</option>
             </select>
             <div id="hkm-room-list"></div>
         </div>
