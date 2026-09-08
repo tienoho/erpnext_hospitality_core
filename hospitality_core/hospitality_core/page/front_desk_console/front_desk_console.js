@@ -8,7 +8,7 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
     // 1. Add Date Filter
     page.add_field({
         fieldname: 'console_date',
-        label: 'Date',
+        label: __('Ngày'),
         fieldtype: 'Date',
         default: frappe.datetime.now_date(),
         change: function () {
@@ -17,41 +17,16 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
     });
 
     // Refresh Button
-    page.set_primary_action('Refresh Data', function () {
+    page.set_primary_action(__('Làm Mới'), function () {
         render_console(wrapper, page);
     });
 
-    page.add_menu_item(__('Scan ID (CCCD/Passport)'), function () {
-        open_id_scanner_dialog();
-    });
-    page.add_menu_item(__('Split Bill'), function () {
-        open_split_bill_dialog();
-    });
-    page.add_menu_item(__('Merge Folio'), function () {
-        open_merge_folio_dialog();
-    });
-    page.add_menu_item(__('Xuất Excel Khai Báo XNC Quốc Tế (XLSX)'), function () {
-        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
-        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report_xlsx?target_date=${cur_date}`);
-    });
-    page.add_menu_item(__('Xuất Excel Khai Báo Tạm Trú Toàn Đoàn (XLSX)'), function () {
-        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
-        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_police_declaration_xlsx?target_date=${cur_date}`);
-    });
-
+    // Inner Buttons (Các thao tác lễ tân thường trực)
     page.add_inner_button(__('⚡ Tạo VietQR Nhanh'), function () {
         open_quick_vietqr_dialog();
     });
     page.add_inner_button(__('Quét CCCD / Passport'), function () {
         open_id_scanner_dialog();
-    });
-    page.add_inner_button(__('📊 Xuất Excel XNC (XLSX)'), function () {
-        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
-        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report_xlsx?target_date=${cur_date}`);
-    });
-    page.add_inner_button(__('📋 Xuất File CSV XNC'), function () {
-        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
-        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report?target_date=${cur_date}`);
     });
     page.add_inner_button(__('Tách Bill'), function () {
         open_split_bill_dialog();
@@ -60,100 +35,283 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
         open_merge_folio_dialog();
     });
 
+    // Page Menu (Báo cáo & Tác vụ xuất dữ liệu Công an / XNC)
+    page.add_menu_item(__('📊 Xuất Excel Khai Báo XNC (XLSX)'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report_xlsx?target_date=${cur_date}`);
+    });
+    page.add_menu_item(__('📋 Xuất File CSV Khai Báo XNC'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_quangninh_immigration_report?target_date=${cur_date}`);
+    });
+    page.add_menu_item(__('📑 Xuất Excel Khai Báo Tạm Trú Toàn Đoàn (XLSX)'), function () {
+        let cur_date = page.fields_dict.console_date.get_value() || frappe.datetime.now_date();
+        window.open(`/api/method/hospitality_core.hospitality_core.api.police_declaration.export_police_declaration_xlsx?target_date=${cur_date}`);
+    });
+
     // CSS Styling
     $(`<style>
+        .fd-quick-actions-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .fd-toolbar-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 14px 8px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #334155;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            text-decoration: none !important;
+        }
+        .fd-toolbar-btn:hover {
+            background: #f8fafc;
+            border-color: #3b82f6;
+            color: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(59,130,246,0.12);
+        }
+        .fd-toolbar-icon {
+            font-size: 22px;
+            margin-bottom: 8px;
+            color: #3b82f6;
+            transition: transform 0.2s;
+        }
+        .fd-toolbar-btn:hover .fd-toolbar-icon {
+            transform: scale(1.1);
+        }
+
         .fd-stat-card {
             background: #fff;
-            border: 1px solid #d1d8dd;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            transition: all 0.2s;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 18px 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
             height: 100%;
         }
-        .fd-stat-card:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .fd-stat-number { font-size: 32px; font-weight: 700; color: #1f272e; margin: 10px 0; }
-        .fd-stat-label { font-size: 13px; color: #8d99a6; text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        .fd-toolbar-btn {
-            display: inline-block;
-            text-align: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border: 1px solid #ebf1f5;
-            border-radius: 6px;
-            width: 100%;
-            cursor: pointer;
-            color: #36414c;
-            font-weight: 600;
+        .fd-stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
         }
-        .fd-toolbar-btn:hover { background: #e2e6ea; text-decoration: none; color: #1f272e; }
-        .fd-toolbar-icon { font-size: 24px; display: block; margin-bottom: 8px; color: #5e64ff; }
+        .fd-stat-card.active-filter {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37,99,235,0.2), 0 8px 20px rgba(0,0,0,0.08);
+            background: #f8faff;
+        }
+        .fd-stat-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .fd-stat-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .fd-stat-icon-wrap {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .fd-stat-number {
+            font-size: 32px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+        .fd-stat-subtext {
+            font-size: 12px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
 
-        .fd-list-header { background: #f0f4f7; padding: 10px 15px; font-weight: bold; border-radius: 4px 4px 0 0; border: 1px solid #d1d8dd; border-bottom: none; }
-        .fd-list-container { border: 1px solid #d1d8dd; border-radius: 0 0 4px 4px; background: #fff; min-height: 300px; max-height: 500px; overflow-y: auto; }
-        .fd-list-item { padding: 12px 15px; border-bottom: 1px solid #f1f1f1; display: flex; align-items: center; justify-content: space-between; }
-        .fd-list-item:hover { background: #fafbfc; }
+        .fd-list-header {
+            background: #f8fafc;
+            padding: 12px 18px;
+            font-weight: 700;
+            font-size: 14px;
+            color: #1e293b;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid #e2e8f0;
+            border-bottom: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .fd-list-container {
+            border: 1px solid #e2e8f0;
+            border-radius: 0 0 8px 8px;
+            background: #fff;
+            min-height: 320px;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+        .fd-list-item {
+            padding: 14px 18px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.15s ease;
+        }
+        .fd-list-item:hover { background: #f8fafc; }
         .fd-list-item:last-child { border-bottom: none; }
         
-        .badge-pending { background: #fff5e6; color: #ff9f43; border: 1px solid #ff9f43; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
-        .badge-done { background: #e8f5e9; color: #28a745; border: 1px solid #28a745; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
-        .badge-missed { background: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .badge-pending {
+            background: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-done {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-missed {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
     </style>`).appendTo(wrapper);
 
     // Main Layout Skeleton
-    // CORRECTION: Removed 'page' argument from set_route for custom pages
     $(wrapper).find('.layout-main-section').append(`
         <div id="fd-content" style="padding-top: 10px;">
-            <!-- Omni Search -->
-            <div class="row" style="margin-bottom: 15px;">
-                <div class="col-md-8 col-xs-12" style="position: relative;">
-                    <input type="text" id="fd-omni-search" class="form-control"
-                        placeholder="${__('Search by guest name, phone, room, ID number, or OTA booking code...')}">
-                    <div id="fd-omni-results" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#fff; border:1px solid #d1d8dd; border-radius:0 0 6px 6px; max-height:320px; overflow-y:auto; box-shadow:0 6px 14px rgba(0,0,0,0.1);"></div>
-                </div>
-            </div>
-
-            <!-- Quick Actions Row -->
+            <!-- Omni Search Bar -->
             <div class="row" style="margin-bottom: 20px;">
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('tape-chart')">Tape Chart</a></div>
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('availability-tool')">Availability</a></div>
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('housekeeping-view')">Housekeeping</a></div>
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('List', 'Hotel Reservation')">Reservations</a></div>
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('query-report', 'House List')">House List</a></div>
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('List', 'Hotel Maintenance Request')">Maintenance</a></div>
-                <div class="col-md-2 col-xs-4"><a class="fd-toolbar-btn" onclick="frappe.set_route('housekeeping-mobile')">Housekeeping Mobile</a></div>
+                <div class="col-md-9 col-xs-12" style="position: relative;">
+                    <div style="position: relative;">
+                        <span class="fas fa-search" style="position: absolute; left: 14px; top: 13px; color: #94a3b8; font-size: 14px;"></span>
+                        <input type="text" id="fd-omni-search" class="form-control" style="padding-left: 38px; height: 42px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;"
+                            placeholder="${__('Tìm kiếm thông minh: Tên khách, Số điện thoại, Số phòng, CCCD/Hộ chiếu, Mã đặt phòng OTA...')}">
+                    </div>
+                    <div id="fd-omni-results" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#fff; border:1px solid #cbd5e1; border-radius:0 0 8px 8px; max-height:320px; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.1);"></div>
+                </div>
+                <div class="col-md-3 col-xs-12 text-right">
+                    <button class="btn btn-default btn-sm" id="btn-reset-filters" style="height: 42px; width: 100%; border-radius: 8px; font-weight: 600;">
+                        <i class="fa fa-undo"></i> ${__('Đặt Lại Bộ Lọc')}
+                    </button>
+                </div>
             </div>
 
-            <!-- Stats Row -->
-            <div class="row" style="margin-bottom: 30px;">
-                <div class="col-md-3">
-                    <div class="fd-stat-card">
-                        <div class="fd-stat-label">Arrivals Pending</div>
-                        <div class="fd-stat-number" id="stat-arr-pending" style="color: #ff9f43">0</div>
-                        <small class="text-muted">For selected date</small>
+            <!-- Quick Actions Grid (8 nút phân bổ cân đối tuyệt đối) -->
+            <div class="fd-quick-actions-bar">
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('tape-chart')">
+                    <span class="fd-toolbar-icon fas fa-th"></span>
+                    <span>${__('Sơ Đồ Buồng')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('availability-tool')">
+                    <span class="fd-toolbar-icon fas fa-search"></span>
+                    <span>${__('Tra Cứu Phòng')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('housekeeping-view')">
+                    <span class="fd-toolbar-icon fas fa-broom"></span>
+                    <span>${__('Buồng Phòng')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('List', 'Hotel Reservation')">
+                    <span class="fd-toolbar-icon fas fa-calendar-check"></span>
+                    <span>${__('Đặt Phòng')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('query-report', 'House List')">
+                    <span class="fd-toolbar-icon fas fa-users"></span>
+                    <span>${__('Khách Lưu Trú')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('List', 'Hotel Maintenance Request')">
+                    <span class="fd-toolbar-icon fas fa-tools"></span>
+                    <span>${__('Bảo Trì Phòng')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('guest-360')">
+                    <span class="fd-toolbar-icon fas fa-id-card"></span>
+                    <span>${__('Hồ Sơ Khách 360')}</span>
+                </a>
+                <a class="fd-toolbar-btn" onclick="frappe.set_route('housekeeping-mobile')">
+                    <span class="fd-toolbar-icon fas fa-mobile-alt"></span>
+                    <span>${__('Buồng Di Động')}</span>
+                </a>
+            </div>
+
+            <!-- Stats Row: 4 Thẻ KPI Thông Minh (Click-to-Filter) -->
+            <div class="row" style="margin-bottom: 25px;">
+                <div class="col-md-3 col-sm-6" style="margin-bottom: 12px;">
+                    <div class="fd-stat-card" id="card-arr-pending" title="${__('Bấm để lọc danh sách khách sắp nhận phòng')}">
+                        <div class="fd-stat-card-top">
+                            <span class="fd-stat-label">${__('Khách Sắp Đến')}</span>
+                            <div class="fd-stat-icon-wrap" style="background: #fffbeb; color: #f59e0b;">
+                                <i class="fas fa-plane-arrival"></i>
+                            </div>
+                        </div>
+                        <div class="fd-stat-number" id="stat-arr-pending" style="color: #d97706;">0</div>
+                        <div class="fd-stat-subtext">${__('Chờ Check-in trong ngày')}</div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="fd-stat-card">
-                        <div class="fd-stat-label">Departures Pending</div>
-                        <div class="fd-stat-number" id="stat-dep-pending" style="color: #ef5350">0</div>
-                        <small class="text-muted">For selected date</small>
+                <div class="col-md-3 col-sm-6" style="margin-bottom: 12px;">
+                    <div class="fd-stat-card" id="card-dep-pending" title="${__('Bấm để lọc danh sách khách sắp trả phòng')}">
+                        <div class="fd-stat-card-top">
+                            <span class="fd-stat-label">${__('Khách Sắp Đi')}</span>
+                            <div class="fd-stat-icon-wrap" style="background: #fef2f2; color: #ef4444;">
+                                <i class="fas fa-plane-departure"></i>
+                            </div>
+                        </div>
+                        <div class="fd-stat-number" id="stat-dep-pending" style="color: #dc2626;">0</div>
+                        <div class="fd-stat-subtext">${__('Chờ Check-out trong ngày')}</div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="fd-stat-card">
-                        <div class="fd-stat-label">Rooms In-House</div>
-                        <div class="fd-stat-number" id="stat-occupancy">0</div>
-                        <small class="text-muted" id="stat-occ-pct">0% Occupancy</small>
+                <div class="col-md-3 col-sm-6" style="margin-bottom: 12px;">
+                    <div class="fd-stat-card" id="card-in-house" onclick="frappe.set_route('query-report', 'House List')" title="${__('Bấm để mở báo cáo danh sách khách đang lưu trú')}">
+                        <div class="fd-stat-card-top">
+                            <span class="fd-stat-label">${__('Đang Lưu Trú')}</span>
+                            <div class="fd-stat-icon-wrap" style="background: #eef2ff; color: #6366f1;">
+                                <i class="fas fa-bed"></i>
+                            </div>
+                        </div>
+                        <div class="fd-stat-number" id="stat-occupancy" style="color: #4f46e5;">0</div>
+                        <div class="fd-stat-subtext" id="stat-occ-pct">0% ${__('Công suất')}</div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="fd-stat-card">
-                        <div class="fd-stat-label">Available Rooms</div>
-                        <div class="fd-stat-number" id="stat-available" style="color: #28a745">0</div>
-                        <small class="text-muted">Net Availability</small>
+                <div class="col-md-3 col-sm-6" style="margin-bottom: 12px;">
+                    <div class="fd-stat-card" id="card-available" onclick="frappe.set_route('availability-tool')" title="${__('Bấm để mở công cụ tra cứu buồng phòng chi tiết')}">
+                        <div class="fd-stat-card-top">
+                            <span class="fd-stat-label">${__('Phòng Khả Dụng')}</span>
+                            <div class="fd-stat-icon-wrap" style="background: #ecfdf5; color: #10b981;">
+                                <i class="fas fa-door-open"></i>
+                            </div>
+                        </div>
+                        <div class="fd-stat-number" id="stat-available" style="color: #059669;">0</div>
+                        <div class="fd-stat-subtext">${__('Sẵn sàng đón khách')}</div>
                     </div>
                 </div>
             </div>
@@ -161,28 +319,31 @@ frappe.pages['front-desk-console'].on_page_load = function (wrapper) {
             <!-- Lists Row -->
             <div class="row">
                 <!-- Arrivals Column -->
-                <div class="col-md-6">
+                <div class="col-md-6" style="margin-bottom: 20px;">
                     <div class="fd-list-header">
-                        <span class="fas fa-plane-arrival" style="color:#5e64ff; margin-right:5px;"></span> Arrivals
+                        <span><i class="fas fa-plane-arrival" style="color:#d97706; margin-right:8px;"></i>${__('Danh Sách Khách Đến (Arrivals)')}</span>
+                        <span id="arrivals-count-badge" class="badge" style="background:#f1f5f9; color:#475569; font-size:11px;">0</span>
                     </div>
                     <div id="list-arrivals" class="fd-list-container">
-                        <div class="text-center p-3 text-muted">Loading...</div>
+                        <div class="text-center p-4 text-muted">${__('Đang tải dữ liệu...')}</div>
                     </div>
                 </div>
 
                 <!-- Departures Column -->
-                <div class="col-md-6">
+                <div class="col-md-6" style="margin-bottom: 20px;">
                     <div class="fd-list-header">
-                        <span class="fas fa-plane-departure" style="color:#ef5350; margin-right:5px;"></span> Departures
+                        <span><i class="fas fa-plane-departure" style="color:#dc2626; margin-right:8px;"></i>${__('Danh Sách Khách Đi (Departures)')}</span>
+                        <span id="departures-count-badge" class="badge" style="background:#f1f5f9; color:#475569; font-size:11px;">0</span>
                     </div>
                     <div id="list-departures" class="fd-list-container">
-                        <div class="text-center p-3 text-muted">Loading...</div>
+                        <div class="text-center p-4 text-muted">${__('Đang tải dữ liệu...')}</div>
                     </div>
                 </div>
             </div>
         </div>
     `);
 
+    setup_kpi_filters();
     render_console(wrapper, page);
     setup_omni_search();
 }
@@ -366,34 +527,103 @@ function open_merge_folio_dialog() {
     dialog.show();
 }
 
+var _fd_cache = { arrivals: [], departures: [], stats: {} };
+var _active_kpi_filter = null; // null | 'arr_pending' | 'dep_pending'
+
+function setup_kpi_filters() {
+    $('#card-arr-pending').off('click').on('click', function () {
+        if (_active_kpi_filter === 'arr_pending') {
+            reset_kpi_filters();
+        } else {
+            _active_kpi_filter = 'arr_pending';
+            $('.fd-stat-card').removeClass('active-filter');
+            $(this).addClass('active-filter');
+            apply_kpi_filters();
+            $('html, body').animate({
+                scrollTop: $('#list-arrivals').offset().top - 120
+            }, 300);
+        }
+    });
+
+    $('#card-dep-pending').off('click').on('click', function () {
+        if (_active_kpi_filter === 'dep_pending') {
+            reset_kpi_filters();
+        } else {
+            _active_kpi_filter = 'dep_pending';
+            $('.fd-stat-card').removeClass('active-filter');
+            $(this).addClass('active-filter');
+            apply_kpi_filters();
+            $('html, body').animate({
+                scrollTop: $('#list-departures').offset().top - 120
+            }, 300);
+        }
+    });
+
+    $('#btn-reset-filters').off('click').on('click', function () {
+        reset_kpi_filters();
+    });
+}
+
+function reset_kpi_filters() {
+    _active_kpi_filter = null;
+    $('.fd-stat-card').removeClass('active-filter');
+    render_arrivals(_fd_cache.arrivals);
+    render_departures(_fd_cache.departures);
+}
+
+function apply_kpi_filters() {
+    if (_active_kpi_filter === 'arr_pending') {
+        let filtered = _fd_cache.arrivals.filter(d => d.status === 'Reserved');
+        render_arrivals(filtered, true);
+        render_departures(_fd_cache.departures);
+    } else if (_active_kpi_filter === 'dep_pending') {
+        let filtered = _fd_cache.departures.filter(d => d.status === 'Checked In');
+        render_departures(filtered, true);
+        render_arrivals(_fd_cache.arrivals);
+    }
+}
+
 function render_console(wrapper, page) {
     let selected_date = page.fields_dict.console_date.get_value();
 
     frappe.call({
         method: "hospitality_core.hospitality_core.page.front_desk_console.front_desk_console.get_console_data",
         args: { target_date: selected_date },
+        freeze: true,
+        freeze_message: __('Đang làm mới bàn lễ tân...'),
         callback: function (r) {
             if (r.message) {
-                update_stats(r.message.stats);
-                render_arrivals(r.message.arrivals);
-                render_departures(r.message.departures);
+                _fd_cache.stats = r.message.stats || {};
+                _fd_cache.arrivals = r.message.arrivals || [];
+                _fd_cache.departures = r.message.departures || [];
+
+                update_stats(_fd_cache.stats);
+                if (_active_kpi_filter) {
+                    apply_kpi_filters();
+                } else {
+                    render_arrivals(_fd_cache.arrivals);
+                    render_departures(_fd_cache.departures);
+                }
             }
         }
     });
 }
 
 function update_stats(stats) {
-    $('#stat-arr-pending').text(stats.arrivals_pending);
-    $('#stat-dep-pending').text(stats.departures_pending);
-    $('#stat-occupancy').text(stats.in_house);
-    $('#stat-occ-pct').text(stats.occupancy_pct + '% Occupancy');
-    $('#stat-available').text(stats.available);
+    $('#stat-arr-pending').text(stats.arrivals_pending || 0);
+    $('#stat-dep-pending').text(stats.departures_pending || 0);
+    $('#stat-occupancy').text(stats.in_house || 0);
+    $('#stat-occ-pct').text((stats.occupancy_pct || 0) + '% ' + __('Công suất'));
+    $('#stat-available').text(stats.available || 0);
 }
 
-function render_arrivals(data) {
+function render_arrivals(data, is_filtered = false) {
     let html = '';
+    let count_text = is_filtered ? `${data.length} / ${_fd_cache.arrivals.length} ${__('chờ')}` : `${data.length}`;
+    $('#arrivals-count-badge').text(count_text);
+
     if (data.length === 0) {
-        html = '<div class="text-center p-4 text-muted">No arrivals found for this date.</div>';
+        html = `<div class="text-center p-4 text-muted">${is_filtered ? __('Không có khách nào đang chờ check-in.') : __('Không có khách đến trong ngày đã chọn.')}</div>`;
     } else {
         data.forEach(d => {
             let is_pending = d.status === 'Reserved';
@@ -401,26 +631,26 @@ function render_arrivals(data) {
             let badge = '';
 
             if (is_arrived) {
-                badge = '<span class="badge-done"><i class="fa fa-check"></i> Arrived</span>';
+                badge = `<span class="badge-done"><i class="fa fa-check"></i> ${__('Đã Đến')}</span>`;
             } else if (is_pending) {
                 let is_past = frappe.datetime.get_diff(frappe.datetime.now_date(), d.arrival_date) > 0;
-                if (is_past) badge = '<span class="badge-missed">No Show</span>';
-                else badge = '<span class="badge-pending">Pending Check-in</span>';
+                if (is_past) badge = `<span class="badge-missed"><i class="fa fa-exclamation-triangle"></i> ${__('Vắng Mặt (No Show)')}</span>`;
+                else badge = `<span class="badge-pending"><i class="fa fa-clock"></i> ${__('Chờ Check-in')}</span>`;
             }
 
             html += `
             <div class="fd-list-item">
                 <div style="flex:1;">
-                    <div style="font-weight:600; font-size:14px;">
-                        <a href="#" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || '')}</a>
+                    <div style="font-weight:700; font-size:14px; margin-bottom: 2px;">
+                        <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
                     </div>
-                    <div style="font-size:12px; color:#6c757d;">
-                        <span class="fas fa-bed"></span> ${frappe.utils.escape_html(d.room || 'Unassigned')} &middot; ${frappe.utils.escape_html(d.room_type || '')}
+                    <div style="font-size:12px; color:#64748b;">
+                        <span class="fas fa-bed" style="color:#3b82f6;"></span> <b>${frappe.utils.escape_html(d.room || __('Chưa xếp phòng'))}</b> &middot; <span class="text-muted">${frappe.utils.escape_html(d.room_type || '')}</span>
                     </div>
                 </div>
                 <div class="text-right">
-                    <div style="margin-bottom:4px;">${badge}</div>
-                    ${d.status === 'Reserved' ? `<button class="btn btn-xs btn-primary" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">Open</button>` : ''}
+                    <div style="margin-bottom:6px;">${badge}</div>
+                    ${d.status === 'Reserved' ? `<button class="btn btn-xs btn-primary" style="font-weight:600; border-radius:4px;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')"><i class="fa fa-sign-in-alt"></i> ${__('Check-in')}</button>` : ''}
                 </div>
             </div>`;
         });
@@ -428,10 +658,13 @@ function render_arrivals(data) {
     $('#list-arrivals').html(html);
 }
 
-function render_departures(data) {
+function render_departures(data, is_filtered = false) {
     let html = '';
+    let count_text = is_filtered ? `${data.length} / ${_fd_cache.departures.length} ${__('chờ')}` : `${data.length}`;
+    $('#departures-count-badge').text(count_text);
+
     if (data.length === 0) {
-        html = '<div class="text-center p-4 text-muted">No departures found for this date.</div>';
+        html = `<div class="text-center p-4 text-muted">${is_filtered ? __('Không có khách nào đang chờ check-out.') : __('Không có khách đi trong ngày đã chọn.')}</div>`;
     } else {
         data.forEach(d => {
             let is_left = d.status === 'Checked Out';
@@ -439,26 +672,26 @@ function render_departures(data) {
             let badge = '';
 
             if (is_left) {
-                badge = '<span class="badge-done"><i class="fa fa-check"></i> Checked Out</span>';
+                badge = `<span class="badge-done"><i class="fa fa-check"></i> ${__('Đã Trả Phòng')}</span>`;
             } else if (is_pending) {
                 let is_past = frappe.datetime.get_diff(frappe.datetime.now_date(), d.departure_date) > 0;
-                if (is_past) badge = '<span class="badge-missed">Overstay</span>';
-                else badge = '<span class="badge-pending">Expected Departure</span>';
+                if (is_past) badge = `<span class="badge-missed"><i class="fa fa-exclamation-circle"></i> ${__('Quá Giờ (Overstay)')}</span>`;
+                else badge = `<span class="badge-pending"><i class="fa fa-clock"></i> ${__('Chờ Check-out')}</span>`;
             }
 
             html += `
             <div class="fd-list-item">
                 <div style="flex:1;">
-                    <div style="font-weight:600; font-size:14px;">
-                        <a href="#" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || '')}</a>
+                    <div style="font-weight:700; font-size:14px; margin-bottom: 2px;">
+                        <a href="#" style="color:#1e293b;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">${frappe.utils.escape_html(d.guest_name || __('Khách Vãng Lai'))}</a>
                     </div>
-                    <div style="font-size:12px; color:#6c757d;">
-                        <span class="fas fa-door-open"></span> ${frappe.utils.escape_html(d.room || '')} &middot; ${frappe.utils.escape_html(d.room_type || '')}
+                    <div style="font-size:12px; color:#64748b;">
+                        <span class="fas fa-door-open" style="color:#ef4444;"></span> <b>${frappe.utils.escape_html(d.room || '')}</b> &middot; <span class="text-muted">${frappe.utils.escape_html(d.room_type || '')}</span>
                     </div>
                 </div>
                 <div class="text-right">
-                    <div style="margin-bottom:4px;">${badge}</div>
-                    ${d.status === 'Checked In' ? `<button class="btn btn-xs btn-danger" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')">Checkout</button>` : ''}
+                    <div style="margin-bottom:6px;">${badge}</div>
+                    ${d.status === 'Checked In' ? `<button class="btn btn-xs btn-danger" style="font-weight:600; border-radius:4px;" onclick="frappe.set_route('Form', 'Hotel Reservation', '${d.name}')"><i class="fa fa-sign-out-alt"></i> ${__('Check-out')}</button>` : ''}
                 </div>
             </div>`;
         });
