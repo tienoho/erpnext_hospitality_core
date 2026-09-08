@@ -11,54 +11,42 @@ frappe.ui.form.on('Guest Folio', {
         frm.set_df_property('is_company_master', 'read_only', is_saved ? 1 : 0);
         frm.set_df_property('company', 'read_only', is_saved ? 1 : 0);
 
-        // Button: Record Payment (Guest Folio only)
-        if (!frm.doc.is_company_master && (frm.doc.status === 'Open' || frm.doc.status === 'Closed')) {
-            frm.add_custom_button(__('Record Payment'), function () {
-                make_payment_entry(frm);
-            }, 'Actions');
-        }
-
-        // Button: Quét VietQR 1-Chạm
+        // === NHÓM 1: THANH TOÁN & THU NGÂN ===
+        // Nút VietQR 1-Chạm: Ưu tiên hiển thị nổi bật trực tiếp khi có dư nợ
         if (!frm.doc.is_company_master && frm.doc.status === 'Open' && frm.doc.outstanding_balance > 0) {
             frm.add_custom_button(__('⚡ Quét VietQR'), function () {
                 show_vietqr_dialog(frm);
-            }, 'Actions');
+            });
         }
 
-        // Button: Tách Bill Đoàn Lữ Hành (Preview & Confirm)
-        if (frm.doc.status === 'Open') {
-            frm.add_custom_button(__('🔀 Tách Bill Đoàn Tour'), function () {
-                show_split_tour_dialog(frm);
-            }, 'Actions');
+        if (!frm.doc.is_company_master && (frm.doc.status === 'Open' || frm.doc.status === 'Closed')) {
+            frm.add_custom_button(__('Ghi Nhận Thanh Toán'), function () {
+                make_payment_entry(frm);
+            }, __('Thanh Toán'));
         }
 
-        // Button: Issue Refund
         let can_issue_refund = true;
-
         if (!frm.doc.is_company_master && (frm.doc.status === 'Open' || frm.doc.status === 'Closed') && frm.doc.outstanding_balance < -0.01 && can_issue_refund) {
-            frm.add_custom_button(__('Issue Refund'), function () {
+            frm.add_custom_button(__('Hoàn Tiền Cho Khách'), function () {
                 issue_refund_dialog(frm);
-            }, 'Actions');
+            }, __('Thanh Toán'));
         }
 
-        // Company Folio Buttons
         if (frm.doc.is_company_master && frm.doc.status === 'Open') {
-            // Record Payment to Company: offsets city ledger (credit side)
-            frm.add_custom_button(__('Record Payment to Company'), function () {
+            frm.add_custom_button(__('Thanh Toán Cho Công Ty'), function () {
                 make_company_payment_entry(frm);
-            }, 'Actions');
+            }, __('Thanh Toán'));
 
-            // Record Transaction: manually post a debit to the company folio
-            frm.add_custom_button(__('Record Transaction'), function () {
+            frm.add_custom_button(__('Ghi Nhận Giao Dịch Ghi Nợ'), function () {
                 make_company_debit_entry(frm);
-            }, 'Actions');
+            }, __('Thanh Toán'));
         }
 
-        // Button: Create Invoice
+        // === NHÓM 2: HÓA ĐƠN & THUẾ ===
         if (frm.doc.status !== 'Provisional') {
-            frm.add_custom_button(__('Create Invoice'), function () {
+            frm.add_custom_button(__('Tạo Hóa Đơn Bán Hàng (Invoice)'), function () {
                 frappe.confirm(
-                    'Create Sales Invoice for all unbilled items?',
+                    __('Tạo Sales Invoice cho toàn bộ các dịch vụ chưa xuất hóa đơn trong Folio?'),
                     function () {
                         frm.call({
                             method: 'hospitality_core.hospitality_core.api.invoicing.create_invoice_from_folio',
@@ -66,9 +54,10 @@ frappe.ui.form.on('Guest Folio', {
                                 folio_name: frm.doc.name
                             },
                             freeze: true,
+                            freeze_message: __('Đang tạo Sales Invoice...'),
                             callback: function (r) {
                                 if (!r.exc && r.message) {
-                                    frappe.msgprint('Invoice Created: ' + r.message);
+                                    frappe.msgprint(__('Đã tạo Hóa đơn: {0}', [r.message]));
                                     frappe.set_route('Form', 'Sales Invoice', r.message);
                                     frm.reload_doc();
                                 }
@@ -76,12 +65,11 @@ frappe.ui.form.on('Guest Folio', {
                         });
                     }
                 );
-            }, 'Actions');
+            }, __('Hóa Đơn'));
         }
 
-        // Button: Issue E-Invoice (Thông tư 78 / Nghị định 123)
         if (['Open', 'Closed'].includes(frm.doc.status)) {
-            frm.add_custom_button(__('Phát Hành Hóa Đơn Điện Tử'), function () {
+            frm.add_custom_button(__('Phát Hành HĐĐT (NĐ 123)'), function () {
                 frappe.confirm(
                     __('Phát hành Hóa đơn điện tử có mã của cơ quan Thuế cho Folio <b>{0}</b>?', [frm.doc.name]),
                     function () {
@@ -112,21 +100,27 @@ frappe.ui.form.on('Guest Folio', {
                         });
                     }
                 );
-            }, 'Actions');
+            }, __('Hóa Đơn'));
         }
 
-        // Button: Move Transactions (Move Bill)
+        // === NHÓM 3: ĐIỀU CHUYỂN & TÁCH GỘP ===
+        if (frm.doc.status === 'Open') {
+            frm.add_custom_button(__('🔀 Tách Bill Đoàn Tour'), function () {
+                show_split_tour_dialog(frm);
+            }, __('Điều Chuyển'));
+        }
+
         let can_manage_folio = frappe.user_roles.includes('Frontdesk Supervisor') ||
             frappe.session.user === 'Administrator';
 
         if (frm.doc.status === 'Open' && can_manage_folio) {
-            frm.add_custom_button(__('Move Transactions'), function () {
+            frm.add_custom_button(__('Chuyển Giao Dịch (Move Bill)'), function () {
                 move_transactions_dialog(frm);
-            }, 'Actions');
+            }, __('Điều Chuyển'));
 
-            frm.add_custom_button(__('Tách Giao Dịch (Split Bill)'), function () {
+            frm.add_custom_button(__('Tách Giao Dịch (Split Amount)'), function () {
                 split_transaction_dialog(frm);
-            }, 'Actions');
+            }, __('Điều Chuyển'));
         }
 
         // Button: Void Transaction

@@ -29,6 +29,7 @@ frappe.ui.form.on('Hotel Reservation', {
         // xong mới thấy lỗi. Gọi lại ở refresh (không chỉ ở sự kiện guest)
         // để hiển thị đúng cả khi mở lại một đặt phòng đã có sẵn khách.
         check_guest_blacklist_warning(frm);
+        render_reservation_stepper(frm);
 
         // Keep room type aligned with the selected room on load and refresh.
         sync_room_type_from_room(frm);
@@ -361,8 +362,8 @@ frappe.ui.form.on('Hotel Reservation', {
                                 d.show();
                             } else {
                                 frappe.warn(
-                                    'Confirm Checkout',
-                                    `Are you sure you want to Check Out <b>${frm.doc.guest}</b> from Room <b>${frm.doc.room}</b>?<br><br>This will close the folio and mark the room as Available.`,
+                                    __('Xác Nhận Trả Phòng'),
+                                    __('Bạn có chắc chắn muốn Check Out cho khách <b>{0}</b> khỏi Phòng <b>{1}</b>?<br><br>Hành động này sẽ chốt Folio và chuyển phòng sang trạng thái Sẵn Sàng (hoặc Cần Dọn).', [frm.doc.guest, frm.doc.room]),
                                     function () {
                                         frm.call({
                                             method: 'check_out_guest',
@@ -370,7 +371,7 @@ frappe.ui.form.on('Hotel Reservation', {
                                             freeze: true,
                                             callback: function (r) {
                                                 if (!r.exc) {
-                                                    frappe.msgprint('Guest Checked Out Successfully');
+                                                    frappe.msgprint(__('Khách đã trả phòng thành công.'));
                                                     frm.reload_doc();
                                                 }
                                             }
@@ -392,7 +393,7 @@ frappe.ui.form.on('Hotel Reservation', {
             if (['Reserved', 'Checked In'].includes(frm.doc.status) && is_supervisor) {
                 frm.add_custom_button(__('Cancel Reservation'), function () {
                     frappe.confirm(
-                        'Are you sure you want to Cancel this Reservation?',
+                        __('Bạn có chắc chắn muốn HỦY Đặt Phòng này không?'),
                         function () {
                             frm.call({
                                 method: 'cancel_reservation',
@@ -402,7 +403,7 @@ frappe.ui.form.on('Hotel Reservation', {
                                 freeze: true,
                                 callback: function (r) {
                                     if (!r.exc) {
-                                        frappe.msgprint('Reservation Cancelled.');
+                                        frappe.msgprint(__('Đã hủy đặt phòng thành công.'));
                                         frm.reload_doc();
                                     }
                                 }
@@ -431,10 +432,10 @@ frappe.ui.form.on('Hotel Reservation', {
             frm.add_custom_button(__('Move Room'), function () {
 
                 var d = new frappe.ui.Dialog({
-                    title: 'Move Guest to New Room',
+                    title: __('Chuyển Phòng Cho Khách'),
                     fields: [
                         {
-                            label: 'New Room',
+                            label: __('Phòng Mới'),
                             fieldname: 'new_room',
                             fieldtype: 'Link',
                             options: 'Hotel Room',
@@ -458,12 +459,12 @@ frappe.ui.form.on('Hotel Reservation', {
                             },
                             reqd: 1
                         },
-                        {fieldname: 'new_room_type', fieldtype: 'Link', options: 'Hotel Room Type', label: 'Hạng phòng mới', read_only: 1},
-                        {fieldname: 'new_rate_plan', fieldtype: 'Link', options: 'Room Rate Plan', label: 'Bảng giá sau chuyển phòng',
-                            description: 'Đổi hạng phòng mà không chọn bảng giá: dùng giá mặc định của hạng mới.',
+                        {fieldname: 'new_room_type', fieldtype: 'Link', options: 'Hotel Room Type', label: __('Hạng phòng mới'), read_only: 1},
+                        {fieldname: 'new_rate_plan', fieldtype: 'Link', options: 'Room Rate Plan', label: __('Bảng giá sau chuyển phòng'),
+                            description: __('Đổi hạng phòng mà không chọn bảng giá: dùng giá mặc định của hạng mới.'),
                             get_query: () => ({filters: {room_type: d.get_value('new_room_type'), active: 1}})}
                     ],
-                    primary_action_label: 'Move',
+                    primary_action_label: __('Chuyển Phòng'),
                     primary_action: function (values) {
                         // Disable immediately to prevent a double-click firing two
                         // concurrent process_room_move calls before the first resolves.
@@ -783,4 +784,92 @@ function validate_room_availability(frm) {
             }
         });
     }
+}
+
+function render_reservation_stepper(frm) {
+    if (!frm.dashboard) return;
+
+    const status = frm.doc.status || 'Reserved';
+
+    if (status === 'Cancelled') {
+        frm.dashboard.set_headline(`
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                <div style="font-size: 22px;">🚫</div>
+                <div>
+                    <div style="font-weight: 700; color: #991b1b; font-size: 14px;">${__('ĐẶT PHÒNG ĐÃ BỊ HỦY (CANCELLED)')}</div>
+                    <div style="font-size: 12px; color: #b91c1c;">${__('Đặt phòng này đã hủy bỏ. Toàn bộ tiền cọc hoặc chính sách hoàn/hủy cần được xử lý trên Guest Folio tương ứng.')}</div>
+                </div>
+            </div>
+        `);
+        return;
+    }
+
+    if (status === 'No Show') {
+        frm.dashboard.set_headline(`
+            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                <div style="font-size: 22px;">⚠️</div>
+                <div>
+                    <div style="font-weight: 700; color: #92400e; font-size: 14px;">${__('KHÁCH KHÔNG ĐẾN (NO SHOW)')}</div>
+                    <div style="font-size: 12px; color: #b45309;">${__('Khách đã không đến nhận phòng theo lịch trình đã đặt.')}</div>
+                </div>
+            </div>
+        `);
+        return;
+    }
+
+    // Standard 3-step Lifecycle: Reserved -> Checked In -> Checked Out
+    const steps = [
+        {
+            key: 'Reserved',
+            label: __('1. Đặt Trước'),
+            sub: frm.doc.arrival_date ? frappe.datetime.str_to_user(frm.doc.arrival_date) : __('Chờ nhận phòng')
+        },
+        {
+            key: 'Checked In',
+            label: __('2. Đã Nhận Phòng'),
+            sub: frm.doc.room ? __('Phòng: {0}', [frm.doc.room]) : __('Đang lưu trú')
+        },
+        {
+            key: 'Checked Out',
+            label: __('3. Đã Trả Phòng'),
+            sub: frm.doc.departure_date ? frappe.datetime.str_to_user(frm.doc.departure_date) : __('Hoàn tất')
+        }
+    ];
+
+    let currentIdx = 0;
+    if (status === 'Checked In') currentIdx = 1;
+    else if (status === 'Checked Out') currentIdx = 2;
+
+    let stepsHtml = steps.map((s, idx) => {
+        let isDone = idx < currentIdx || (status === 'Checked Out' && idx === 2);
+        let isCurrent = idx === currentIdx && status !== 'Checked Out';
+
+        let circleBg = isDone ? '#10b981' : (isCurrent ? '#2563eb' : 'var(--bg-light-gray, #e5e7eb)');
+        let circleColor = isDone || isCurrent ? '#ffffff' : '#6b7280';
+        let circleContent = isDone ? '<i class="fa fa-check"></i>' : (idx + 1);
+        let titleColor = isCurrent ? '#1d4ed8' : (isDone ? '#065f46' : 'var(--text-muted, #6b7280)');
+        let fontWeight = isCurrent || isDone ? '700' : '500';
+
+        return `
+            <div style="flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: ${circleBg}; color: ${circleColor}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; box-shadow: ${isCurrent ? '0 0 0 4px rgba(37,99,235,0.2)' : 'none'};">
+                    ${circleContent}
+                </div>
+                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    <div style="font-size: 13px; font-weight: ${fontWeight}; color: ${titleColor}; line-height: 1.2;">${s.label}</div>
+                    <div style="font-size: 11px; color: #6b7280; line-height: 1.2; margin-top: 2px;">${s.sub}</div>
+                </div>
+            </div>
+        `;
+    }).join(`
+        <div style="width: 36px; height: 2px; background: var(--border-color, #e5e7eb); margin: 0 4px; flex-shrink: 0;"></div>
+    `);
+
+    frm.dashboard.set_headline(`
+        <div class="reservation-stepper-widget" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                ${stepsHtml}
+            </div>
+        </div>
+    `);
 }

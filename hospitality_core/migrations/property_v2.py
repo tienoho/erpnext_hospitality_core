@@ -17,6 +17,19 @@ def execute():
     # tồn tại chưa) thay vì đợi ai đó nhớ chạy tay.
     from hospitality_core.setup_einvoice_fields import run as setup_einvoice_fields
     setup_einvoice_fields()
+    # TRƯỚC ĐÂY: toàn bộ DocType "Folio Ledger Adjustment" (không chỉ 1 field)
+    # chỉ được tạo bởi create_ledger_adjustment_doctype.py — script KHÔNG hề
+    # được hooks.py/setup.py gọi ở đâu cả. Trong khi đó hooks.py đã wire sẵn
+    # doc_events["Folio Ledger Adjustment"] (on_submit/on_cancel →
+    # api/folio.py's process_ledger_adjustment/cancel_ledger_adjustment) và
+    # api/folio.py chủ động tạo Folio Transaction tham chiếu doctype này làm
+    # reference_doctype. Trên site cài mới/staging/khôi phục thảm họa, cả
+    # DOCTYPE không tồn tại — tính năng điều chỉnh sổ cái thủ công sẽ crash
+    # "DocType Folio Ledger Adjustment not found" ngay lần đầu dùng, không
+    # phải chỉ mất field. Hàm execute() đã tự kiểm tra tồn tại (idempotent),
+    # gọi lại an toàn mỗi lần migrate.
+    from hospitality_core.create_ledger_adjustment_doctype import execute as create_ledger_adjustment_doctype
+    create_ledger_adjustment_doctype()
     common = [dict(fieldname='hospitality_property',label='Hospitality Property',fieldtype='Link',
                    options='Hospitality Property',insert_after='company'),
               dict(fieldname='hospitality_folio',label='Guest Folio',fieldtype='Link',options='Guest Folio'),
