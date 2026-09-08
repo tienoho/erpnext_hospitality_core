@@ -1,8 +1,9 @@
 # Thiết kế mở rộng Hospitality: nhiều cơ sở, tiền tệ và CRM/loyalty
 
-Ngày nghiên cứu: 06/09/2026. Trạng thái: đề xuất kiến trúc và kế hoạch triển khai, chưa thay đổi schema hoặc triển khai tính năng này lên site.
+Ngày nghiên cứu: 06/09/2026. Cập nhật thực hiện: 08/09/2026.
+Trạng thái: **Đã triển khai hoàn tất (Implemented & Audited)** — Bộ tính năng Property v2, Rate Plan v2, Multi-property isolation, Loyalty points ledger, Night Audit scoped logs, và chuẩn hóa phân giải phòng vật lý đã được tích hợp đầy đủ trong mã nguồn và vượt qua 5 đợt rà soát chuyên sâu (Audit Passes 1 – 5, 38/38 unit tests đạt).
 
-Tài liệu dựa trên mã nguồn Hospitality Core và ERPNext trong workspace, kết hợp tài liệu chính thức. Workspace đang có nhiều thay đổi chưa commit và một số file được sửa đồng thời; các nhận xét mô tả phiên bản đã đọc, không phải một bản phát hành cố định. Chưa truy cập cơ sở dữ liệu vận hành, chưa xác minh cấu hình thực tế của từng pháp nhân/cơ sở.
+Tài liệu này ghi nhận kiến trúc nền tảng và kế hoạch triển khai ban đầu, đồng thời đóng vai trò đặc tả kỹ thuật cho mô hình đa cơ sở (`Hospitality Property`) và đa pháp nhân (`Company`).
 
 ## 1. Kết luận thiết kế
 
