@@ -136,11 +136,24 @@ function load_room_board() {
     });
 }
 
+function trigger_haptic(pattern = 50) {
+    if (window.navigator && window.navigator.vibrate) {
+        try {
+            window.navigator.vibrate(pattern);
+        } catch (e) {
+            // Ignore if vibration API is not allowed or unsupported
+        }
+    }
+}
+
 window.hkm_set_status = function (room, status) {
     frappe.call({
         method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.update_room_status',
         args: { room: room, status: status },
-        callback: function () {
+        callback: function (r) {
+            if (!r || !r.exc) {
+                trigger_haptic(50);
+            }
             load_room_board();
         }
     });
@@ -180,6 +193,7 @@ function setup_minibar_tab() {
             freeze: true,
             callback: function (r) {
                 if (!r.exc) {
+                    trigger_haptic(50);
                     frappe.show_alert({ message: __('Minibar consumption posted to folio.'), indicator: 'green' });
                     $('#hkm-mb-items').empty();
                     add_row();
@@ -201,6 +215,7 @@ function setup_lostfound_tab() {
             freeze: true,
             callback: function (r) {
                 if (!r.exc) {
+                    trigger_haptic(50);
                     frappe.show_alert({ message: __('Lost & Found report created: {0}', [r.message]), indicator: 'green' });
                     $('#hkm-lf-item').val('');
                     $('#hkm-lf-location').val('');
@@ -236,6 +251,8 @@ function setup_maintenance_tab() {
             freeze: true,
             callback: function (r) {
                 if (!r.exc) {
+                    trigger_haptic(50);
+                    frappe.show_alert({ message: __('Maintenance issue reported successfully.'), indicator: 'green' });
                     $('#hkm-mnt-room').val('');
                     $('#hkm-mnt-desc').val('');
                     $('#hkm-mnt-photo-preview').empty();
