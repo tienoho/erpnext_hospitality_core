@@ -26,6 +26,8 @@ def setup_composite_item_fields():
 			}
 		],
 		"Stock Entry": [
+			{"fieldname": "custom_source_invoice_item", "label": "Source Invoice Item",
+			 "fieldtype": "Data", "read_only": 1, "no_copy": 1, "module": "Hospitality Core"},
 			{
 				"fieldname": "custom_composite_item",
 				"label": "Composite Item",

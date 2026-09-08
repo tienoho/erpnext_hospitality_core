@@ -23,6 +23,7 @@ class GuestFolio(Document):
         # Child table lưu qua parent không tự chạy validate() của controller con.
         for row in self.transactions or []:
             row.validate_pricing_evidence()
+            row.validate_inventory_source()
         if not self.is_new():
             protected = frappe.get_all('Folio Transaction', filters={'parent': self.name},
                 fields=['name', 'pricing_details', 'pricing_origin'])

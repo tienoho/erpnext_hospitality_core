@@ -28,6 +28,11 @@ def process_composite_items_in_invoice(doc, method=None):
 
 	# Determine if this is a cancellation
 	is_cancel = doc.docstatus == 2
+	if is_cancel:
+		# Hoàn chứng từ đã tạo, bất kể Item Master đã thay đổi sau lần bán.
+		for item in doc.items:
+			reverse_ingredient_consumption(doc, item)
+		return
 	
 	# Get composite items from invoice
 	composite_items = []
@@ -66,10 +71,11 @@ def process_composite_items_in_invoice(doc, method=None):
 				# Create consumption entry
 				create_ingredient_consumption_entry(
 					item_code=item.item_code,
-					qty=item.qty,
+					qty=item.stock_qty,
 					warehouse=item.warehouse,
 					invoice_ref=doc.name,
 					invoice_type=doc.doctype,
+					invoice_item=item.name,
 					company=doc.company,
 					posting_date=doc.posting_date,
 					posting_time=doc.posting_time
@@ -100,7 +106,7 @@ def is_consolidated_pos_sales_invoice(doc):
 
 
 def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref,
-										 invoice_type, company=None, posting_date=None, posting_time=None):
+										 invoice_type, company=None, posting_date=None, posting_time=None, invoice_item=None):
 	"""
 	Create Stock Entry for consuming ingredients based on BOM.
 
@@ -117,18 +123,17 @@ def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref,
 	Returns:
 		Stock Entry document
 	"""
-	# TRƯỚC ĐÂY: không có guard nào chống chạy trùng — nếu hook on_submit vô
-	# tình chạy 2 lần cho cùng hóa đơn/dòng item (retry job nền, hoặc code
-	# khác vô tình gọi lại doc.run_method("on_submit")), nguyên liệu bị trừ
-	# kho 2 LẦN cho 1 lần bán thật, không có lỗi/cảnh báo nào. Kiểm tra đã có
-	# Stock Entry hợp lệ (chưa hủy) cho đúng (invoice_ref, item_code) này
-	# chưa trước khi tạo mới — reverse_ingredient_consumption() đã dùng đúng
-	# 2 field này để tìm & hủy, nên dùng lại y hệt filter ở đây cho nhất quán.
-	existing = frappe.get_all("Stock Entry", filters={
-		"custom_source_invoice": invoice_ref,
-		"custom_composite_item": item_code,
-		"docstatus": 1
-	}, pluck="name")
+	if invoice_type not in ('Sales Invoice', 'POS Invoice') or not invoice_item:
+		frappe.throw(_('Cần hóa đơn và mã dòng nguồn để xuất nguyên liệu.'))
+	frappe.db.sql(f'SELECT name FROM `tab{invoice_type}` WHERE name=%s FOR UPDATE', invoice_ref)
+	# Locking read tránh snapshot cũ khi request khác vừa hoàn tất.
+	existing = frappe.db.sql('''SELECT name, custom_source_invoice_item FROM `tabStock Entry`
+		WHERE custom_source_invoice=%s AND custom_invoice_type=%s
+		AND custom_composite_item=%s AND docstatus=1 FOR UPDATE''',
+		(invoice_ref, invoice_type, item_code), as_dict=True)
+	if any(not row.custom_source_invoice_item for row in existing):
+		frappe.throw(_('Phiếu xuất lịch sử chưa có mã dòng nguồn; cần đối soát trước khi chạy lại.'))
+	existing = [row.name for row in existing if row.custom_source_invoice_item == invoice_item]
 	if existing:
 		return frappe.get_doc("Stock Entry", existing[0])
 
@@ -169,6 +174,7 @@ def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref,
 		stock_entry.purpose = "Material Consumption for Manufacture"
 	
 	if posting_date:
+		stock_entry.set_posting_time = 1
 		stock_entry.posting_date = posting_date
 	if posting_time:
 		stock_entry.posting_time = posting_time
@@ -177,6 +183,7 @@ def create_ingredient_consumption_entry(item_code, qty, warehouse, invoice_ref,
 	stock_entry.custom_composite_item = item_code
 	stock_entry.custom_source_invoice = invoice_ref
 	stock_entry.custom_invoice_type = invoice_type
+	stock_entry.custom_source_invoice_item = invoice_item
 	
 	# Add ingredients as items
 	for ingredient in ingredients:
@@ -215,6 +222,7 @@ def reverse_ingredient_consumption(invoice_doc, item):
 		"Stock Entry",
 		filters={
 			"custom_source_invoice": invoice_doc.name,
+			"custom_invoice_type": invoice_doc.doctype,
 			"custom_composite_item": item.item_code,
 			"docstatus": 1
 		},
@@ -327,9 +335,9 @@ def get_bom_ingredients(bom_name, qty_multiplier):
 		ingredients.append({
 			"item_code": item.item_code,
 			"qty": required_qty,
-			"uom": item.uom,
+			"uom": item.stock_uom,
 			"stock_uom": item.stock_uom,
-			"conversion_factor": item.conversion_factor
+			"conversion_factor": 1
 		})
 	
 	return ingredients

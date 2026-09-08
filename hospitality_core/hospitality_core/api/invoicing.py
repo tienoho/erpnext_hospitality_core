@@ -164,8 +164,53 @@ def create_invoice_from_folio(folio_name):
     # cho cùng 1 folio ở lần phát hành hóa đơn điện tử tiếp theo.
     si.hospitality_folio = folio_name
 
+    # TRƯỚC ĐÂY: hóa đơn dựng thẳng bằng frappe.new_doc()+gán field+save(), KHÔNG
+    # BAO GIỜ gọi si.set_missing_values() — hàm này chỉ chạy khi JS/mapped-doc tự
+    # gọi (đã xác minh trực tiếp: SellingController.validate() KHÔNG tự gọi
+    # set_missing_values(), Sales Invoice.validate() cũng không). "tax_id" vẫn tự
+    # đúng nhờ khai báo fetch_from="customer.tax_id" (Frappe core tự fetch mọi
+    # Link field lúc validate), nhưng "address_display"/"contact_email" KHÔNG có
+    # fetch_from — sẽ luôn RỖNG. Hậu quả: mọi hóa đơn điện tử phát hành qua đường
+    # Legacy này (einvoice_core.py's _build_payload() đọc thẳng 2 field này) luôn
+    # gửi "địa chỉ người mua" rỗng lên Cơ quan Thuế/nhà cung cấp HĐĐT, kể cả khi
+    # Customer/Guest đã có địa chỉ đầy đủ trên hồ sơ — ảnh hưởng cả hóa đơn khách
+    # công ty/đại lý (thường bắt buộc đủ địa chỉ theo quy định hóa đơn B2B).
+    # Không gọi cả si.set_missing_values() (rủi ro: hàm này cascade sang
+    # set_missing_item_details(), có thể tính lại rate/income_account từ Price
+    # List, ghi đè mất phần net/thuế vừa tách ở trên) — chỉ tự lấy đúng 2 giá trị
+    # cần, giống hệt logic ERPNext dùng nội bộ (get_default_address+
+    # get_address_display, get_default_contact+get_contact_details), không đụng
+    # tới items/rate/account.
+    # get_address_display() tự check_permission() trên Address (đúng hành vi
+    # ERPNext core, giống hệt _get_party_details()) — bọc best-effort để 1 lễ
+    # tân có quyền "write Guest Folio"/xuất hóa đơn nhưng không có quyền đọc
+    # riêng Address/Contact không bị chặn ngang cả luồng lập hóa đơn (dữ liệu
+    # tài chính) chỉ vì thiếu thông tin hiển thị phụ trợ này — thất bại thì bỏ
+    # trống, không throw.
+    from frappe.contacts.doctype.address.address import get_default_address, get_address_display
+    from frappe.contacts.doctype.contact.contact import get_default_contact
+
+    try:
+        default_address = get_default_address("Customer", customer)
+        if default_address:
+            si.customer_address = default_address
+            si.address_display = get_address_display(default_address)
+    except Exception:
+        frappe.log_error(f"Không lấy được địa chỉ mặc định của Customer {customer} cho hóa đơn {folio_name}", "Hospitality Invoicing")
+
+    try:
+        default_contact = get_default_contact("Customer", customer)
+        if default_contact:
+            contact_person, contact_email = frappe.db.get_value(
+                "Contact", default_contact, ["name", "email_id"]
+            )
+            si.contact_person = contact_person
+            si.contact_email = contact_email
+    except Exception:
+        frappe.log_error(f"Không lấy được liên hệ mặc định của Customer {customer} cho hóa đơn {folio_name}", "Hospitality Invoicing")
+
     # Set Taxes (Optional: Fetch from Template)
-    # si.set_taxes() 
+    # si.set_taxes()
 
     si.save()
     

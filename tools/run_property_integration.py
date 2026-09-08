@@ -286,10 +286,11 @@ class PropertyDatabaseTests(unittest.TestCase):
                 exchange('USD', 'VND', '2000-01-01')
 
 
-try:
-    result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(PropertyDatabaseTests))
-    print(json.dumps(dict(tests=result.testsRun,failures=len(result.failures),errors=len(result.errors))))
-    sys.exit(0 if result.wasSuccessful() else 1)
-finally:
-    frappe.db.rollback()
-    frappe.destroy()
+if __name__ == "__main__":
+    try:
+        result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(PropertyDatabaseTests))
+        print(json.dumps(dict(tests=result.testsRun,failures=len(result.failures),errors=len(result.errors))))
+        sys.exit(0 if result.wasSuccessful() else 1)
+    finally:
+        frappe.db.rollback()
+        frappe.destroy()

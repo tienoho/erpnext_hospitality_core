@@ -339,40 +339,34 @@ class SalesReport(Document):
             })
 
     def aggregate_stock_balances(self, closing_entries):
-        # Collect unique POS profiles used in this report
-        unique_profiles = list({e.pos_profile for e in closing_entries if e.pos_profile})
-        if not unique_profiles:
-            return
+        from frappe.utils import get_datetime
+        from erpnext.stock.utils import get_stock_balance
 
-        for profile_name in unique_profiles:
-            # Fetch the warehouse linked to this POS profile
-            warehouse = frappe.db.get_value("POS Profile", profile_name, "warehouse")
-            if not warehouse:
-                continue
+        cutoff = get_datetime(self.to_date_time)
+        profiles_by_warehouse = {}
+        for profile in sorted({e.pos_profile for e in closing_entries if e.pos_profile}):
+            warehouse = frappe.db.get_value("POS Profile", profile, "warehouse")
+            if warehouse:
+                profiles_by_warehouse.setdefault(warehouse, []).append(profile)
 
-            # Get current stock balance (actual qty) per item from the Bin table
+        for warehouse, profiles in profiles_by_warehouse.items():
+            if frappe.db.get_value('Warehouse', warehouse, 'company') != self.company:
+                frappe.throw(frappe._('Kho POS không thuộc pháp nhân của báo cáo.'))
             stock_rows = frappe.db.sql("""
-                SELECT
-                    b.item_code,
-                    i.item_name,
-                    i.item_group,
-                    i.stock_uom as uom,
-                    b.actual_qty as balance_qty
-                FROM `tabBin` b
-                JOIN `tabItem` i ON i.name = b.item_code
-                WHERE b.warehouse = %s
-                  AND b.actual_qty != 0
-                  AND i.disabled = 0
+                SELECT DISTINCT s.item_code, i.item_name, i.item_group, i.stock_uom AS uom
+                FROM `tabStock Ledger Entry` s
+                JOIN `tabItem` i ON i.name=s.item_code
+                WHERE s.warehouse=%s AND s.is_cancelled=0
+                  AND TIMESTAMP(s.posting_date, s.posting_time) <= %s
                 ORDER BY i.item_group, i.item_name
-            """, (warehouse,), as_dict=True)
-
+            """, (warehouse, cutoff), as_dict=True)
             for row in stock_rows:
+                balance = get_stock_balance(row.item_code, warehouse, cutoff.date(), cutoff.time())
+                if not balance:
+                    continue
                 self.append("eod_stock_balance", {
-                    "pos_profile": profile_name,
-                    "warehouse": warehouse,
-                    "item_code": row.item_code,
-                    "item_name": row.item_name,
-                    "item_group": row.item_group,
-                    "uom": row.uom,
-                    "balance_qty": flt(row.balance_qty)
+                    "pos_profile": ", ".join(profiles), "warehouse": warehouse,
+                    "item_code": row.item_code, "item_name": row.item_name,
+                    "item_group": row.item_group, "uom": row.uom,
+                    "balance_qty": flt(balance)
                 })

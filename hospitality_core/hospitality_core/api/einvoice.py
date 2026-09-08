@@ -281,8 +281,21 @@ def issue_einvoice_from_folio(folio_name):
             si_doc.submit()
         existing_si = si_name
 
-    # Issue E-Invoice for the submitted Sales Invoice
-    result = issue_einvoice(existing_si)
+    # TRƯỚC ĐÂY: luôn gọi issue_einvoice() vô điều kiện — nhưng nếu
+    # vietnam_einvoice đã cài VÀ company này bật `auto_issue_on_submit` trong
+    # Vietnam E-Invoice Config (tính năng tự phát hành khi nộp Sales Invoice,
+    # dùng chung cho mọi công ty không riêng hospitality), hook on_submit của
+    # chính lệnh `si_doc.submit()` ở trên đã tự phát hành HĐĐT NGAY TRONG lúc
+    # submit — gọi issue_einvoice() lần nữa ở đây sẽ đụng "chốt chặn 2: chống
+    # phát hành trùng lặp" của vietnam_einvoice và ném lỗi, phá vỡ luồng này
+    # dù thực chất hóa đơn ĐÃ được phát hành đúng. Đọc lại trạng thái mới nhất
+    # trước khi gọi — nếu đã Issued (do hook tự động vừa xử lý), trả kết quả
+    # từ chính field đã lưu thay vì gọi lại.
+    current_status = frappe.db.get_value("Sales Invoice", existing_si, "einvoice_status")
+    if current_status == "Issued":
+        result = get_einvoice_status(existing_si)
+    else:
+        result = issue_einvoice(existing_si)
     result["sales_invoice"] = existing_si
     return result
 

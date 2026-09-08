@@ -93,21 +93,31 @@ function calculate_stock_qty(frm, cdt, cdn) {
 }
 
 function calculate_total_cost(frm) {
-    // Chờ TẤT CẢ lời gọi get_value hoàn tất bằng Promise.all thay vì đoán một
-    // khoảng setTimeout cố định 500ms — với công thức nhiều nguyên liệu hoặc
-    // mạng chậm, 500ms không đủ để mọi promise resolve, khiến "Estimated Cost"
-    // hiển thị bị thiếu mà không có dấu hiệu nào cho biết là chưa tính xong.
-    const lookups = (frm.doc.ingredients || []).map((ingredient) =>
-        frappe.db.get_value('Item', ingredient.ingredient_item, 'valuation_rate').then((r) => {
-            if (r.message) {
-                return flt(ingredient.stock_qty) * flt(r.message.valuation_rate);
+    if (frm.is_dirty()) {
+        frappe.msgprint(__('Vui lòng lưu công thức trước khi tính giá vốn.'));
+        return;
+    }
+    const recipe = frm.doc.name;
+    frappe.prompt([
+        {fieldname: 'warehouse', label: __('Kho nguyên liệu'), fieldtype: 'Link', options: 'Warehouse', reqd: 1,
+            get_query: () => ({filters: {is_group: 0, disabled: 0}})},
+        {fieldname: 'at', label: __('Thời điểm định giá'), fieldtype: 'Datetime', reqd: 1,
+            default: frappe.datetime.now_datetime()}
+    ], (values) => {
+        const request = frm._recipe_cost_request = (frm._recipe_cost_request || 0) + 1;
+        frappe.call({
+            method: 'hospitality_core.hospitality_core.doctype.item_recipe.item_recipe.estimate_recipe_cost',
+            args: {recipe_name: recipe, ...values},
+            callback: (r) => {
+                if (request !== frm._recipe_cost_request || frm.doc.name !== recipe || frm.is_dirty() || !r.message) return;
+                const cost = r.message;
+                const escape = frappe.utils.escape_html;
+                frappe.msgprint({title: __('Ước tính giá vốn'), message:
+                    `${__('Chi phí cả mẻ')}: ${format_currency(cost.batch_cost, cost.currency)}<br>` +
+                    `${__('Chi phí mỗi đơn vị')}: ${format_currency(cost.unit_cost, cost.currency)}<br>` +
+                    `${__('Sản lượng')}: ${escape(String(cost.quantity))} ${escape(cost.uom)}<br>` +
+                    `${__('Kho')}: ${escape(cost.warehouse)}<br>${__('Thời điểm')}: ${escape(cost.at)}`});
             }
-            return 0;
-        })
-    );
-
-    Promise.all(lookups).then((costs) => {
-        const total_cost = costs.reduce((sum, c) => sum + c, 0);
-        frappe.msgprint(__('Estimated Cost: {0}', [format_currency(total_cost)]));
-    });
+        });
+    }, __('Ước tính giá vốn'), __('Tính'));
 }

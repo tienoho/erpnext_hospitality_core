@@ -5,6 +5,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
+from math import isfinite
 
 
 class ItemRecipe(Document):
@@ -23,6 +24,11 @@ class ItemRecipe(Document):
 		"""Validate ingredient items"""
 		if not self.ingredients:
 			frappe.throw(_("At least one ingredient is required"))
+		if not isfinite(flt(self.quantity)) or flt(self.quantity) <= 0:
+			frappe.throw(_('Sản lượng công thức phải dương và hữu hạn.'))
+		for row in self.ingredients:
+			if not isfinite(flt(row.qty)) or flt(row.qty) <= 0:
+				frappe.throw(_('Lượng nguyên liệu phải dương và hữu hạn.'))
 		
 		# Check for duplicate ingredients
 		ingredient_items = [d.ingredient_item for d in self.ingredients]
@@ -237,5 +243,32 @@ def get_uom_conversion_factor(item_code, from_uom, to_uom):
 	if conversion:
 		return flt(conversion)
 	
-	# Default to 1 if no conversion found
-	return 1.0
+	frappe.throw(_('Thiếu quy đổi UOM {0} sang {1} cho nguyên liệu {2}.').format(from_uom, to_uom, item_code))
+
+
+@frappe.whitelist()
+def estimate_recipe_cost(recipe_name, warehouse, at):
+	from frappe.utils import get_datetime
+	from erpnext.stock.utils import get_stock_balance
+	recipe = frappe.get_doc('Item Recipe', recipe_name)
+	recipe.check_permission('read')
+	wh = frappe.get_doc('Warehouse', warehouse)
+	wh.check_permission('read')
+	if wh.is_group or wh.disabled:
+		frappe.throw(_('Chọn kho chi tiết đang hoạt động.'))
+	# Quyền giá trị tồn kho cần đủ cả kho và pháp nhân, không chỉ Item Recipe.
+	frappe.get_doc('Company', wh.company).check_permission('read')
+	cutoff = get_datetime(at)
+	recipe.validate_ingredients()
+	recipe.calculate_stock_quantities()
+	costs = []
+	for row in recipe.ingredients:
+		qty, rate = get_stock_balance(row.ingredient_item, warehouse, cutoff.date(), cutoff.time(), with_valuation_rate=True)
+		if rate <= 0:
+			frappe.throw(_('Chưa có giá trị tồn kho dương cho {0} tại thời điểm đã chọn; không thể ước tính đủ giá vốn.').format(row.ingredient_item))
+		costs.append(dict(item=row.ingredient_item, stock_qty=row.stock_qty, stock_uom=row.stock_uom,
+			valuation_rate=rate, amount=flt(row.stock_qty)*rate))
+	total = sum(row['amount'] for row in costs)
+	return dict(batch_cost=total, unit_cost=total/flt(recipe.quantity), quantity=recipe.quantity,
+		uom=recipe.uom, warehouse=warehouse, at=str(cutoff),
+		currency=frappe.get_cached_value('Company', wh.company, 'default_currency'), ingredients=costs)

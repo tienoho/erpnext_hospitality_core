@@ -48,11 +48,59 @@ class FolioTransaction(Document):
             frappe.db.set_value("Folio Transaction", name, "idx", new_idx, update_modified=False)
 
     def validate(self):
+        self.validate_inventory_source()
         self.validate_parent_status()
         self.validate_void_status()
         self.validate_pricing_evidence()
         self.fetch_price_if_missing()
         self.compute_debit_credit()
+
+    def validate_inventory_source(self):
+        keys = ['item', 'qty', 'reference_doctype', 'reference_name', 'is_void']
+        old = frappe.db.get_value('Folio Transaction', self.name, keys, as_dict=True) if not self.is_new() else None
+        if old:
+            if old.is_void and not self.is_void:
+                frappe.throw(_('Không được khôi phục dòng đã hủy; hãy tạo nghiệp vụ điều chỉnh có nguồn.'))
+            changed = any(self.get(k) != old.get(k) for k in keys[:-1])
+            if not changed:
+                return  # Không ép đối soát lại các dòng lịch sử không đổi.
+            old_flags = frappe.db.get_value('Item', old.item, ['is_stock_item', 'is_composite_item'], as_dict=True) if old.item else None
+            if old_flags and (old_flags.is_stock_item or old_flags.is_composite_item):
+                frappe.throw(_('Không sửa mặt hàng, số lượng hoặc nguồn của dòng tồn kho đã ghi; hãy dùng nghiệp vụ điều chỉnh có nguồn.'))
+        if not self.item or self.is_void:
+            return
+        flags = frappe.db.get_value('Item', self.item, ['is_stock_item', 'is_composite_item'], as_dict=True)
+        if not flags or not (flags.is_stock_item or flags.is_composite_item):
+            return
+        if self.flags.from_folio_mirror:
+            return
+        if self.reference_doctype in ('POS Invoice', 'Sales Invoice') and self.reference_name:
+            invoice = frappe.get_doc(self.reference_doctype, self.reference_name)
+            invoice.check_permission('read')
+            rows = [r for r in invoice.items if r.item_code == self.item]
+            if invoice.docstatus == 1 and rows:
+                if not flags.is_stock_item or self.invoice_has_stock_source(invoice, rows):
+                    return
+        if self.reference_doctype == 'Folio Transaction' and self.reference_name:
+            source = frappe.get_doc('Folio Transaction', self.reference_name)
+            frappe.get_doc('Guest Folio', source.parent).check_permission('write')
+            if source.item == self.item:
+                return
+        frappe.throw(_('Hàng tồn kho/món theo công thức phải bán qua POS và chuyển phí vào Folio; không ghi trực tiếp khi chưa có chứng từ xuất kho.'))
+
+    def invoice_has_stock_source(self, invoice, rows):
+        for row in rows:
+            sources = [(invoice.doctype, invoice.name, row.name)]
+            if row.get('delivery_note') and row.get('dn_detail'):
+                sources.append(('Delivery Note', row.delivery_note, row.dn_detail))
+            for doctype, name, detail in sources:
+                if frappe.db.exists('Stock Ledger Entry', {
+                    'voucher_type': doctype, 'voucher_no': name, 'voucher_detail_no': detail,
+                    'item_code': self.item, 'company': invoice.company,
+                    'is_cancelled': 0, 'actual_qty': ['!=', 0],
+                }):
+                    return True
+        return False
 
 
     def validate_parent_status(self):
