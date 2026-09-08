@@ -37,7 +37,7 @@ def get_chart_data(start_date, end_date):
     rooms = frappe.get_all(
         "Hotel Room",
         filters=room_filters,
-        fields=["name", "room_number", "room_type", "status"],
+        fields=["name", "room_number", "room_type", "status", "floor"],
         order_by="room_number asc",
     )
 
@@ -52,6 +52,7 @@ def get_chart_data(start_date, end_date):
             res.external_booking_id, res.is_complimentary, res.is_group_guest,
             res.is_company_guest,
             g.full_name as guest_name,
+            g.mobile_no as guest_phone,
             f.outstanding_balance
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
