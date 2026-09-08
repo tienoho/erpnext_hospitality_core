@@ -97,6 +97,20 @@ def update_room_status(room, status):
     return status
 
 
+def resolve_hotel_room(room_identifier):
+    """
+    Hỗ trợ nhân viên buồng phòng nhập số phòng thực tế (VD: '101', '202')
+    hoặc truyền trực tiếp ID/hash của Hotel Room.
+    """
+    if not room_identifier:
+        return None
+    raw = str(room_identifier).strip()
+    if frappe.db.exists("Hotel Room", raw):
+        return raw
+    docname = frappe.db.get_value("Hotel Room", {"room_number": raw}, "name")
+    return docname or raw
+
+
 @frappe.whitelist()
 def log_minibar_consumption(room, items):
     """
@@ -113,11 +127,12 @@ def log_minibar_consumption(room, items):
     if not items:
         frappe.throw(_("No items provided."))
 
+    room_doc = resolve_hotel_room(room)
     reservation = frappe.db.get_value(
-        "Hotel Reservation", {"room": room, "status": "Checked In"}, ["name", "folio"], as_dict=True
+        "Hotel Reservation", {"room": room_doc, "status": "Checked In"}, ["name", "folio"], as_dict=True
     )
     if not reservation or not reservation.folio:
-        frappe.throw(_("No in-house guest with an open folio found for Room {0}.").format(room))
+        frappe.throw(_("Không tìm thấy đặt phòng đang lưu trú có Folio mở cho Phòng {0}.").format(room))
 
     folio = frappe.get_doc("Guest Folio", reservation.folio)
     if folio.status != "Open":
@@ -178,9 +193,13 @@ def report_maintenance_issue(room, issue_type, description, image=None):
     if not frappe.has_permission("Hotel Maintenance Request", "create"):
         frappe.throw(_("Not authorized to report a maintenance issue"), frappe.PermissionError)
 
+    room_doc = resolve_hotel_room(room)
+    if not frappe.db.exists("Hotel Room", room_doc):
+        frappe.throw(_("Không tìm thấy phòng {0} trong hệ thống khách sạn.").format(room))
+
     doc = frappe.get_doc({
         "doctype": "Hotel Maintenance Request",
-        "room": room,
+        "room": room_doc,
         "issue_type": issue_type,
         "description": description,
         "image": image,
@@ -189,3 +208,4 @@ def report_maintenance_issue(room, issue_type, description, image=None):
     doc.insert(ignore_permissions=True)
     frappe.msgprint(_("Maintenance request {0} created and sent to the Technical team.").format(doc.name))
     return doc.name
+

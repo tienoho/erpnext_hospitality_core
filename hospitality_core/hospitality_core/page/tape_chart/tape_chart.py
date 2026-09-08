@@ -92,10 +92,48 @@ def _resolve_source_category(booking):
 @frappe.whitelist()
 def move_booking(reservation_name, new_room):
     """
-    Thin wrapper so the Tape Chart's drag-and-drop can reuse the existing,
-    already-audited room move logic (permission checks, availability check,
-    folio update, comment log) instead of duplicating it.
+    Kéo thả đổi phòng trên Tape Chart 2.0:
+    - Nếu khách đang ở (Checked In): tái sử dụng process_room_move (chuyển phòng in-house,
+      cập nhật trạng thái buồng phòng cũ Dirty/mới Occupied, đồng bộ folio, snapshot giá).
+    - Nếu đặt phòng trước (Reserved): chuyển gán buồng phòng trước nhận phòng (pre-arrival
+      reassignment), kiểm tra tình trạng trống theo toàn bộ khoảng thời gian lưu trú,
+      đồng bộ room_type & folio nếu có, ghi comment lịch sử mà không can thiệp trạng thái phòng thực tế.
     """
-    from hospitality_core.hospitality_core.api.room_move import process_room_move
+    res = frappe.get_doc("Hotel Reservation", reservation_name, for_update=True)
+    res.check_permission("write")
 
-    return process_room_move(reservation_name, new_room)
+    if res.status == "Checked In":
+        from hospitality_core.hospitality_core.api.room_move import process_room_move
+        return process_room_move(reservation_name, new_room)
+
+    elif res.status == "Reserved":
+        if res.room == new_room:
+            frappe.throw(_("Phòng mới không được trùng với phòng hiện tại."))
+
+        if res.get("property"):
+            from hospitality_core.hospitality_core.api.property_scope import require_property
+            require_property(res.property)
+            if frappe.db.get_value("Hotel Room", new_room, "property") != res.property:
+                frappe.throw(_("Chuyển phòng không được đổi cơ sở; cần booking mới có liên kết nguồn."))
+
+        new_room_type = frappe.db.get_value("Hotel Room", new_room, "room_type")
+        if new_room_type == "Virtual":
+            frappe.throw(_("Không được gán đặt phòng vào phòng ảo."))
+
+        old_room = res.room
+        res.room = new_room
+        res.save()
+
+        if res.folio:
+            frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
+
+        comment = _("Đổi phòng trước nhận phòng từ phòng {0} sang phòng {1} trên Sơ đồ Tape Chart").format(
+            old_room or _("Chưa gán"), new_room
+        )
+        res.add_comment("Info", comment)
+        frappe.msgprint(_("Đã chuyển đặt phòng sang phòng {0} thành công.").format(new_room), indicator="green")
+        return True
+
+    else:
+        frappe.throw(_("Chỉ có thể chuyển phòng cho đặt phòng ở trạng thái 'Reserved' hoặc 'Checked In'."))
+

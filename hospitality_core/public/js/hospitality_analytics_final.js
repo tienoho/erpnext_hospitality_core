@@ -181,9 +181,20 @@ frappe.hospitality.FinalAnalyticsV13 = class {
         if (!this.fromDate || !this.toDate) return;
         $('#v13-guide').html(`<span style="color: #2563eb; font-weight: 600;"><i class="fa fa-spinner fa-spin"></i> ${__('Đang đồng bộ dữ liệu biểu đồ…')}</span>`);
 
+        let pending = this.charts.length;
+        const onFinish = () => {
+            pending--;
+            if (pending <= 0) {
+                $('#v13-guide').html(`<span style="color: #059669; font-weight: 600;"><i class="fa fa-check-circle"></i> ${__('Đã đồng bộ dữ liệu từ {0} đến {1}', [this.fromDate, this.toDate])}</span>`);
+            }
+        };
+
         this.charts.forEach(chart => {
             let el = document.getElementById(chart.id);
-            if (!el || !el.parentNode) return;
+            if (!el || !el.parentNode) {
+                onFinish();
+                return;
+            }
 
             // CLONE & REPLACE Strategy to sever stale observers
             const newEl = el.cloneNode(false);
@@ -204,6 +215,7 @@ frappe.hospitality.FinalAnalyticsV13 = class {
                     el.innerHTML = '';
                     if (!data || !data.labels || data.labels.length === 0) {
                         el.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 250px; color: var(--text-muted, #9ca3af); font-size: 13px;"><i class="fa fa-info-circle" style="margin-right: 6px;"></i> ${__('Chưa có dữ liệu')}</div>`;
+                        onFinish();
                         return;
                     }
 
@@ -225,13 +237,14 @@ frappe.hospitality.FinalAnalyticsV13 = class {
                     } catch (err) {
                         console.error(`[v14] Render Error on ${chart.name}:`, err);
                     }
+                    onFinish();
+                },
+                error: () => {
+                    el.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 250px; color: #ef4444; font-size: 13px;"><i class="fa fa-exclamation-triangle" style="margin-right: 6px;"></i> ${__('Lỗi tải dữ liệu')}</div>`;
+                    onFinish();
                 }
             });
         });
-
-        setTimeout(() => {
-            $('#v13-guide').html(`<span style="color: #059669; font-weight: 600;"><i class="fa fa-check-circle"></i> ${__('Đã đồng bộ dữ liệu từ {0} đến {1}', [this.fromDate, this.toDate])}</span>`);
-        }, 1000);
     }
 };
 

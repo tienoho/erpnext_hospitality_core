@@ -178,9 +178,9 @@ function setup_minibar_tab() {
         let idx = $('#hkm-mb-items .hkm-mb-row').length;
         $('#hkm-mb-items').append(`
             <div class="hkm-mb-row row" style="margin-bottom:6px;" data-idx="${idx}">
-                <div class="col-xs-5"><input class="form-control input-sm hkm-mb-item" placeholder="${__('Item Code')}" value="${item_code}"></div>
-                <div class="col-xs-3"><input class="form-control input-sm hkm-mb-qty" type="number" placeholder="Qty" value="${qty}"></div>
-                <div class="col-xs-4"><input class="form-control input-sm hkm-mb-amount" type="number" placeholder="${__('Amount')}" value="${amount}"></div>
+                <div class="col-xs-5"><input class="form-control input-sm hkm-mb-item" placeholder="${__('Mã Món')}" value="${item_code}"></div>
+                <div class="col-xs-3"><input class="form-control input-sm hkm-mb-qty" type="number" placeholder="${__('SL')}" value="${qty}"></div>
+                <div class="col-xs-4"><input class="form-control input-sm hkm-mb-amount" type="number" placeholder="${__('Số Tiền (VND)')}" value="${amount}"></div>
             </div>
         `);
     }
@@ -189,7 +189,7 @@ function setup_minibar_tab() {
 
     $('#hkm-mb-submit').on('click', function () {
         let room = $('#hkm-mb-room').val();
-        if (!room) { frappe.msgprint(__('Please enter a room number.')); return; }
+        if (!room) { frappe.msgprint(__('Vui lòng nhập số phòng.')); return; }
 
         let items = [];
         $('#hkm-mb-items .hkm-mb-row').each(function () {
@@ -199,16 +199,17 @@ function setup_minibar_tab() {
             if (item && amount) items.push({ item: item, qty: qty, amount: amount });
         });
 
-        if (!items.length) { frappe.msgprint(__('Add at least one item with an amount.')); return; }
+        if (!items.length) { frappe.msgprint(__('Vui lòng thêm ít nhất một món có số tiền.')); return; }
 
         frappe.call({
             method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.log_minibar_consumption',
             args: { room: room, items: items },
             freeze: true,
+            freeze_message: __('Đang ghi Folio...'),
             callback: function (r) {
                 if (!r.exc) {
                     trigger_haptic(50);
-                    frappe.show_alert({ message: __('Minibar consumption posted to folio.'), indicator: 'green' });
+                    frappe.show_alert({ message: __('Đã ghi nhận tiêu dùng minibar vào Folio.'), indicator: 'green' });
                     $('#hkm-mb-items').empty();
                     add_row();
                 }
@@ -221,16 +222,17 @@ function setup_lostfound_tab() {
     $('#hkm-lf-submit').on('click', function () {
         let item_name = $('#hkm-lf-item').val();
         let found_location = $('#hkm-lf-location').val();
-        if (!item_name || !found_location) { frappe.msgprint(__('Please fill in both fields.')); return; }
+        if (!item_name || !found_location) { frappe.msgprint(__('Vui lòng nhập đủ Mô tả vật phẩm và Vị trí tìm thấy.')); return; }
 
         frappe.call({
             method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.create_lost_and_found_report',
             args: { item_name: item_name, found_location: found_location },
             freeze: true,
+            freeze_message: __('Đang lưu báo cáo...'),
             callback: function (r) {
                 if (!r.exc) {
                     trigger_haptic(50);
-                    frappe.show_alert({ message: __('Lost & Found report created: {0}', [r.message]), indicator: 'green' });
+                    frappe.show_alert({ message: __('Đã tạo báo cáo đồ thất lạc: {0}', [r.message]), indicator: 'green' });
                     $('#hkm-lf-item').val('');
                     $('#hkm-lf-location').val('');
                 }
@@ -257,16 +259,17 @@ function setup_maintenance_tab() {
         let room = $('#hkm-mnt-room').val();
         let issue_type = $('#hkm-mnt-type').val();
         let description = $('#hkm-mnt-desc').val();
-        if (!room || !description) { frappe.msgprint(__('Please fill in Room and Description.')); return; }
+        if (!room || !description) { frappe.msgprint(__('Vui lòng nhập Số phòng và Mô tả sự cố.')); return; }
 
         frappe.call({
             method: 'hospitality_core.hospitality_core.api.housekeeping_mobile.report_maintenance_issue',
             args: { room: room, issue_type: issue_type, description: description, image: attached_file_url },
             freeze: true,
+            freeze_message: __('Đang gửi báo cáo kỹ thuật...'),
             callback: function (r) {
                 if (!r.exc) {
                     trigger_haptic(50);
-                    frappe.show_alert({ message: __('Maintenance issue reported successfully.'), indicator: 'green' });
+                    frappe.show_alert({ message: __('Đã gửi báo cáo kỹ thuật thành công.'), indicator: 'green' });
                     $('#hkm-mnt-room').val('');
                     $('#hkm-mnt-desc').val('');
                     $('#hkm-mnt-photo-preview').empty();

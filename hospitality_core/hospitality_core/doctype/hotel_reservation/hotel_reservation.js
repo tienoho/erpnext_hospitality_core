@@ -451,10 +451,10 @@ frappe.ui.form.on('Hotel Reservation', {
                             },
                             get_query: function () {
                                 return {
-                                    filters: {
+                                    filters: Object.assign({
                                         'is_enabled': 1,
                                         'name': ['!=', frm.doc.room]
-                                    }
+                                    }, frm.doc.property ? { 'property': frm.doc.property } : {})
                                 };
                             },
                             reqd: 1
@@ -497,67 +497,73 @@ frappe.ui.form.on('Hotel Reservation', {
         if (['Reserved', 'Checked In'].includes(frm.doc.status) && frm.doc.room) {
             frm.add_custom_button(__('Ghi Thẻ Phòng'), function () {
                 get_keycard_time_window(frm, function (checkin_time, checkout_time) {
-                    if (window.frappe && frappe.hospitality && frappe.hospitality.encode_keycard) {
-                        frappe.hospitality.encode_keycard(
-                            frm.doc.room,
-                            checkin_time,
-                            checkout_time,
-                            frm.doc.guest,
-                            false
-                        );
-                    } else {
-                        // Direct fetch fallback if keycard_encoder_bridge.js is not loaded
-                        fetch('http://127.0.0.1:8765/api/lock/encode_card', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                room_no: frm.doc.room,
-                                checkin_time: checkin_time,
-                                checkout_time: checkout_time,
-                                guest_name: frm.doc.guest,
-                                is_duplicate: false
+                    frappe.db.get_value('Hotel Room', frm.doc.room, 'room_number').then(res => {
+                        let room_no = (res && res.message && res.message.room_number) || frm.doc.room;
+                        if (window.frappe && frappe.hospitality && frappe.hospitality.encode_keycard) {
+                            frappe.hospitality.encode_keycard(
+                                room_no,
+                                checkin_time,
+                                checkout_time,
+                                frm.doc.guest,
+                                false
+                            );
+                        } else {
+                            // Direct fetch fallback if keycard_encoder_bridge.js is not loaded
+                            fetch('http://127.0.0.1:8765/api/lock/encode_card', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    room_no: room_no,
+                                    checkin_time: checkin_time,
+                                    checkout_time: checkout_time,
+                                    guest_name: frm.doc.guest,
+                                    is_duplicate: false
+                                })
                             })
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                frappe.show_alert({ message: __('Ghi thẻ phòng thành công: ') + data.card_uid, indicator: 'green' });
-                            } else {
-                                frappe.msgprint({ title: __('Lỗi Ghi Thẻ'), message: data.error || data.message, indicator: 'red' });
-                            }
-                        })
-                        .catch(err => {
-                            frappe.msgprint({
-                                title: __('Không thể kết nối Đầu đọc thẻ'),
-                                indicator: 'red',
-                                message: __('Vui lòng chạy Hardware Bridge tại <b>http://127.0.0.1:8765</b> trên máy trạm Lễ tân.')
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success) {
+                                    frappe.show_alert({ message: __('Ghi thẻ phòng thành công: ') + data.card_uid, indicator: 'green' });
+                                } else {
+                                    frappe.msgprint({ title: __('Lỗi Ghi Thẻ'), message: data.error || data.message, indicator: 'red' });
+                                }
+                            })
+                            .catch(err => {
+                                frappe.msgprint({
+                                    title: __('Không thể kết nối Đầu đọc thẻ'),
+                                    indicator: 'red',
+                                    message: __('Vui lòng chạy Hardware Bridge tại <b>http://127.0.0.1:8765</b> trên máy trạm Lễ tân.')
+                                });
                             });
-                        });
-                    }
+                        }
+                    });
                 });
             }, __('Khóa Thẻ Từ'));
 
             frm.add_custom_button(__('Ghi Thẻ Phụ (Duplicate)'), function () {
                 get_keycard_time_window(frm, function (checkin_time, checkout_time) {
-                    fetch('http://127.0.0.1:8765/api/lock/encode_card', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            room_no: frm.doc.room,
-                            checkin_time: checkin_time,
-                            checkout_time: checkout_time,
-                            guest_name: frm.doc.guest,
-                            is_duplicate: true
+                    frappe.db.get_value('Hotel Room', frm.doc.room, 'room_number').then(res => {
+                        let room_no = (res && res.message && res.message.room_number) || frm.doc.room;
+                        fetch('http://127.0.0.1:8765/api/lock/encode_card', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                room_no: room_no,
+                                checkin_time: checkin_time,
+                                checkout_time: checkout_time,
+                                guest_name: frm.doc.guest,
+                                is_duplicate: true
+                            })
                         })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            frappe.show_alert({ message: __('Ghi thẻ phụ thành công: ') + data.card_uid, indicator: 'green' });
-                        }
-                    })
-                    .catch(() => {
-                        frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                frappe.show_alert({ message: __('Ghi thẻ phụ thành công: ') + data.card_uid, indicator: 'green' });
+                            }
+                        })
+                        .catch(() => {
+                            frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
+                        });
                     });
                 });
             }, __('Khóa Thẻ Từ'));

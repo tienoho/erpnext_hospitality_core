@@ -923,7 +923,6 @@ function show_vietqr_dialog(frm) {
                                         default: frm.doc.hotel_reception || ''
                                     }
                                 ], function (vals) {
-                                    frappe.dom.freeze(__('Đang hạch toán thanh toán chuyển khoản...'));
                                     frappe.call({
                                         method: 'hospitality_core.hospitality_core.api.payment_bridge.create_folio_payment',
                                         args: {
@@ -932,8 +931,9 @@ function show_vietqr_dialog(frm) {
                                             mode_of_payment: 'Bank Transfer',
                                             hotel_reception: vals.hotel_reception
                                         },
+                                        freeze: true,
+                                        freeze_message: __('Đang hạch toán thanh toán chuyển khoản...'),
                                         callback: function (res) {
-                                            frappe.dom.unfreeze();
                                             frm.__vietqr_in_progress = false;
                                             if (!res.exc) {
                                                 frappe.show_alert({
@@ -942,6 +942,9 @@ function show_vietqr_dialog(frm) {
                                                 });
                                                 frm.reload_doc();
                                             }
+                                        },
+                                        error: function () {
+                                            frm.__vietqr_in_progress = false;
                                         }
                                     });
                                 }, __('Xác Nhận Hạch Toán VietQR'), __('Lưu Thanh Toán'));

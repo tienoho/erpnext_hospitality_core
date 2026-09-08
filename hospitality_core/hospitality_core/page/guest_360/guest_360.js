@@ -404,6 +404,12 @@ function render_guest_profile(wrapper, guest) {
 
             body.html(html);
 
+            // Prevent tab links from altering window.location.hash and triggering Frappe Desk SPA route changes
+            body.find('.nav-tabs a').on('click', function (e) {
+                e.preventDefault();
+                $(this).tab('show');
+            });
+
             // Bind actions
             body.find('[data-guest-edit]').on('click', () => frappe.set_route('Form', 'Guest', d.guest.name));
             body.find('[data-new-res]').on('click', () => frappe.new_doc('Hotel Reservation', { guest: d.guest.name }));

@@ -160,13 +160,20 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
         if not frappe.has_permission("Guest Folio", "read", doc=folio_name):
             frappe.throw(_("Không có quyền truy cập Guest Folio {0}.").format(folio_name), frappe.PermissionError)
         folio = frappe.get_doc("Guest Folio", folio_name)
-        # Số tiền luôn lấy từ số dư thực tế trên Folio — không tin tưởng
-        # tham số amount do client gửi, để tránh tạo mã QR với số tiền
-        # thấp hơn số nợ thực tế.
-        pay_amount = flt(folio.outstanding_balance or 0)
-        room_no = folio.room or ""
+        # Nếu client chỉ định số tiền cụ thể (> 0, VD: đặt cọc hoặc thanh toán từng phần),
+        # ưu tiên dùng số tiền đó. Nếu không truyền hoặc <= 0, lấy số dư thực tế trên Folio.
+        if pay_amount <= 0:
+            pay_amount = flt(folio.outstanding_balance or 0)
+        
+        if folio.room:
+            display_room = frappe.db.get_value("Hotel Room", folio.room, "room_number") or folio.room
+            room_no = display_room
+
         if not description:
             description = f"{prefix} {room_no} {folio_name}".strip()
+
+    if pay_amount <= 0:
+        frappe.throw(_("Số tiền thanh toán VietQR phải lớn hơn 0 VND."))
 
     if not description:
         description = f"{prefix} THANHTOAN".strip()

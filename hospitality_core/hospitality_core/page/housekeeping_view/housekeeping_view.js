@@ -380,8 +380,9 @@ function run_batch_update(target_status) {
     if (_hk_selected_rooms.size === 0) return;
 
     let room_names = Array.from(_hk_selected_rooms);
+    let target_label = (HK_STATUS_CONFIG[target_status] && HK_STATUS_CONFIG[target_status].label) || target_status;
     frappe.confirm(
-        __('Bạn có chắc muốn cập nhật trạng thái "{0}" cho {1} phòng đã chọn?', [target_status, room_names.length]),
+        __('Bạn có chắc muốn cập nhật trạng thái "{0}" cho {1} phòng đã chọn?', [target_label, room_names.length]),
         function () {
             frappe.call({
                 method: "hospitality_core.hospitality_core.page.housekeeping_view.housekeeping_view.batch_set_room_status",
@@ -407,7 +408,8 @@ window.update_room_status = function (room_name, new_status) {
         freeze: true,
         callback: function (r) {
             if (!r.exc) {
-                frappe.show_alert({ message: __('Đã đổi trạng thái phòng sang {0}', [new_status]), indicator: 'green' });
+                let status_label = (HK_STATUS_CONFIG[new_status] && HK_STATUS_CONFIG[new_status].label) || new_status;
+                frappe.show_alert({ message: __('Đã đổi trạng thái phòng sang {0}', [status_label]), indicator: 'green' });
                 // Cập nhật ngay trong cache để giao diện đổi tức thì
                 let found = _hk_rooms_cache.find(x => x.name === room_name);
                 if (found) found.status = new_status;
