@@ -30,9 +30,10 @@ def get_console_data(target_date=None):
     # 1. Fetch Arrivals for specific date
     # Include 'Checked Out' in arrivals list if they arrived AND left on the target date (Day Use)
     arrivals = frappe.db.sql(f"""
-        SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type, res.arrival_date
+        SELECT res.name, g.full_name as guest_name, res.status, COALESCE(r.room_number, res.room) as room, res.room_type, res.arrival_date
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
+        LEFT JOIN `tabHotel Room` r ON res.room = r.name
         WHERE res.arrival_date = %(target_date)s
         AND res.status IN ('Reserved', 'Checked In', 'Checked Out')
         {property_condition}
@@ -41,13 +42,14 @@ def get_console_data(target_date=None):
 
     # 2. Fetch Departures for specific date
     departures = frappe.db.sql(f"""
-        SELECT res.name, g.full_name as guest_name, res.status, res.room, res.room_type, res.departure_date
+        SELECT res.name, g.full_name as guest_name, res.status, COALESCE(r.room_number, res.room) as room, res.room_type, res.departure_date
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
+        LEFT JOIN `tabHotel Room` r ON res.room = r.name
         WHERE res.departure_date = %(target_date)s
         AND res.status IN ('Checked In', 'Checked Out')
         {property_condition}
-        ORDER BY res.status ASC, res.room ASC
+        ORDER BY res.status ASC, COALESCE(r.room_number, res.room) ASC
     """, {"target_date": target_date, "_properties": allowed_properties or [""]}, as_dict=True)
 
     # 3. Stats Calculation (Date Sensitive)

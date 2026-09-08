@@ -28,6 +28,9 @@ def set_room_status(room, status):
     if status not in valid_statuses:
         frappe.throw(_("Invalid status: {0}").format(status))
 
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
+    room = resolve_hotel_room(room)
+
     frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room)
 
     if status == "Available":

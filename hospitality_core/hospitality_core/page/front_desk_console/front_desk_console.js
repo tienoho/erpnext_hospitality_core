@@ -718,7 +718,13 @@ function open_quick_vietqr_dialog() {
                         frappe.db.get_value('Guest Folio', val, ['outstanding_balance', 'room'], (r) => {
                             if (r) {
                                 d.set_value('amount', r.outstanding_balance > 0 ? r.outstanding_balance : 0);
-                                d.set_value('room', r.room || '');
+                                if (r.room) {
+                                    frappe.db.get_value('Hotel Room', r.room, 'room_number', (hr) => {
+                                        d.set_value('room', (hr && hr.room_number) ? hr.room_number : r.room);
+                                    });
+                                } else {
+                                    d.set_value('room', '');
+                                }
                             }
                         });
                     }

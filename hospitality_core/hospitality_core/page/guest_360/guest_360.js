@@ -282,7 +282,7 @@ function render_guest_profile(wrapper, guest) {
                                                         </a>
                                                     </td>
                                                     <td>${escape(h.property || '—')}</td>
-                                                    <td><span class="badge badge-info" style="font-weight: 700;">${escape(h.room || 'Chưa gán')}</span></td>
+                                                    <td><span class="badge badge-info" style="font-weight: 700;">${escape(h.room_number || h.room || 'Chưa gán')}</span></td>
                                                     <td>${h.arrival_date ? frappe.datetime.str_to_user(h.arrival_date) : '—'}</td>
                                                     <td>${h.departure_date ? frappe.datetime.str_to_user(h.departure_date) : '—'}</td>
                                                     <td>${getStatusBadge(h.status)}</td>

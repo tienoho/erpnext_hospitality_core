@@ -47,7 +47,8 @@ def get_chart_data(start_date, end_date):
     bookings = frappe.db.sql(
         f"""
         SELECT
-            res.name, res.guest, res.room, res.arrival_date, res.departure_date,
+            res.name, res.guest, res.room, COALESCE(r.room_number, res.room) as room_number,
+            res.arrival_date, res.departure_date,
             res.status, res.folio, res.booking_source, res.ota_platform,
             res.external_booking_id, res.is_complimentary, res.is_group_guest,
             res.is_company_guest,
@@ -57,6 +58,7 @@ def get_chart_data(start_date, end_date):
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
         LEFT JOIN `tabGuest Folio` f ON res.folio = f.name
+        LEFT JOIN `tabHotel Room` r ON res.room = r.name
         WHERE res.status IN ('Reserved', 'Checked In')
         AND res.arrival_date < %(end)s AND res.departure_date > %(start)s
         {property_condition}
@@ -127,11 +129,14 @@ def move_booking(reservation_name, new_room):
         if res.folio:
             frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
 
+        old_room_no = frappe.db.get_value("Hotel Room", old_room, "room_number") if old_room else _("Chưa gán")
+        new_room_no = frappe.db.get_value("Hotel Room", new_room, "room_number") or new_room
+
         comment = _("Đổi phòng trước nhận phòng từ phòng {0} sang phòng {1} trên Sơ đồ Tape Chart").format(
-            old_room or _("Chưa gán"), new_room
+            old_room_no, new_room_no
         )
         res.add_comment("Info", comment)
-        frappe.msgprint(_("Đã chuyển đặt phòng sang phòng {0} thành công.").format(new_room), indicator="green")
+        frappe.msgprint(_("Đã chuyển đặt phòng sang phòng {0} thành công.").format(new_room_no), indicator="green")
         return True
 
     else:

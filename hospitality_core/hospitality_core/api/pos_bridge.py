@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 from hospitality_core.hospitality_core.api.folio import mirror_to_company_folio
+from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room, get_room_number
 
 def assign_hospitality_property(doc, method=None):
     """
@@ -84,6 +85,9 @@ def process_room_charge(doc, method=None):
     Logic: Breaks down the POS Invoice and posts EACH item to the Guest Folio.
     """
     
+    if doc.get('fnb_version') == 'FNB v1':
+        from hospitality_core.hospitality_core.api.fnb.pos import post_room_charge
+        return post_room_charge(doc)
     # 1. Calculate how much of this invoice is being charged to the room
     room_charge_payment = 0
     for pay in doc.payments:
@@ -117,19 +121,22 @@ def process_room_charge(doc, method=None):
                 doc.hotel_room = folios[0].room
                 # Update the document to persist the room back to DB
                 frappe.db.set_value(doc.doctype, doc.name, "hotel_room", doc.hotel_room)
-                frappe.msgprint(_("Auto-linked Room {0} from active Folio {1}").format(doc.hotel_room, folios[0].name))
+                display_room = get_room_number(doc.hotel_room)
+                frappe.msgprint(_("Auto-linked Room {0} from active Folio {1}").format(display_room, folios[0].name))
             elif len(folios) > 1:
                  frappe.throw(_("Multiple active folios found for this customer ({0}). Please select a Room Number manually.").format(customer))
                  
     if not doc.get("hotel_room"):
         frappe.throw(_("Please select a Hotel Room for the Room Charge."))
 
+    resolved_room = resolve_hotel_room(doc.hotel_room)
+    display_room = get_room_number(resolved_room) or doc.hotel_room
     folio_name = frappe.db.get_value("Guest Folio", 
-        {"room": doc.hotel_room, "status": "Open"}, "name"
+        {"room": resolved_room, "status": "Open"}, "name"
     )
     
     if not folio_name:
-        frappe.throw(_("No open Folio found for Room {0}.").format(doc.hotel_room))
+        frappe.throw(_("No open Folio found for Room {0}.").format(display_room))
 
     # 3. Determine the ratio (in case of split payments like half cash / half room charge)
     # This ensures the sales price on the folio matches the portion charged to the room
@@ -150,7 +157,7 @@ def process_room_charge(doc, method=None):
             frappe.throw(_("Reservation {0} linked to Folio {1} could not be found.").format(res_name, folio_name))
 
         if not res_details.allow_pos_posting:
-            frappe.throw(_("Room {0} is closed for POS Posting.").format(doc.hotel_room))
+            frappe.throw(_("Room {0} is closed for POS Posting.").format(display_room))
 
         if res_details.is_company_guest:
             bill_to = "Company"
@@ -236,6 +243,9 @@ def void_room_charge(doc, method=None):
     Logic: Deletes all folio transactions linked to this POS Invoice.
     Requirement: "the transaction should be located and the row deleted"
     """
+    if doc.get('fnb_version') == 'FNB v1':
+        from hospitality_core.hospitality_core.api.fnb.pos import void_room_charge as void_fnb_charge
+        return void_fnb_charge(doc)
     # 1. Find all Folio Transactions linked to this POS Invoice
     transactions = frappe.get_all("Folio Transaction", 
         filters={"reference_doctype": "POS Invoice", "reference_name": doc.name},
@@ -280,9 +290,11 @@ def get_guest_details_from_room(room_number):
     if not room_number:
         return {}
 
+    resolved_room = resolve_hotel_room(room_number)
+
     # Find the Open Folio for this room
     folio = frappe.db.get_value("Guest Folio", 
-        {"room": room_number, "status": "Open"}, 
+        {"room": resolved_room, "status": "Open"}, 
         ["name", "reservation"], 
         as_dict=True
     )

@@ -426,6 +426,8 @@ frappe.ui.form.on('Hotel Reservation', {
 
         // ROOM MOVE BUTTON
         let can_move_room = frappe.user_roles.includes('Frontdesk Supervisor') ||
+            frappe.user_roles.includes('Hospitality Manager') ||
+            frappe.user_roles.includes('System Manager') ||
             frappe.session.user === 'Administrator';
 
         if (frm.doc.status === 'Checked In' && can_move_room) {

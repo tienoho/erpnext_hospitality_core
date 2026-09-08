@@ -33,6 +33,8 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
         frappe.throw(_("New Room cannot be the same as Current Room."))
 
     old_room = res.room
+    old_room_no = frappe.db.get_value("Hotel Room", old_room, "room_number") or old_room
+    new_room_no = frappe.db.get_value("Hotel Room", new_room, "room_number") or new_room
     new_room_type = frappe.db.get_value("Hotel Room", new_room, "room_type")
     if new_room_type == 'Virtual':
         frappe.throw(_('Không được chuyển khách lưu trú vào phòng ảo.'))
@@ -98,13 +100,13 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
             frappe.throw(_(
                 "Cannot move to Room {0}: Folio {1} for that room is still Open. "
                 "Please close/settle it before moving a new guest in."
-            ).format(new_room, conflicting_folio))
+            ).format(new_room_no, conflicting_folio))
 
         frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
 
     # 4. Log the Move (Optional: Add a comment)
     comment = _("Moved from Room {0} to Room {1} on {2}").format(
-        old_room, new_room, frappe.utils.now_datetime()
+        old_room_no, new_room_no, frappe.utils.now_datetime()
     )
     # Cảnh báo/ghi chú khi căn cứ giá thực sự đổi (đổi hạng phòng VÀ/HOẶC đổi
     # rate plan) — KHÔNG khẳng định "chắc chắn mất LOS" nếu lễ tân đã chủ động
@@ -131,13 +133,13 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
             "định của hạng phòng mới — mọi giảm giá theo số đêm lưu trú (LOS) hoặc bảng giá theo mùa vụ đang áp "
             "dụng trước đó KHÔNG còn hiệu lực cho phòng mới. Vui lòng gán lại Rate Plan cho đặt phòng này nếu "
             "khách vẫn nên được hưởng ưu đãi tương ứng."
-        ).format(new_room, new_room_type), indicator="orange")
+        ).format(new_room_no, new_room_type), indicator="orange")
     elif new_snapshot:
         frappe.msgprint(_(
             "Đã chuyển khách sang phòng {0} và cập nhật Rate Plan → {1}. Giá phòng từ đêm này trở đi tính theo "
             "Rate Plan mới."
-        ).format(new_room, new_rate_plan), indicator="blue")
+        ).format(new_room_no, new_rate_plan), indicator="blue")
     else:
-        frappe.msgprint(_("Successfully moved guest to Room {0}").format(new_room))
+        frappe.msgprint(_("Successfully moved guest to Room {0}").format(new_room_no))
 
     return True

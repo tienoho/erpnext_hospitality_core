@@ -42,9 +42,15 @@ def get_profile(guest):
         if f.status=='Closed':
             spend[f.currency or 'Chưa ánh xạ']+=flt(f.total_charges)-flt(f.total_discounts)
         balances[f.currency or 'Chưa ánh xạ']+=flt(f.outstanding_balance)
+    rooms = {h.room for h in history if h.room}
+    room_map = {}
+    if rooms:
+        room_data = frappe.get_all("Hotel Room", filters={"name": ["in", list(rooms)]}, fields=["name", "room_number"])
+        room_map = {r.name: r.room_number for r in room_data}
     for h in history:
         f=indexed.get(h.folio)
         h.balance=flt(f.outstanding_balance) if f else None
+        h.room_number = room_map.get(h.room) or h.room
     visits=[h for h in history if h.status=='Checked Out']
     preferences=frappe.get_list('Guest Preference',filters={'guest':['in',guests],'active':1},
         or_filters=[['valid_until','is','not set'],['valid_until','>=',frappe.utils.nowdate()]],
@@ -60,10 +66,11 @@ def get_profile(guest):
     interactions=frappe.get_list('Guest Interaction',filters={'guest':['in',guests],'status':['!=','Resolved']},
         fields=['name','subject','status','assigned_to','property'],limit_page_length=100)
     last=visits[0] if visits else None
+    last_room_no = room_map.get(last.room) if (last and last.room) else None
     return dict(guest=doc.as_dict(),history=history[:200],history_count=len(history),preferences=preferences,
         memberships=memberships,interactions=interactions,spend_by_currency=dict(spend),balances_by_currency=dict(balances),
         stats=dict(total_stays=len(visits),total_spend=next(iter(spend.values())) if len(spend)==1 else None,
-            avg_rate=None,last_room=last.room if last else None,last_visit=last.departure_date if last else None))
+            avg_rate=None,last_room=last_room_no,last_visit=last.departure_date if last else None))
 
 
 def _merge_memberships(source_guest,target_guest):

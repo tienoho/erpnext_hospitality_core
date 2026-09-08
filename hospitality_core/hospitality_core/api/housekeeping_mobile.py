@@ -84,16 +84,17 @@ def update_room_status(room, status):
     # chạy TRƯỚC KHI transaction check-in commit xong, khiến phòng bị ghi đè
     # về "Available"/"Inspected" dù khách vừa nhận phòng thật — phòng có
     # khách hiện ra như đang trống, có thể bị bán/gán cho khách khác.
-    frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room)
+    room_doc = resolve_hotel_room(room)
+    frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room_doc)
 
     if status in ("Available", "Inspected"):
-        active_res = frappe.db.exists("Hotel Reservation", {"room": room, "status": "Checked In"})
+        active_res = frappe.db.exists("Hotel Reservation", {"room": room_doc, "status": "Checked In"})
         if active_res:
             status = "Occupied"
 
-    previous_status = frappe.db.get_value("Hotel Room", room, "status")
-    frappe.db.set_value("Hotel Room", room, "status", status)
-    log_room_status_change(room, previous_status, status)
+    previous_status = frappe.db.get_value("Hotel Room", room_doc, "status")
+    frappe.db.set_value("Hotel Room", room_doc, "status", status)
+    log_room_status_change(room_doc, previous_status, status)
     return status
 
 

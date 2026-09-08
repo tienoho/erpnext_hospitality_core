@@ -303,7 +303,7 @@ function draw_grid(data, start, end) {
 
         let hk = HK_BADGES[room.status] || { label: room.status || 'Chưa rõ', bg: '#94a3b8', color: '#fff' };
 
-        html += `<tr class="tc-room-row" data-room="${room.name}">
+        html += `<tr class="tc-room-row" data-room="${room.name}" data-room-number="${frappe.utils.escape_html(room.room_number || room.name)}">
             <td style="position: sticky; left: 0; background: #fff; z-index: 1; border-right: 2px solid #cbd5e1; padding: 5px 8px;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                     <b style="font-size:12px; color:#1e293b;">${frappe.utils.escape_html(room.room_number || room.name)}</b>
@@ -423,10 +423,11 @@ function attach_drag_handlers() {
             }
 
             let target_room = $(this).data('room');
+            let target_room_number = $(this).data('room-number') || target_room;
             if (!payload.reservation || target_room === payload.source_room) return;
 
             frappe.confirm(
-                __('Chuyển đặt phòng {0} sang Phòng {1}?', [payload.reservation, target_room]),
+                __('Chuyển đặt phòng {0} sang Phòng {1}?', [payload.reservation, target_room_number]),
                 function () {
                     frappe.call({
                         method: 'hospitality_core.hospitality_core.page.tape_chart.tape_chart.move_booking',
@@ -477,7 +478,7 @@ window.tc_open_booking_drawer = function (res_name) {
                         </div>
                         <div class="row" style="font-size:13px; line-height: 1.8;">
                             <div class="col-sm-6">
-                                <div><span class="text-muted">${__('Phòng:')}</span> <b>${frappe.utils.escape_html(b.room || __('Chưa xếp'))}</b></div>
+                                <div><span class="text-muted">${__('Phòng:')}</span> <b>${frappe.utils.escape_html(b.room_number || b.room || __('Chưa xếp'))}</b></div>
                                 <div><span class="text-muted">${__('Lưu trú:')}</span> ${b.arrival_date} &rarr; ${b.departure_date}</div>
                             </div>
                             <div class="col-sm-6 text-right">

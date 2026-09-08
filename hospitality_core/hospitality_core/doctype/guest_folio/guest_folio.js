@@ -104,16 +104,16 @@ frappe.ui.form.on('Guest Folio', {
         }
 
         // === NHÓM 3: ĐIỀU CHUYỂN & TÁCH GỘP ===
-        if (frm.doc.status === 'Open') {
-            frm.add_custom_button(__('🔀 Tách Bill Đoàn Tour'), function () {
-                show_split_tour_dialog(frm);
-            }, __('Điều Chuyển'));
-        }
-
         let can_manage_folio = frappe.user_roles.includes('Frontdesk Supervisor') ||
+            frappe.user_roles.includes('Hospitality Manager') ||
+            frappe.user_roles.includes('System Manager') ||
             frappe.session.user === 'Administrator';
 
         if (frm.doc.status === 'Open' && can_manage_folio) {
+            frm.add_custom_button(__('🔀 Tách Bill Đoàn Tour'), function () {
+                show_split_tour_dialog(frm);
+            }, __('Điều Chuyển'));
+
             frm.add_custom_button(__('Chuyển Giao Dịch (Move Bill)'), function () {
                 move_transactions_dialog(frm);
             }, __('Điều Chuyển'));

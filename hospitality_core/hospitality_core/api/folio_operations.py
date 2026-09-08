@@ -156,20 +156,31 @@ def omni_search(query):
     if not query or len(query) < 2:
         return []
 
-    like = f"%{query}%"
+    from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
+
+    allowed_properties = allowed_properties_for_report()
+    property_condition = ""
+    params = {"like": f"%{query}%"}
+    if allowed_properties is not None:
+        property_condition = "AND res.property IN %(_properties)s"
+        params["_properties"] = allowed_properties or [""]
+
     results = frappe.db.sql(
-        """
+        f"""
         SELECT
-            res.name as reservation, res.status, res.room, res.arrival_date, res.departure_date,
+            res.name as reservation, res.status, COALESCE(r.room_number, res.room) as room, res.arrival_date, res.departure_date,
             res.external_booking_id,
             g.full_name as guest_name, g.mobile_no, g.identification_no
         FROM `tabHotel Reservation` res
         LEFT JOIN `tabGuest` g ON res.guest = g.name
+        LEFT JOIN `tabHotel Room` r ON res.room = r.name
         WHERE res.status IN ('Reserved', 'Checked In')
+        {property_condition}
         AND (
             g.full_name LIKE %(like)s OR
             g.mobile_no LIKE %(like)s OR
             g.identification_no LIKE %(like)s OR
+            r.room_number LIKE %(like)s OR
             res.room LIKE %(like)s OR
             res.name LIKE %(like)s OR
             res.external_booking_id LIKE %(like)s
@@ -177,7 +188,7 @@ def omni_search(query):
         ORDER BY res.arrival_date DESC
         LIMIT 20
         """,
-        {"like": like},
+        params,
         as_dict=True,
     )
     return results
@@ -236,10 +247,11 @@ def get_split_tour_preview(folio_name):
             incidental_charges.append(row_data)
             incidental_total += amt
 
+    room_no = frappe.db.get_value("Hotel Room", folio.room, "room_number") if folio.room else ""
     return {
         "folio": folio_name,
         "guest": folio.guest,
-        "room": folio.room,
+        "room": room_no or folio.room,
         "company": folio.company,
         "room_charges": room_charges,
         "room_total": room_total,
