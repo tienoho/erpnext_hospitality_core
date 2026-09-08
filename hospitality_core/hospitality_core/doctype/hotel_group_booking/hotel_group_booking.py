@@ -103,28 +103,15 @@ class HotelGroupBooking(Document):
         res.arrival_date = self.arrival_date
         res.departure_date = self.departure_date
         res.status = "Reserved"
+        if self.get("property"):
+            res.property = self.property
+            res.operating_company = self.get("operating_company")
+            res.currency = self.get("currency")
         
-        # We need to bypass strict room validation for this 'Master' one if no room is assigned.
-        # But if the user wants "a room that will act as master", maybe they should select it?
-        # Since I didn't add a 'Master Room' field to schema, I'll assume we can't assign a physical room yet.
-        # I will Insert with a special flag context to bypass checks, OR just create the Folio.
-        # Wait, the user said "making a reservation for a room".
-        # Let's check if we can assign a dummy room type, or if I should Have added a field.
-        # I'll create it without a room and see if it passes validations (field is mandatory).
-        # Ah, 'room' is mandatory in JSON. 
-        # I'll default to the first room in the list if available, or throw an error if no room?
-        # Re-reading: "also be making a reservation for a room that will act as the master payer"
-        # Implies a room IS occupied by the master payer.
-        # Logic: Pick the first room from the child table as the Master Room?
-        # Or maybe the Group Booking needs a 'Master Room' field?
-        # Safest bet: I will create the reservation but 'room' is required.
-        # I will auto-assign the first room from the 'rooms' list to the Master Payer?
-        # No, that gives the room to the Master Payer, robbing a guest.
-        # I'll create a "Master Room" field on the Group Booking schema to be safe? 
-        # No, schema changes are done.
-        # Let's try to find a virtual room.
-        
-        virtual_rooms = frappe.get_all("Hotel Room", filters={"room_type": "Virtual"}, pluck="name")
+        virtual_filters = {"room_type": "Virtual"}
+        if self.get("property"):
+            virtual_filters["property"] = self.property
+        virtual_rooms = frappe.get_all("Hotel Room", filters=virtual_filters, pluck="name")
 
         # TRƯỚC ĐÂY: nếu chưa cấu hình Hotel Room Type "Virtual", code sẽ tự
         # động CHIẾM một phòng THẬT (self.rooms[0]) để neo Master Folio, chỉ
@@ -189,16 +176,21 @@ class HotelGroupBooking(Document):
             # bulk reservation, lễ tân sẽ cập nhật lại tên khách thật khi nhận
             # phòng. Không log_error mỗi dòng (trước đây gọi cho CẢ trường
             # hợp thành công, làm rác Error Log không cần thiết).
+            from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
             res = frappe.new_doc("Hotel Reservation")
             res.guest = self.get_corporate_guest_name(self.master_payer)
-            res.room = row.room
-            res.room_type = row.room_type
+            res.room = resolve_hotel_room(row.room, property=self.get("property"))
+            res.room_type = row.room_type or frappe.db.get_value("Hotel Room", res.room, "room_type")
             res.rate_plan = row.rate_plan
             res.arrival_date = self.arrival_date
             res.departure_date = self.departure_date
             res.is_group_guest = 1
             res.group_booking = self.name
             res.status = "Reserved"
+            if self.get("property"):
+                res.property = self.property
+                res.operating_company = self.get("operating_company")
+                res.currency = self.get("currency")
 
             # Discount Fallback logic
             res.discount_type = row.discount_type or self.discount_type

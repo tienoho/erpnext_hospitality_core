@@ -122,14 +122,19 @@ def _build_payload(invoice_doc, settings):
     configured_template = (getattr(settings, "pos_invoice_template", None) or "").strip()
     template_code = configured_template if configured_template else (f"1M{cur_year}MTT" if is_pos else f"1C{cur_year}TGT")
 
-    tax_code = (getattr(settings, "einvoice_tax_code", None) or "").strip()
-    if not tax_code:
-        default_company = frappe.db.get_single_value("Global Defaults", "default_company")
-        if default_company:
-            tax_code = frappe.db.get_value("Company", default_company, "tax_id") or ""
+    seller_tax_code = (getattr(settings, "einvoice_tax_code", None) or "").strip()
+    if not seller_tax_code:
+        company = invoice_doc.company or frappe.db.get_single_value("Global Defaults", "default_company")
+        if company:
+            seller_tax_code = frappe.db.get_value("Company", company, "tax_id") or ""
+
+    buyer_tax_code = (invoice_doc.get("tax_id") or "").strip()
+    if not buyer_tax_code and invoice_doc.customer:
+        buyer_tax_code = (frappe.db.get_value("Customer", invoice_doc.customer, "tax_id") or "").strip()
 
     return {
-        "buyer_tax_code": tax_code,
+        "seller_tax_code": seller_tax_code,
+        "buyer_tax_code": buyer_tax_code,
         "customer": invoice_doc.customer_name or invoice_doc.customer,
         "invoice_date": str(invoice_doc.posting_date),
         "currency": invoice_doc.currency,

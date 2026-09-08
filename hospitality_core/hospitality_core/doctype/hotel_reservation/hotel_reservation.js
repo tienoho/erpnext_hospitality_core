@@ -91,7 +91,7 @@ frappe.ui.form.on('Hotel Reservation', {
                                                     </div>
                                                     <div style="font-size: 13px; color: #451a03; line-height: 1.6;">
                                                         • Bậc phụ thu: <b>${sur.tier_label}</b><br>
-                                                        • Giá phòng gốc: <b>${format_currency(sur.base_rate)}</b><br>
+                                                        • Giá phòng gốc: <b>${sur.formatted_base_rate || (window.format_currency ? format_currency(sur.base_rate) : sur.base_rate)}</b><br>
                                                         • Mức phụ thu dự kiến: <b style="color: #e11d48; font-size: 16px;">${sur.formatted_amount}</b>
                                                     </div>
                                                 </div>
@@ -203,7 +203,7 @@ frappe.ui.form.on('Hotel Reservation', {
                                 d.show();
                             } else {
                                 frappe.confirm(
-                                    'Are you sure you want to Check In this guest?',
+                                    __('Bạn có chắc chắn muốn nhận phòng (Check In) cho khách này không?'),
                                     function () {
                                         frm.call({
                                             method: 'check_in_guest',
@@ -212,7 +212,7 @@ frappe.ui.form.on('Hotel Reservation', {
                                             error: reenable,
                                             callback: function (r) {
                                                 if (!r.exc) {
-                                                    frappe.msgprint('Guest Checked In Successfully');
+                                                    frappe.msgprint(__('Đã nhận phòng (Check In) thành công.'));
                                                     frm.reload_doc();
                                                 } else {
                                                     reenable();
@@ -276,7 +276,7 @@ frappe.ui.form.on('Hotel Reservation', {
                                                     </div>
                                                     <div style="font-size: 13px; color: #4c0519; line-height: 1.6;">
                                                         • Bậc phụ thu: <b>${sur.tier_label}</b><br>
-                                                        • Giá phòng gốc: <b>${format_currency(sur.base_rate)}</b><br>
+                                                        • Giá phòng gốc: <b>${sur.formatted_base_rate || (window.format_currency ? format_currency(sur.base_rate) : sur.base_rate)}</b><br>
                                                         • Mức phụ thu dự kiến: <b style="color: #e11d48; font-size: 16px;">${sur.formatted_amount}</b>
                                                     </div>
                                                 </div>
@@ -361,23 +361,35 @@ frappe.ui.form.on('Hotel Reservation', {
                                 });
                                 d.show();
                             } else {
-                                frappe.warn(
-                                    __('Xác Nhận Trả Phòng'),
-                                    __('Bạn có chắc chắn muốn Check Out cho khách <b>{0}</b> khỏi Phòng <b>{1}</b>?<br><br>Hành động này sẽ chốt Folio và chuyển phòng sang trạng thái Sẵn Sàng (hoặc Cần Dọn).', [frm.doc.guest, frm.doc.room]),
-                                    function () {
-                                        frm.call({
-                                            method: 'check_out_guest',
-                                            args: { name: frm.doc.name },
-                                            freeze: true,
-                                            callback: function (r) {
-                                                if (!r.exc) {
-                                                    frappe.msgprint(__('Khách đã trả phòng thành công.'));
-                                                    frm.reload_doc();
-                                                }
-                                            }
-                                        });
+                                let guest_label = frm.doc.guest;
+                                let room_label = frm.doc.room;
+                                frappe.db.get_value('Hotel Room', frm.doc.room, 'room_number').then(room_res => {
+                                    if (room_res && room_res.message && room_res.message.room_number) {
+                                        room_label = room_res.message.room_number;
                                     }
-                                );
+                                    frappe.db.get_value('Guest', frm.doc.guest, 'full_name').then(guest_res => {
+                                        if (guest_res && guest_res.message && guest_res.message.full_name) {
+                                            guest_label = guest_res.message.full_name;
+                                        }
+                                        frappe.warn(
+                                            __('Xác Nhận Trả Phòng'),
+                                            __('Bạn có chắc chắn muốn Check Out cho khách <b>{0}</b> khỏi Phòng <b>{1}</b>?<br><br>Hành động này sẽ chốt Folio và chuyển phòng sang trạng thái Sẵn Sàng (hoặc Cần Dọn).', [guest_label, room_label]),
+                                            function () {
+                                                frm.call({
+                                                    method: 'check_out_guest',
+                                                    args: { name: frm.doc.name },
+                                                    freeze: true,
+                                                    callback: function (r) {
+                                                        if (!r.exc) {
+                                                            frappe.msgprint(__('Khách đã trả phòng thành công.'));
+                                                            frm.reload_doc();
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        );
+                                    });
+                                });
                             }
                         }
                     });
@@ -385,8 +397,9 @@ frappe.ui.form.on('Hotel Reservation', {
             }
 
             // CANCEL RESERVATION BUTTON
-            // Visible for Reserved AND Checked In, Restricted to Supervisors
+            // Visible for Reserved AND Checked In, Restricted to Supervisors & Hospitality Manager
             let is_supervisor = frappe.user_roles.includes('Frontdesk Supervisor') ||
+                frappe.user_roles.includes('Hospitality Manager') ||
                 frappe.user_roles.includes('System Manager') ||
                 frappe.session.user === 'Administrator';
 

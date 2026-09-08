@@ -53,7 +53,7 @@ def create_invoice_from_folio(folio_name):
     transaction_ids = []
     
     # Use the Company defined on the Customer or default to user's company (but ideally Folio should drive this if multi-company)
-    company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+    company = folio.get("operating_company") or frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
 
     # Fetch default Cost Center for this Company
     default_cost_center = frappe.get_cached_value('Company', company, 'cost_center')
@@ -129,6 +129,8 @@ def create_invoice_from_folio(folio_name):
     si = frappe.new_doc("Sales Invoice")
     si.customer = customer
     si.company = company
+    if folio.get("currency"):
+        si.currency = folio.currency
     si.posting_date = frappe.utils.nowdate()
     si.due_date = frappe.utils.nowdate()
     si.set("items", items_to_bill)

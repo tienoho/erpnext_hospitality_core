@@ -464,6 +464,9 @@ def record_guest_balance(folio_doc):
             ledger_entry.folio = folio_doc.name
             ledger_entry.amount = credit_amount
             ledger_entry.status = "Available"
+            for field in ('property', 'operating_company', 'currency'):
+                if folio_doc.get(field):
+                    ledger_entry.set(field, folio_doc.get(field))
             ledger_entry.insert(ignore_permissions=True)
             
             frappe.msgprint(_("Recorded credit balance of {0} for Guest {1} in Balance Ledger.").format(
@@ -505,14 +508,9 @@ def transfer_existing_balances(folio_doc):
             "is_void": 0
         })
         
-        # Ensure BALANCE-TRANSFER item exists
-        if not frappe.db.exists("Item", "BALANCE-TRANSFER"):
-            item = frappe.new_doc("Item")
-            item.item_code = "BALANCE-TRANSFER"
-            item.item_name = "Guest Balance Transfer"
-            item.item_group = "Services"
-            item.is_stock_item = 0
-            item.insert(ignore_permissions=True)
+        # Ensure BALANCE-TRANSFER item exists with proper UOM
+        from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
+        ensure_item_exists("BALANCE-TRANSFER", "Guest Balance Transfer")
             
         txn.insert(ignore_permissions=True)
         

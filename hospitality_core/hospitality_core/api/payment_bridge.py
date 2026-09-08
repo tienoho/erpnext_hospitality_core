@@ -2,15 +2,19 @@ import frappe
 from frappe import _
 
 def _get_hotel_company(folio=None):
-    if folio and getattr(folio, "hotel_company", None):
-        return folio.hotel_company
+    if folio:
+        if getattr(folio, "operating_company", None):
+            return folio.operating_company
+        if getattr(folio, "hotel_company", None):
+            return folio.hotel_company
     default_co = frappe.db.get_single_value("Global Defaults", "default_company")
     if default_co:
         return default_co
     user_co = frappe.defaults.get_user_default("Company")
     if user_co:
         return user_co
-    return "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO"
+    first_co = frappe.db.get_value("Company", {}, "name")
+    return first_co or "CÔNG TY CỔ PHẦN NGHỈ DƯỠNG ĐÀO"
 
 @frappe.whitelist()
 def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
@@ -72,16 +76,16 @@ def create_folio_payment(folio_name, amount, mode_of_payment, hotel_reception):
         )
     if not mop_account:
         frappe.throw(_(
-            "No account configured for Mode of Payment '{0}' under Edo Heritage Hotel. "
+            "No account configured for Mode of Payment '{0}' under {1}. "
             "Please add a default account for it."
-        ).format(mode_of_payment))
+        ).format(mode_of_payment, COMPANY))
 
-    # 4. Resolve the Accounts Receivable account from Edo Heritage Hotel
+    # 4. Resolve the Accounts Receivable account from operating company
     receivable_account = frappe.db.get_value(
         "Company", COMPANY, "default_receivable_account"
     )
     if not receivable_account:
-        frappe.throw(_("No Default Receivable Account found for 'Edo Heritage Hotel'. Please configure it in Company settings."))
+        frappe.throw(_("No Default Receivable Account found for '{0}'. Please configure it in Company settings.").format(COMPANY))
 
     # 5. Resolve poster's full name from session
     poster_name = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
@@ -315,14 +319,9 @@ def process_payment_entry(doc, method=None):
             item_code = "PAYMENT"
             item_name = "Payment Credit"
         
-        # Ensure Payment Item Exists
-        if not frappe.db.exists("Item", item_code):
-            item = frappe.new_doc("Item")
-            item.item_code = item_code
-            item.item_name = item_name
-            item.item_group = "Services" if frappe.db.exists("Item Group", "Services") else "All Item Groups"
-            item.is_stock_item = 0
-            item.insert(ignore_permissions=True)
+        # Ensure Payment Item Exists with proper UOM
+        from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
+        ensure_item_exists(item_code, item_name)
         
         # Determine bill_to based on whether this is a Company or Group Master Folio
         # TRƯỚC ĐÂY: chỉ kiểm tra is_company_master — group_booking.py's

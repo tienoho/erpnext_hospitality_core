@@ -408,11 +408,12 @@ window.update_room_status = function (room_name, new_status) {
         freeze: true,
         callback: function (r) {
             if (!r.exc) {
-                let status_label = (HK_STATUS_CONFIG[new_status] && HK_STATUS_CONFIG[new_status].label) || new_status;
+                let final_status = (r.message && r.message.status) || new_status;
+                let status_label = (HK_STATUS_CONFIG[final_status] && HK_STATUS_CONFIG[final_status].label) || final_status;
                 frappe.show_alert({ message: __('Đã đổi trạng thái phòng sang {0}', [status_label]), indicator: 'green' });
-                // Cập nhật ngay trong cache để giao diện đổi tức thì
+                // Cập nhật ngay trong cache để giao diện đổi tức thì theo trạng thái thực tế từ server
                 let found = _hk_rooms_cache.find(x => x.name === room_name);
-                if (found) found.status = new_status;
+                if (found) found.status = final_status;
                 render_kpi_summary();
                 render_filtered_rooms();
             }

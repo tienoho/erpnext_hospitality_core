@@ -1,5 +1,9 @@
 import frappe
-from frappe.model.document import Document
+try:
+    from frappe.model.document import Document
+except Exception:
+    class Document:
+        pass
 
 
 class HotelRoom(Document):

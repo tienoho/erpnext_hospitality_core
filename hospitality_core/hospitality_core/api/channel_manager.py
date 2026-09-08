@@ -44,7 +44,8 @@ def _find_or_create_guest(guest_name, mobile_no=None, identification_no=None):
         guest = frappe.db.get_value("Guest", {"mobile_no": mobile_no}, "name")
 
     if guest:
-        return guest
+        from hospitality_core.hospitality_core.api.guest_crm import canonical
+        return canonical(guest)
 
     doc = frappe.get_doc({
         "doctype": "Guest",
@@ -56,15 +57,19 @@ def _find_or_create_guest(guest_name, mobile_no=None, identification_no=None):
     return doc.name
 
 
-def _auto_assign_room(room_type, arrival_date, departure_date):
+def _auto_assign_room(room_type, arrival_date, departure_date, property=None):
     """
     Picks the first room of `room_type` with no overlapping Reserved/Checked
     In booking in the requested date range. Raises if none is free — this
     IS the overbooking guard the Channel Manager pillar is meant to provide.
     """
+    room_filters = {"room_type": room_type, "is_enabled": 1, "status": ["!=", "Out of Order"]}
+    if property:
+        room_filters["property"] = property
+
     candidate_rooms = frappe.get_all(
         "Hotel Room",
-        filters={"room_type": room_type, "is_enabled": 1, "status": ["!=", "Out of Order"]},
+        filters=room_filters,
         pluck="name",
         order_by="room_number asc",
     )
@@ -165,9 +170,12 @@ def receive_ota_webhook(platform, secret, payload):
         guest = _find_or_create_guest(
             payload["guest_name"], payload.get("mobile_no"), payload.get("identification_no")
         )
-        room = _auto_assign_room(payload["room_type"], arrival_date, departure_date)
+        prop = payload.get("property")
+        room = _auto_assign_room(payload["room_type"], arrival_date, departure_date, property=prop)
+        room_prop = frappe.db.get_value("Hotel Room", room, "property")
+        resolved_prop = prop or room_prop
 
-        reservation = frappe.get_doc({
+        res_data = {
             "doctype": "Hotel Reservation",
             "hotel_reception": settings.default_hotel_reception,
             "guest": guest,
@@ -178,7 +186,10 @@ def receive_ota_webhook(platform, secret, payload):
             "booking_source": "OTA",
             "ota_platform": platform,
             "external_booking_id": payload["external_booking_id"],
-        })
+        }
+        if resolved_prop:
+            res_data["property"] = resolved_prop
+        reservation = frappe.get_doc(res_data)
         reservation.insert(ignore_permissions=True)
 
         frappe.logger("channel_manager").info(
@@ -191,7 +202,7 @@ def receive_ota_webhook(platform, secret, payload):
 
 
 @frappe.whitelist()
-def push_availability(room_type, start_date, end_date):
+def push_availability(room_type, start_date, end_date, property=None):
     """
     MOCK: would call each enabled OTA's inventory API to push remaining
     room-nights for `room_type` between start_date/end_date. Wire in real
@@ -211,16 +222,19 @@ def push_availability(room_type, start_date, end_date):
         }.items() if flag
     ]
 
-    available_count = frappe.db.count("Hotel Room", {"room_type": room_type, "is_enabled": 1}) - len(
-        frappe.get_all(
-            "Hotel Reservation",
-            filters={
-                "room_type": room_type,
-                "status": ["in", ["Reserved", "Checked In"]],
-                "arrival_date": ["<", end_date],
-                "departure_date": [">", start_date],
-            },
-        )
+    room_filters = {"room_type": room_type, "is_enabled": 1, "status": ["!=", "Out of Order"]}
+    res_filters = {
+        "room_type": room_type,
+        "status": ["in", ["Reserved", "Checked In"]],
+        "arrival_date": ["<", end_date],
+        "departure_date": [">", start_date],
+    }
+    if property:
+        room_filters["property"] = property
+        res_filters["property"] = property
+
+    available_count = frappe.db.count("Hotel Room", room_filters) - len(
+        frappe.get_all("Hotel Reservation", filters=res_filters)
     )
 
     frappe.logger("channel_manager").info(

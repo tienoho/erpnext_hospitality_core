@@ -125,15 +125,17 @@ def post_daily_charge(res, target_date):
     common = dict(doctype='Folio Transaction', parent=res.folio, parenttype='Guest Folio',
                   parentfield='transactions', posting_date=str(target_date), qty=1, bill_to=bill_to,
                   pricing_reservation=res.name)
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import get_room_number
+    room_label = get_room_number(res.room) or res.room
     rent = frappe.get_doc(dict(common, item='ROOM-RENT', amount=gross,
-        description=f'Room Charge - {res.room}', pricing_details=json.dumps(details, ensure_ascii=False)))
+        description=f'Room Charge - {room_label}', pricing_details=json.dumps(details, ensure_ascii=False)))
     rent.flags.from_rate_plan = True
     rent.insert(ignore_permissions=True)
     if gross != final_gross:
         item = 'COMPLIMENTARY' if details['complimentary'] else 'DISCOUNT'
         ensure_item_exists(item, item)
         discount = frappe.get_doc(dict(common, item=item, amount=final_gross-gross, pricing_origin=rent.name,
-            description=f"Room Discount - {res.room}: LOS {quote['los_percent']}% ({quote['los_discount']}), "
+            description=f"Room Discount - {room_label}: LOS {quote['los_percent']}% ({quote['los_discount']}), "
                         f"khác {quote['manual_discount']}"))
         discount.flags.from_rate_plan = True
         discount.insert(ignore_permissions=True)

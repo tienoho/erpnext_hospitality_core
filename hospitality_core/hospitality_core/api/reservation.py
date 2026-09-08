@@ -10,6 +10,11 @@ def check_availability(room, arrival_date, departure_date, ignore_reservation=No
     if not room or not arrival_date or not departure_date:
         return
 
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room, get_room_number
+
+    resolved_room = resolve_hotel_room(room)
+    room_label = get_room_number(resolved_room) or str(room)
+
     # Khóa dòng Hotel Room (SELECT ... FOR UPDATE) trước khi đọc các đặt phòng
     # đang trùng lịch — nếu không, 2 request tạo/duyệt Hotel Reservation đồng
     # thời cho CÙNG MỘT phòng (2 quầy lễ tân, hoặc kéo-thả trùng lúc trên Tape
@@ -17,25 +22,25 @@ def check_availability(room, arrival_date, departure_date, ignore_reservation=No
     # rồi cả hai cùng lưu thành công — double-booking. create_folio() trong
     # cùng file này đã dùng đúng mẫu khóa này cho Hotel Reservation, chỉ chưa
     # áp dụng cho tài nguyên khan hiếm thật sự là Hotel Room.
-    frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room)
+    frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", resolved_room)
 
     # 1. Check if Room is Enabled (Maintenance check)
-    room_status = frappe.db.get_value("Hotel Room", room, ["status", "is_enabled", "property"], as_dict=True)
+    room_status = frappe.db.get_value("Hotel Room", resolved_room, ["status", "is_enabled", "property"], as_dict=True)
     if not room_status:
-        frappe.throw(_("Room {0} does not exist.").format(room))
+        frappe.throw(_("Room {0} does not exist.").format(room_label))
     if room_status.property:
         from hospitality_core.hospitality_core.api.property_scope import require_property
         require_property(room_status.property)
     if not room_status.is_enabled:
-        frappe.throw(_("Room {0} is currently disabled/under maintenance.").format(room))
+        frappe.throw(_("Room {0} is currently disabled/under maintenance.").format(room_label))
     
     if room_status.status == "Out of Order":
-        frappe.throw(_("Room {0} is marked Out of Order.").format(room))
+        frappe.throw(_("Room {0} is marked Out of Order.").format(room_label))
 
     # 2. Check Overlapping Reservations
     # Logic: New Arrival < Existing Departure AND New Departure > Existing Arrival
     filters = {
-        "room": room,
+        "room": resolved_room,
         "status": ["in", ["Reserved", "Checked In"]],
         "name": ["!=", ignore_reservation] if ignore_reservation else ["is", "set"]
     }
@@ -51,7 +56,7 @@ def check_availability(room, arrival_date, departure_date, ignore_reservation=No
            (getdate(departure_date) > getdate(booking.arrival_date)):
              frappe.throw(
                 _("Room {0} is already booked by {1} from {2} to {3} (Reservation: {4})").format(
-                    room, booking.guest, booking.arrival_date, booking.departure_date, booking.name
+                    room_label, booking.guest, booking.arrival_date, booking.departure_date, booking.name
                 )
              )
     
@@ -65,15 +70,20 @@ def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservat
     if not rooms or not arrival_date or not departure_date:
         return
 
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room, get_room_number
+
     conflicts = []
 
-    rooms = sorted(set(rooms))
+    # Map physical room numbers or hashes to canonical docnames
+    room_to_canonical = {r: resolve_hotel_room(r) for r in rooms if r}
+    canonical_rooms = sorted({c for c in room_to_canonical.values() if c})
+
     frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name IN %(rooms)s ORDER BY name FOR UPDATE",
-                  {"rooms": rooms})
+                  {"rooms": canonical_rooms})
 
     # 1. Check Room Maintenance Status for all rooms in batch
     room_data = frappe.get_all("Hotel Room", 
-        filters={"name": ["in", rooms]},
+        filters={"name": ["in", canonical_rooms]},
         fields=["name", "room_number", "status", "is_enabled", "property"]
     )
 
@@ -82,22 +92,24 @@ def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservat
         require_property(prop)
     room_map = {r.name: r for r in room_data}
 
-    for room_num in rooms:
-        r = room_map.get(room_num)
+    for orig_room in sorted(set(rooms)):
+        canon = room_to_canonical.get(orig_room)
+        r = room_map.get(canon)
+        label = (r.room_number if r and r.room_number else None) or orig_room
         if not r:
-            conflicts.append(_("Room {0} does not exist.").format(room_num))
+            conflicts.append(_("Room {0} does not exist.").format(label))
             continue
             
         if not r.is_enabled:
-            conflicts.append(_("Room {0} is currently disabled/under maintenance.").format(room_num))
+            conflicts.append(_("Room {0} is currently disabled/under maintenance.").format(label))
         elif r.status == "Out of Order":
-            conflicts.append(_("Room {0} is marked Out of Order.").format(room_num))
+            conflicts.append(_("Room {0} is marked Out of Order.").format(label))
 
     # 2. Check Overlapping Reservations for all rooms in batch
     # Logic: New Arrival < Existing Departure AND New Departure > Existing Arrival
     existing_bookings = frappe.get_all("Hotel Reservation", 
         filters={
-            "room": ["in", rooms],
+            "room": ["in", canonical_rooms],
             "status": ["in", ["Reserved", "Checked In"]],
             "name": ["!=", ignore_reservation] if ignore_reservation else ["is", "set"]
         },
@@ -108,9 +120,10 @@ def check_bulk_availability(rooms, arrival_date, departure_date, ignore_reservat
         # Check for date overlap
         if (getdate(arrival_date) < getdate(booking.departure_date)) and \
            (getdate(departure_date) > getdate(booking.arrival_date)):
+             b_room_label = get_room_number(booking.room) or booking.room
              conflicts.append(
                 _("Room {0} is already booked by {1} from {2} to {3} (Reservation: {4})").format(
-                    booking.room, booking.guest, booking.arrival_date, booking.departure_date, booking.name
+                    b_room_label, booking.guest, booking.arrival_date, booking.departure_date, booking.name
                 )
              )
 
@@ -216,7 +229,9 @@ def get_room_rate(room=None, rate_plan=None, room_type=None, arrival_date=None, 
     from hospitality_core.hospitality_core.api.rate_calculation import quote_day, quote_stay
     from frappe.utils import cint
     if room:
-        room_type = frappe.db.get_value('Hotel Room', room, 'room_type')
+        from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
+        resolved_room = resolve_hotel_room(room, property=property)
+        room_type = frappe.db.get_value('Hotel Room', resolved_room, 'room_type')
     if not room_type or not arrival_date or not departure_date:
         return dict(nightly_rates=[], nights=0, total=0)
     saved = None

@@ -106,6 +106,7 @@ def calculate_checkin_surcharge(reservation_name, checkin_time=None):
         "applicable": True,
         "checkin_time": t.strftime("%H:%M:%S"),
         "base_rate": base_rate,
+        "formatted_base_rate": frappe.format(base_rate, {"fieldtype": "Currency"}),
         "pct": tier_pct,
         "amount": fee,
         "formatted_amount": frappe.format(fee, {"fieldtype": "Currency"}),
@@ -159,6 +160,7 @@ def calculate_checkout_surcharge(reservation_name, checkout_time=None):
         "applicable": True,
         "checkout_time": t.strftime("%H:%M:%S"),
         "base_rate": base_rate,
+        "formatted_base_rate": frappe.format(base_rate, {"fieldtype": "Currency"}),
         "pct": tier_pct,
         "amount": fee,
         "formatted_amount": frappe.format(fee, {"fieldtype": "Currency"}),
@@ -197,11 +199,17 @@ def apply_surcharge_to_folio(reservation_name, surcharge_type, amount=None, desc
         return {"success": False, "message": _("Số tiền phụ thu phải lớn hơn 0.")}
 
     from hospitality_core.hospitality_core.api.folio import sync_folio_balance
+    from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import get_room_number
 
     # Item code đại diện cho phụ thu
     item_code = "SURCHARGE-EARLY" if surcharge_type == "Early Check-in" else "SURCHARGE-LATE"
+    item_name = _("Phụ thu nhận phòng sớm") if surcharge_type == "Early Check-in" else _("Phụ thu trả phòng muộn")
+    ensure_item_exists(item_code, item_name)
+
+    room_label = get_room_number(res.room) or res.room
     if not description:
-        description = f"Phụ thu {surcharge_type} phòng {res.room}"
+        description = _("Phụ thu {0} phòng {1}").format(surcharge_type, room_label)
 
     # Chốt chặn trùng lặp: chỉ mirror_to_company_folio()/mirror_to_group_folio()
     # trong folio.py có kiểm tra "đã ghi chưa", còn hàm này thì không — nếu

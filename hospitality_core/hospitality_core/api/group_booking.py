@@ -274,23 +274,30 @@ def bulk_reserve_rooms(group_booking, guest, rooms, arrival_date, departure_date
     created_reservations = []
     errors = []
     
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
+
     for room in room_list:
         try:
             # Create Hotel Reservation
+            resolved_room = resolve_hotel_room(room, property=group_doc.get("property"))
             res = frappe.new_doc("Hotel Reservation")
             res.guest = guest
-            res.room = room
+            res.room = resolved_room
             # Get room type
-            res.room_type = frappe.db.get_value("Hotel Room", room, "room_type")
+            res.room_type = frappe.db.get_value("Hotel Room", resolved_room, "room_type")
             res.arrival_date = arrival_date
             res.departure_date = departure_date
             res.group_booking = group_booking
             res.is_group_guest = 1
             res.company = group_doc.master_payer
+            if group_doc.get("property"):
+                res.property = group_doc.property
+                res.operating_company = group_doc.get("operating_company")
+                res.currency = group_doc.get("currency")
             
             # --- EXTRACT FROM TABLE ---
             # Look for this room in the group booking's rooms child table
-            row = next((r for r in group_doc.get("rooms", []) if r.room == room), None)
+            row = next((r for r in group_doc.get("rooms", []) if r.room in (room, resolved_room)), None)
             
             if row:
                 res.rate_plan = row.rate_plan

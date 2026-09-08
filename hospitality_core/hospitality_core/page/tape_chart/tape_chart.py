@@ -109,28 +109,31 @@ def move_booking(reservation_name, new_room):
         return process_room_move(reservation_name, new_room)
 
     elif res.status == "Reserved":
-        if res.room == new_room:
+        from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room, get_room_number
+
+        canonical_new_room = resolve_hotel_room(new_room, property=res.get("property")) or new_room
+        if res.room == canonical_new_room:
             frappe.throw(_("Phòng mới không được trùng với phòng hiện tại."))
 
         if res.get("property"):
             from hospitality_core.hospitality_core.api.property_scope import require_property
             require_property(res.property)
-            if frappe.db.get_value("Hotel Room", new_room, "property") != res.property:
+            if frappe.db.get_value("Hotel Room", canonical_new_room, "property") != res.property:
                 frappe.throw(_("Chuyển phòng không được đổi cơ sở; cần booking mới có liên kết nguồn."))
 
-        new_room_type = frappe.db.get_value("Hotel Room", new_room, "room_type")
+        new_room_type = frappe.db.get_value("Hotel Room", canonical_new_room, "room_type")
         if new_room_type == "Virtual":
             frappe.throw(_("Không được gán đặt phòng vào phòng ảo."))
 
         old_room = res.room
-        res.room = new_room
+        res.room = canonical_new_room
         res.save()
 
         if res.folio:
-            frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
+            frappe.db.set_value("Guest Folio", res.folio, "room", canonical_new_room)
 
-        old_room_no = frappe.db.get_value("Hotel Room", old_room, "room_number") if old_room else _("Chưa gán")
-        new_room_no = frappe.db.get_value("Hotel Room", new_room, "room_number") or new_room
+        old_room_no = get_room_number(old_room) or old_room or _("Chưa gán")
+        new_room_no = get_room_number(canonical_new_room) or canonical_new_room
 
         comment = _("Đổi phòng trước nhận phòng từ phòng {0} sang phòng {1} trên Sơ đồ Tape Chart").format(
             old_room_no, new_room_no

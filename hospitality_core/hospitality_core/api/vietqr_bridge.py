@@ -134,7 +134,11 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
     prefix = (getattr(settings, "vietqr_content_prefix", None) or "").strip()
 
     # Fallback động từ Company mặc định của hệ thống nếu chưa cấu hình tên chủ tài khoản
-    default_company = frappe.db.get_single_value("Global Defaults", "default_company") or frappe.defaults.get_user_default("Company")
+    default_company = (
+        (frappe.db.get_value("Guest Folio", folio_name, "operating_company") if folio_name else None)
+        or frappe.db.get_single_value("Global Defaults", "default_company")
+        or frappe.defaults.get_user_default("Company")
+    )
     if not account_name and default_company:
         account_name = default_company.upper()
 
@@ -166,7 +170,8 @@ def generate_vietqr_payload(folio_name=None, amount=None, description=None):
             pay_amount = flt(folio.outstanding_balance or 0)
         
         if folio.room:
-            display_room = frappe.db.get_value("Hotel Room", folio.room, "room_number") or folio.room
+            from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import get_room_number
+            display_room = get_room_number(folio.room) or folio.room
             room_no = display_room
 
         if not description:

@@ -31,6 +31,9 @@ def set_room_status(room, status):
     from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
     room = resolve_hotel_room(room)
 
+    if not frappe.db.exists("Hotel Room", room):
+        frappe.throw(_("Không tìm thấy phòng {0}.").format(room))
+
     frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room)
 
     if status == "Available":
@@ -44,7 +47,7 @@ def set_room_status(room, status):
     previous_status = frappe.db.get_value("Hotel Room", room, "status")
     frappe.db.set_value("Hotel Room", room, "status", status)
     log_room_status_change(room, previous_status, status)
-    return True
+    return {"success": True, "status": status, "room": room}
 
 @frappe.whitelist()
 def batch_set_room_status(rooms, status):

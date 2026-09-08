@@ -18,24 +18,29 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
     if not (any(r in user_roles for r in allowed) or frappe.session.user == "Administrator"):
         frappe.throw(_("Access Denied. Only Frontdesk Supervisors, Hospitality Managers, and Administrators can move rooms."))
 
+    from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room, get_room_number
+
     res = frappe.get_doc("Hotel Reservation", reservation_name, for_update=True)
     res.check_permission('write')
+
+    canonical_new_room = resolve_hotel_room(new_room, property=res.get('property')) or new_room
+
     if res.get('property'):
         from hospitality_core.hospitality_core.api.property_scope import require_property
         require_property(res.property)
-        if frappe.db.get_value('Hotel Room', new_room, 'property') != res.property:
+        if frappe.db.get_value('Hotel Room', canonical_new_room, 'property') != res.property:
             frappe.throw(_('Chuyển phòng không được đổi cơ sở; cần booking mới có liên kết nguồn.'))
     
     if res.status != "Checked In":
         frappe.throw(_("Room moves are only allowed for Checked In guests."))
         
-    if res.room == new_room:
+    if res.room == canonical_new_room:
         frappe.throw(_("New Room cannot be the same as Current Room."))
 
     old_room = res.room
-    old_room_no = frappe.db.get_value("Hotel Room", old_room, "room_number") or old_room
-    new_room_no = frappe.db.get_value("Hotel Room", new_room, "room_number") or new_room
-    new_room_type = frappe.db.get_value("Hotel Room", new_room, "room_type")
+    old_room_no = get_room_number(old_room) or old_room
+    new_room_no = get_room_number(canonical_new_room) or canonical_new_room
+    new_room_type = frappe.db.get_value("Hotel Room", canonical_new_room, "room_type")
     if new_room_type == 'Virtual':
         frappe.throw(_('Không được chuyển khách lưu trú vào phòng ảo.'))
     from hospitality_core.hospitality_core.api.rate_plan import snapshot_for
@@ -69,17 +74,22 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
 
     # 1. Validate Availability (for the remaining dates)
     # We check from Today to Departure Date
-    check_availability(new_room, frappe.utils.nowdate(), res.departure_date, ignore_reservation=res.name)
+    check_availability(canonical_new_room, frappe.utils.nowdate(), res.departure_date, ignore_reservation=res.name)
 
-    # 2. Update Statuses
+    # 2. Update Statuses and Housekeeping Log
     # Old Room -> Dirty (housekeeping needs to turnover and clean)
+    from hospitality_core.hospitality_core.page.housekeeping_view.housekeeping_view import log_room_status_change
+    prev_old_status = frappe.db.get_value("Hotel Room", old_room, "status")
     frappe.db.set_value("Hotel Room", old_room, "status", "Dirty")
+    log_room_status_change(old_room, prev_old_status, "Dirty")
     
     # New Room -> Occupied
-    frappe.db.set_value("Hotel Room", new_room, "status", "Occupied")
+    prev_new_status = frappe.db.get_value("Hotel Room", canonical_new_room, "status")
+    frappe.db.set_value("Hotel Room", canonical_new_room, "status", "Occupied")
+    log_room_status_change(canonical_new_room, prev_new_status, "Occupied")
 
     # 3. Update Documents (Bypass set_only_once restriction)
-    res.db_set("room", new_room)
+    res.db_set("room", canonical_new_room)
     if new_room_type and res.room_type != new_room_type:
         res.db_set("room_type", new_room_type)
     if new_snapshot:
@@ -92,7 +102,7 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
         # folio has this room — refuse to create a second one so a previous
         # occupant's still-open folio can't silently absorb the new guest's charges.
         conflicting_folio = frappe.db.get_value("Guest Folio", {
-            "room": new_room,
+            "room": canonical_new_room,
             "status": "Open",
             "name": ["!=", res.folio]
         }, "name")
@@ -102,7 +112,7 @@ def process_room_move(reservation_name, new_room, new_rate_plan=None):
                 "Please close/settle it before moving a new guest in."
             ).format(new_room_no, conflicting_folio))
 
-        frappe.db.set_value("Guest Folio", res.folio, "room", new_room)
+        frappe.db.set_value("Guest Folio", res.folio, "room", canonical_new_room)
 
     # 4. Log the Move (Optional: Add a comment)
     comment = _("Moved from Room {0} to Room {1} on {2}").format(

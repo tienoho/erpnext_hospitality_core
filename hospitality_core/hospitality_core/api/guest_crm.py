@@ -112,7 +112,12 @@ def _merge_memberships(source_guest,target_guest):
 
     for sm in source_memberships:
         target_name = target_memberships.get(sm.program)
-        if not target_name or target_name == sm.name:
+        if not target_name:
+            # target_guest does not yet have a membership in this program: transfer ownership of source membership
+            frappe.db.set_value('Guest Membership', sm.name, 'guest', target_guest)
+            target_memberships[sm.program] = sm.name
+            continue
+        if target_name == sm.name:
             continue
         source_member = _member(sm.name, lock=True)
         target_member = _member(target_name, lock=True)

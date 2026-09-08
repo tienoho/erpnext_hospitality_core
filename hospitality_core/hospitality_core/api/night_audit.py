@@ -335,13 +335,17 @@ def already_charged_today(folio_name, date, room=None):
     }
     if room:
         # Crucial for Group Payer Folio which contains mirrored charges for many rooms.
-        # Match the room number as a whole token (bounded by non-digits) so room "10"
-        # doesn't false-positive match a description mentioning room "101".
-        filters["description"] = ["like", f"%{room}%"]
+        # Match both the room docname hash and physical room number as whole tokens
+        # so room "10" doesn't false-positive match a description mentioning room "101".
+        from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import get_room_number
+        room_number = get_room_number(room)
         candidates = frappe.get_all("Folio Transaction", filters=filters, pluck="description")
+        tokens = {str(room).strip()}
+        if room_number:
+            tokens.add(str(room_number).strip())
         import re
-        pattern = re.compile(r"(?<!\d)" + re.escape(str(room)) + r"(?!\d)")
-        return any(pattern.search(desc or "") for desc in candidates)
+        patterns = [re.compile(r"(?<!\w)" + re.escape(t) + r"(?!\w)") for t in tokens if t]
+        return any(any(p.search(desc or "") for p in patterns) for desc in candidates)
 
     return frappe.db.exists("Folio Transaction", filters)
 
@@ -371,10 +375,17 @@ def ensure_item_exists(code, name):
         item = frappe.new_doc("Item")
         item.item_code = code
         item.item_name = name
-        item.item_group = "Services"
+        item.item_group = "Services" if frappe.db.exists("Item Group", "Services") else "All Item Groups"
         item.is_stock_item = 0
-        item.stock_uom = (frappe.db.get_single_value('Stock Settings', 'stock_uom')
-                          or frappe.db.get_value('Item', 'ROOM-RENT', 'stock_uom'))
-        if not item.stock_uom:
-            frappe.throw(_('Cần cấu hình đơn vị tính mặc định trước khi tạo mặt hàng ghi phí.'))
+        stock_uom = (frappe.db.get_single_value('Stock Settings', 'stock_uom')
+                     or frappe.db.get_value('Item', 'ROOM-RENT', 'stock_uom'))
+        if not stock_uom or not frappe.db.exists('UOM', stock_uom):
+            if frappe.db.exists('UOM', 'Nos'):
+                stock_uom = 'Nos'
+            elif frappe.db.exists('UOM', 'Unit'):
+                stock_uom = 'Unit'
+            else:
+                first_uom = frappe.db.get_value('UOM', {}, 'name')
+                stock_uom = first_uom or 'Nos'
+        item.stock_uom = stock_uom
         item.insert(ignore_permissions=True)

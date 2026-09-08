@@ -229,6 +229,31 @@ def _build_excel_workbook(title, subtitle, meta_text, headers, rows, sheet_title
     return buf
 
 
+def _is_foreign_guest(g):
+    """
+    Kiểm tra khách có yếu tố nước ngoài dựa trên cờ is_alien, loại giấy tờ
+    (Passport), số hộ chiếu, hoặc quốc tịch khác Việt Nam.
+    """
+    if g.get("is_alien") or g.get("passport_number") or g.get("identification_type") == "Passport":
+        return True
+    nat = (g.get("nationality") or "").strip().lower()
+    if nat and nat not in ("vietnam", "viet nam", "việt nam", "vnm", "vn"):
+        return True
+    return False
+
+
+def _normalize_iso3_nationality(nationality_val, is_alien=False):
+    """
+    Chuẩn hóa mã quốc tịch: nếu là Việt Nam chuyển thành VNM, nếu rỗng trả về VNM hoặc FOR.
+    """
+    nat = (nationality_val or "").strip()
+    if not nat:
+        return "FOR" if is_alien else "VNM"
+    if nat.lower() in ("việt nam", "vietnam", "viet nam", "vnm", "vn"):
+        return "VNM"
+    return nat
+
+
 @frappe.whitelist()
 def get_daily_guest_list(target_date=None, company=None):
     """
@@ -249,6 +274,10 @@ def get_daily_guest_list(target_date=None, company=None):
         # In/Checked Out/Cancelled — 'Arrived'/'Confirmed' không tồn tại,
         # không bao giờ khớp, chỉ gây hiểu nhầm nên đã bỏ).
         #
+        # QUAN TRỌNG: JOIN tabHotel Room hr để lấy số phòng vật lý (hr.room_number,
+        # VD: "101", "Villa 01") thay vì xuất mã hash kỹ thuật (r.room) sang cột
+        # "Số phòng" — nếu xuất mã hash, Cổng DVC và Công an địa phương sẽ từ chối.
+        #
         # QUAN TRỌNG: KHÔNG lọc theo r.company — trường "company" trên Hotel
         # Reservation thực chất là Link tới CUSTOMER (đối tượng chịu trách
         # nhiệm thanh toán, VD công ty lữ hành đặt hộ khách), KHÔNG PHẢI Link
@@ -256,12 +285,7 @@ def get_daily_guest_list(target_date=None, company=None):
         # hàm này. Bộ lọc cũ so sánh 2 giá trị này với nhau nên gần như không
         # bao giờ khớp — MỌI khách đặt qua công ty/đại lý lữ hành (r.company
         # có giá trị) bị âm thầm LOẠI KHỎI báo cáo khai báo tạm trú, trong khi
-        # đây chính là nhóm khách bắt buộc phải khai báo với Công an. Vì app
-        # này hiện chỉ hỗ trợ 1 pháp nhân/1 cơ sở lưu trú (chưa có multi-
-        # property — xem kế hoạch nâng cấp), không có trường property/company
-        # nào đáng tin cậy khác để lọc, nên bỏ hẳn điều kiện lọc theo company;
-        # tham số `company` vẫn được giữ lại chỉ để hiển thị trên tiêu đề báo
-        # cáo xuất ra.
+        # đây chính là nhóm khách bắt buộc phải khai báo với Công an.
         guests = frappe.db.sql("""
             SELECT
                 g.name AS guest_id,
@@ -275,7 +299,7 @@ def get_daily_guest_list(target_date=None, company=None):
                 g.date_of_birth,
                 g.nationality,
                 r.name AS reservation_id,
-                r.room AS room_number,
+                COALESCE(NULLIF(hr.room_number, ''), r.room, '') AS room_number,
                 r.arrival_date,
                 r.departure_date,
                 r.status AS reservation_status,
@@ -284,9 +308,10 @@ def get_daily_guest_list(target_date=None, company=None):
                 r.company
             FROM `tabHotel Reservation` r
             LEFT JOIN `tabGuest` g ON r.guest = g.name
+            LEFT JOIN `tabHotel Room` hr ON r.room = hr.name
             WHERE (r.status = 'Checked In')
               AND (r.arrival_date <= %(target_date)s AND r.departure_date >= %(target_date)s)
-            ORDER BY r.room ASC, g.full_name ASC
+            ORDER BY COALESCE(NULLIF(hr.room_number, ''), r.room) ASC, g.full_name ASC
         """, {"target_date": target_date}, as_dict=True)
     except Exception as e:
         # TRƯỚC ĐÂY: nuốt mọi lỗi truy vấn thành danh sách rỗng — nếu một sửa
@@ -490,9 +515,9 @@ def export_quangninh_immigration_report(target_date=None, company=None, file_for
     if not company:
         company = conf["resort_company_name"]
 
-    # Chỉ lọc các khách có yếu tố nước ngoài (is_alien = 1 hoặc Passport)
+    # Chỉ lọc các khách có yếu tố nước ngoài (is_alien = 1, Passport, hoặc quốc tịch ngoài Việt Nam)
     all_guests = get_daily_guest_list(target_date, company)
-    foreign_guests = [g for g in all_guests if g.get('is_alien') or g.get('passport_number') or g.get('identification_type') == 'Passport']
+    foreign_guests = [g for g in all_guests if _is_foreign_guest(g)]
 
     output = io.StringIO()
     output.write('\ufeff')
@@ -534,10 +559,7 @@ def export_quangninh_immigration_report(target_date=None, company=None, file_for
         passport_no = g.get('passport_number') or g.get('identification_no') or ""
         gender_code = _vn_gender_label(g.get('gender'), form="code")
         dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
-        # Mã ISO-3 thật cần bảng tra quốc gia riêng (Country doctype lõi của
-        # Frappe không có sẵn mã alpha-3) — tạm dùng tên quốc tịch thật nếu đã
-        # khai báo trên Guest, thay vì luôn hardcode "FOR" bất kể quốc tịch gì.
-        nationality_code = g.get('nationality') or ("VNM" if not g.get('is_alien') else "FOR")
+        nationality_code = _normalize_iso3_nationality(g.get('nationality'), g.get('is_alien'))
         cin = formatdate(g.get('arrival_date'), "dd/mm/yyyy") if g.get('arrival_date') else formatdate(target_date, "dd/mm/yyyy")
         cout = formatdate(g.get('departure_date'), "dd/mm/yyyy") if g.get('departure_date') else ""
 
@@ -585,7 +607,7 @@ def export_quangninh_immigration_report_xlsx(target_date=None, company=None):
         company = conf["resort_company_name"]
 
     all_guests = get_daily_guest_list(target_date, company)
-    foreign_guests = [g for g in all_guests if g.get('is_alien') or g.get('passport_number') or g.get('identification_type') == 'Passport']
+    foreign_guests = [g for g in all_guests if _is_foreign_guest(g)]
 
     headers = [
         "STT",
@@ -617,7 +639,7 @@ def export_quangninh_immigration_report_xlsx(target_date=None, company=None):
         # bản của CÙNG một loại báo cáo chính thức.
         gender_code = _vn_gender_label(g.get('gender'), form="code")
         dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
-        nationality_code = g.get('nationality') or ("VNM" if not g.get('is_alien') else "FOR")
+        nationality_code = _normalize_iso3_nationality(g.get('nationality'), g.get('is_alien'))
         cin = formatdate(g.get('arrival_date'), "dd/mm/yyyy") if g.get('arrival_date') else formatdate(target_date, "dd/mm/yyyy")
         cout = formatdate(g.get('departure_date'), "dd/mm/yyyy") if g.get('departure_date') else ""
 
@@ -693,9 +715,9 @@ def export_police_declaration_xml(target_date=None, company=None):
 
     for idx, g in enumerate(guests, start=1):
         full_name = (g.get('full_name') or "").upper()
-        id_type = "Passport" if g.get('is_alien') else "CCCD"
+        id_type = "Passport" if _is_foreign_guest(g) or g.get('identification_type') == "Passport" else "CCCD"
         id_number = g.get('passport_number') or g.get('identification_no') or ""
-        nationality = g.get('nationality') or ("FOREIGN" if g.get('is_alien') else "VNM")
+        nationality = _normalize_iso3_nationality(g.get('nationality'), g.get('is_alien'))
         gender_label = _vn_gender_label(g.get('gender'))
         dob = formatdate(g.get('date_of_birth'), "dd/mm/yyyy") if g.get('date_of_birth') else ""
 

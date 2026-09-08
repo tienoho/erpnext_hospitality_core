@@ -9,6 +9,10 @@ class HotelReservation(Document):
         if not self.is_company_guest:
             self.company = None
 
+        if self.room:
+            from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
+            self.room = resolve_hotel_room(self.room, property=self.get('property')) or self.room
+
         self.validate_dates()
         self.validate_occupancy_counts()
         self.validate_blacklist()
@@ -206,7 +210,10 @@ class HotelReservation(Document):
         self.status = "Checked In"
         
         # 2. Update Room Status
+        prev_room_status = frappe.db.get_value("Hotel Room", self.room, "status")
         frappe.db.set_value("Hotel Room", self.room, "status", "Occupied")
+        from hospitality_core.hospitality_core.api.housekeeping_mobile import log_room_status_change
+        log_room_status_change(self.room, prev_room_status, "Occupied")
         
         # 3. Update Folio Status
         if self.folio:
@@ -268,13 +275,8 @@ class HotelReservation(Document):
                     if company_liability > 0:
                         # Check if we already posted a transfer to avoid double credit if button clicked twice
                         transfer_item = "TRANSFER"
-                        if not frappe.db.exists("Item", transfer_item):
-                            item = frappe.new_doc("Item")
-                            item.item_code = transfer_item
-                            item.item_name = "Transfer to City Ledger"
-                            item.item_group = "Services"
-                            item.is_stock_item = 0
-                            item.insert(ignore_permissions=True)
+                        from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
+                        ensure_item_exists(transfer_item, "Transfer to City Ledger")
                         
                         transfer_exists = frappe.db.exists("Folio Transaction", {
                             "parent": self.folio,
@@ -327,13 +329,8 @@ class HotelReservation(Document):
 
                         if current_balance > 0.01:
                             transfer_item = "TRANSFER-GROUP"
-                            if not frappe.db.exists("Item", transfer_item):
-                                item = frappe.new_doc("Item")
-                                item.item_code = transfer_item
-                                item.item_name = "Transfer to Group Master"
-                                item.item_group = "Services"
-                                item.is_stock_item = 0
-                                item.insert(ignore_permissions=True)
+                            from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
+                            ensure_item_exists(transfer_item, "Transfer to Group Master")
 
                             # Check if we already posted a transfer to avoid double
                             # credit if button clicked twice — TRƯỚC ĐÂY khối này là
@@ -411,7 +408,10 @@ class HotelReservation(Document):
         self.db_set("status", "Checked Out")
         
         # 3. Update Room Status to Dirty (needs housekeeping turnover cleaning)
+        prev_room_status = frappe.db.get_value("Hotel Room", self.room, "status")
         frappe.db.set_value("Hotel Room", self.room, "status", "Dirty")
+        from hospitality_core.hospitality_core.api.housekeeping_mobile import log_room_status_change
+        log_room_status_change(self.room, prev_room_status, "Dirty")
 
         # 4. No self.save() needed - db_set handles the status update safely.
 
@@ -447,13 +447,8 @@ class HotelReservation(Document):
                     if not already_recorded:
                         # Create a debit transaction to zero out the folio
                         transfer_item = "REFUND-TRANSFER"
-                        if not frappe.db.exists("Item", transfer_item):
-                            item = frappe.new_doc("Item")
-                            item.item_code = transfer_item
-                            item.item_name = "Transfer to Balance Ledger"
-                            item.item_group = "Services"
-                            item.is_stock_item = 0
-                            item.insert(ignore_permissions=True)
+                        from hospitality_core.hospitality_core.api.night_audit import ensure_item_exists
+                        ensure_item_exists(transfer_item, "Transfer to Balance Ledger")
 
                         # flags.hospitality_service=True — TRƯỚC ĐÂY thiếu, khiến
                         # property_scope.py's validate_document() throw ngay khi
