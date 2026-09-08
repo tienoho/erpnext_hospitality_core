@@ -1,7 +1,93 @@
-.DS_Store
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
 *.pyc
-*.egg-info
+*.py~
+
+# C extensions
+*.so
+*.dylib
+*.dll
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Frappe specific
+.wnf-lang-status
+sites/
+*.comp.js
+hospitality_core/public/dist/
+hospitality_core/public/build/
+
+# Node / Frontend assets
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# IDE and Editors
+.idea/
+.vscode/
+.vs/
 *.swp
+*.swo
+*~
+*.bak
+.helix/
 tags
-node_modules
-__pycache__
+TAGS
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Unit tests, Coverage, Logs & Caches
+*.log
+*.sqlite
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.cache/
+.tox/
+.hypothesis/
+
+# Scratch & AI assistant files
+.aider*
+scratch/
