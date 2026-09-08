@@ -67,6 +67,30 @@ FIELDS = [
 
 
 def run():
+    # TRƯỚC ĐÂY: hàm này luôn tự tạo/ghi đè field "einvoice_status" (Select,
+    # options hẹp "Not Issued/Issued/Failed/Cancelled") trên Sales Invoice mỗi
+    # lần bench migrate — nhưng app erpnext_vietnam_einvoice (khi đã cài) CŨNG
+    # tự tạo đúng field CÙNG TÊN "einvoice_status" trên CÙNG doctype với bộ
+    # options RỘNG HƠN VÀ KHÁC HẲN ("Draft/Queued/Issued/Cancelled/Adjusted/
+    # Replaced" — các giá trị "Queued"/"Draft"/"Adjusted"/"Replaced" mà
+    # vietnam_einvoice.einvoice_core thực sự ghi vào field này). Vì
+    # create_custom_fields() ghi đè TOÀN BỘ definition (kể cả `options`) của 1
+    # Custom Field đã tồn tại, ứng dụng nào chạy after_migrate SAU CÙNG sẽ âm
+    # thầm đổi options của field dùng chung này — nếu hospitality_core thắng,
+    # dropdown Desk sẽ không hiển thị đúng các trạng thái Queued/Adjusted/
+    # Replaced mà vietnam_einvoice đang lưu thật trong DB. api/einvoice.py's
+    # issue_einvoice() đã tự ủy quyền (delegate) toàn bộ logic phát hành sang
+    # vietnam_einvoice khi app đó có mặt (và JS cũng tự ẩn nút của
+    # hospitality_core theo đúng nguyên tắc này) — nên khi vietnam_einvoice đã
+    # cài, bộ field/local Mock provider của CHÍNH module này không còn được
+    # dùng tới nữa (dead code), và không nên tự tạo/ghi đè field cạnh tranh.
+    try:
+        import vietnam_einvoice  # noqa: F401
+        print("vietnam_einvoice đã cài đặt — bỏ qua, dùng bộ field/logic HĐĐT của app đó.")
+        return
+    except ImportError:
+        pass
+
     for field in FIELDS:
         if frappe.db.exists("Custom Field", {"dt": "Sales Invoice", "fieldname": field["fieldname"]}):
             continue

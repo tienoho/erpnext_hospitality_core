@@ -216,12 +216,29 @@ def issue_einvoice(sales_invoice):
 def get_einvoice_status(sales_invoice):
     invoice_doc = frappe.get_doc("Sales Invoice", sales_invoice)
     invoice_doc.check_permission("read")
+
+    # TRƯỚC ĐÂY: luôn đọc field "einvoice_issued_on" của CHÍNH module này —
+    # nhưng khi app vietnam_einvoice đã cài, issue_einvoice() ở trên tự ủy
+    # quyền TOÀN BỘ việc phát hành sang app đó, và app đó ghi kết quả vào
+    # field "einvoice_issued_at" (tên KHÁC hẳn, không phải lỗi gõ nhầm — 2 app
+    # định nghĩa 2 field riêng cho cùng khái niệm). Hệ quả: hàm này luôn trả
+    # về "einvoice_issued_on" = None dù hóa đơn ĐÃ được phát hành thật qua
+    # vietnam_einvoice — bất kỳ nơi nào gọi API này (bên ngoài Desk, vì Desk
+    # tự có JS/field riêng của từng app) sẽ thấy dữ liệu sai. Đọc field đúng
+    # theo đúng app nào thực sự đang xử lý (cùng cách nhận diện try/except
+    # ImportError đã dùng trong issue_einvoice()).
+    try:
+        import vietnam_einvoice  # noqa: F401
+        issued_on = invoice_doc.get("einvoice_issued_at")
+    except ImportError:
+        issued_on = invoice_doc.get("einvoice_issued_on")
+
     return {
         "einvoice_status": invoice_doc.get("einvoice_status") or "Not Issued",
         "einvoice_provider": invoice_doc.get("einvoice_provider"),
         "einvoice_number": invoice_doc.get("einvoice_number"),
         "einvoice_lookup_code": invoice_doc.get("einvoice_lookup_code"),
-        "einvoice_issued_on": invoice_doc.get("einvoice_issued_on"),
+        "einvoice_issued_on": issued_on,
     }
 
 
