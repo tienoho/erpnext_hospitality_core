@@ -398,9 +398,21 @@ class CostControlTests(FBTests):
     def test_native_pos_issues_once_with_native_tax(self):
         self.setup_control()
         frappe.db.set_single_value('POS Settings','invoice_type','POS Invoice')
-        customer=frappe.copy_doc(frappe.get_doc('Customer',self.reservation.billing_customer))
-        customer.customer_name='Walk in Customer'
-        customer.insert()
+        # Idempotent: 'Walk in Customer' la ten CU THE ma pos_bridge.py's
+        # enforce_payment_mode_rules() nhan dien rieng (payment-mode rule cho
+        # khach khong gan phong) — cac file test KHAC (run_docker_verification.py,
+        # run_concurrency_tests.py) cung tao ban ghi nay tren CUNG site
+        # 'localhost' dung chung, khong rollback duoc neu file do da thuc su
+        # commit that (VD qua POS Invoice submit). Truoc day insert() vo dieu
+        # kien o day se tao ban ghi TRUNG TEN, bi Frappe tu doi thanh "Walk in
+        # Customer - 1" — mot customer KHONG duoc enforce_payment_mode_rules()
+        # nhan dien dung, lam sai ca test. Dung lai ban ghi da co neu ton tai.
+        if frappe.db.exists('Customer','Walk in Customer'):
+            customer=frappe.get_doc('Customer','Walk in Customer')
+        else:
+            customer=frappe.copy_doc(frappe.get_doc('Customer',self.reservation.billing_customer))
+            customer.customer_name='Walk in Customer'
+            customer.insert()
         cash=frappe.db.get_value('Account',{'company':self.company,'account_type':'Cash','is_group':0},'name')
         mode=frappe.get_doc(dict(doctype='Mode of Payment',mode_of_payment='FNB Cash Test',type='Cash',
             accounts=[dict(company=self.company,default_account=cash)])).insert()

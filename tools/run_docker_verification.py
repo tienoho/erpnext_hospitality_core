@@ -37,6 +37,18 @@ def ensure_legacy_accounting_settings(company):
     if settings.receivable_account and frappe.db.get_value('Account', settings.receivable_account, 'company') == company:
         return
     def account(label, root_type):
+        # Idempotent: mot lan chay TRUOC (vd trong cung phien lam viec, khi
+        # Hospitality Accounting Settings — Single TOAN SITE — sau do bi 1
+        # file test KHAC gan lai cho company khac qua commit that, VD
+        # run_city_ledger_financial_control_tests.py's void_transaction())
+        # co the da tao san cac Account "Docker Legacy ... - <abbr>" nay roi.
+        # insert() vo dieu kien se crash Duplicate Entry ngay tren lan chay
+        # thu 2 — dung lai ban ghi cu neu da ton tai, khop dung quy uoc
+        # idempotent dung xuyen suot cac file test khac trong thu muc nay.
+        abbr = frappe.get_cached_value('Company', company, 'abbr')
+        existing = f'{label} - {abbr}'
+        if frappe.db.exists('Account', existing):
+            return existing
         parent = frappe.db.get_value('Account', {'company': company, 'root_type': root_type, 'is_group': 1},
             'name', order_by='lft')
         return frappe.get_doc(dict(doctype='Account', account_name=label, parent_account=parent,

@@ -34,6 +34,27 @@ class PropertyDatabaseTests(unittest.TestCase):
             if not frappe.db.exists('Hospitality Property',code):
                 frappe.get_doc(dict(doctype='Hospitality Property',property_code=code,property_name=code,
                     operating_company=company,currency='VND',timezone='Asia/Ho_Chi_Minh')).insert()
+        # Site 'localhost' (sau khi gop bo test ve day) co san Fiscal Year nam
+        # hien tai nhung GIOI HAN theo danh sach company THAT cua Tap doan
+        # Tuan Chau (bang con 'companies') — 2 company test HVA/HVB khong nam
+        # trong do nen GL Entry se bi tu choi "not in any active Fiscal Year"
+        # o BAT KY test nao dung toi. Them ca 2 company test vao MOT LAN o day
+        # (thay vi va o tung file test rieng le) — chi them neu bang con dang
+        # o che do gioi han (khong rong, "rong" nghia la ap dung cho MOI
+        # company, khong nen vo tinh bat dau gioi han).
+        from frappe.utils import nowdate, getdate
+        year = str(getdate(nowdate()).year)
+        if frappe.db.exists('Fiscal Year', year):
+            fy = frappe.get_doc('Fiscal Year', year)
+            existing = {d.company for d in (fy.get('companies') or [])}
+            if existing:
+                changed = False
+                for co in ('_Hospitality V2 A', '_Hospitality V2 B'):
+                    if co not in existing:
+                        fy.append('companies', dict(company=co))
+                        changed = True
+                if changed:
+                    fy.save(ignore_permissions=True)
         frappe.db.commit()
 
     def setUp(self):

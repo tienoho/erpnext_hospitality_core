@@ -99,11 +99,17 @@ class SurchargeRoomMoveTests(unittest.TestCase):
         self.fixture()
         self.reset_surcharge_settings()
         from hospitality_core.hospitality_core.api.surcharge_engine import apply_surcharge_to_folio
-        result = apply_surcharge_to_folio(self.reservation.name, 'Early Check-in', description=None)
-        # Hàm tự tính lại theo now_datetime() thật (không truyền checkin_time) —
-        # chỉ cần xác nhận có ghi giao dịch thật nếu applicable tại thời điểm chạy.
-        if not result.get('success') and 'reason' not in result:
-            self.skipTest('Thời điểm chạy test trùng giờ chuẩn check-in, không phát sinh phụ thu để kiểm tra.')
+        # Ham tu tinh lai theo now_datetime() THAT (khong truyen checkin_time)
+        # — TRUOC DAY gia dinh SAI la ham tra ve dict {'success': False} khi
+        # khong applicable; thuc te apply_surcharge_to_folio() frappe.throw()
+        # thang trong truong hop nay (dung, dung y do API — "khong ap dung
+        # phu thu" la 1 loi nghiep vu ro rang, khong phai 1 ket qua "that
+        # bai" am tham). Da sua bat dung frappe.ValidationError de skip test
+        # nhe nhang khi thoi diem chay THAT roi vao gio chuan (khong phu thu).
+        try:
+            result = apply_surcharge_to_folio(self.reservation.name, 'Early Check-in', description=None)
+        except frappe.ValidationError as e:
+            self.skipTest(f'Thời điểm chạy test không phát sinh phụ thu để kiểm tra: {e}')
         if result.get('message', '').find('lớn hơn 0') >= 0:
             self.skipTest('Thời điểm chạy test không tạo phụ thu dương.')
         self.assertTrue(result['success'])

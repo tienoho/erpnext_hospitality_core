@@ -97,6 +97,20 @@ class CityLedgerFinancialControlTests(unittest.TestCase):
         if not frappe.db.exists('Fiscal Year', year):
             frappe.get_doc(dict(doctype='Fiscal Year', year=year, year_start_date=year + '-01-01',
                 year_end_date=year + '-12-31')).insert(ignore_permissions=True)
+        else:
+            # Site 'localhost' (sau khi gop bo test ve day) co san Fiscal Year
+            # nam nay nhung GIOI HAN theo danh sach company THAT cua Tap doan
+            # Tuan Chau (bang con 'companies') — 'FC Test Co' khong nam trong
+            # do nen GL Entry bi tu choi "not in any active Fiscal Year".
+            # Khop fix da ap dung o run_property_integration.py's
+            # accounting_reservation(). Chi them neu bang con dang o che do
+            # gioi han (khong rong) — rong nghia la ap dung cho MOI company,
+            # khong dong vao de tranh vo tinh bat dau gioi han.
+            fy = frappe.get_doc('Fiscal Year', year)
+            existing_companies = {d.company for d in (fy.get('companies') or [])}
+            if existing_companies and company not in existing_companies:
+                fy.append('companies', dict(company=company))
+                fy.save(ignore_permissions=True)
         # Folio 'Legacy' (FC-TEST không cutover Property v2) vẫn cần cấu hình
         # Single toàn cục "Hospitality Accounting Settings" (receivable_account
         # v.v.) để accounting.py's make_gl_entries_for_folio_transaction()

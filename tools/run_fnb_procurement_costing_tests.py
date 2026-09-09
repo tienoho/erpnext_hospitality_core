@@ -25,6 +25,15 @@ class ProcurementCostingTests(CostControlTests):
         # 'Purchase Manager'/'Purchase User' mới có create=1). Không đụng tới
         # setup_control() dùng chung; chỉ cấp thêm quyền cho user riêng của lớp test này.
         frappe.get_doc('User', self.operator).add_roles('Purchase Manager')
+        # Site 'localhost' (sau khi gop bo test ve day) co Buying Settings's
+        # maintain_same_rate_action = 'Stop' — chan CUNG ERPNext's rate-mismatch
+        # check ngay tai Purchase Receipt.validate(), truoc khi kip cham toi
+        # logic tolerance CUA APP (stock_gate()) ma cac test nhu
+        # test_purchase_receipt_price_over_tolerance_blocked can kiem tra
+        # rieng. Doi sang 'Warn' (chi canh bao, khong chan cung) de kich ban
+        # test lech gia THAT SU toi duoc app's logic thay vi bi ERPNext chan
+        # truoc mat.
+        frappe.db.set_single_value('Buying Settings', 'maintain_same_rate_action', 'Warn')
 
     def make_supplier(self):
         name = 'FNB Test Supplier'

@@ -25,7 +25,13 @@ def get_columns():
         {"label": _("Ngày Đến"), "fieldname": "arrival_date", "fieldtype": "Date", "width": 110},
         {"label": _("Ngày Đi Dự Kiến"), "fieldname": "departure_date", "fieldtype": "Date", "width": 120},
         {"label": _("Mã Đặt Phòng"), "fieldname": "reservation", "fieldtype": "Link", "options": "Hotel Reservation", "width": 140},
-        {"label": _("Công Ty"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 180},
+        # "company" ở đây thực chất là `Hotel Reservation.company` (Link tới
+        # CUSTOMER — bên đặt hộ/chịu trách nhiệm thanh toán) hoặc fallback về
+        # tên pháp nhân khách sạn (RESORT_COMPANY, chuỗi thô) — KHÔNG PHẢI
+        # Link hợp lệ tới DocType "Company" trong cả 2 trường hợp. Dùng
+        # "Link"/"Company" trước đây khiến Desk cố tra cứu giá trị này như
+        # 1 bản ghi Company thật, luôn ra link hỏng/trống. Đổi sang "Data".
+        {"label": _("Công Ty"), "fieldname": "company", "fieldtype": "Data", "width": 180},
         {"label": _("Trạng Thái"), "fieldname": "status", "fieldtype": "Data", "width": 100},
         {"label": _("Cảnh Báo"), "fieldname": "warning", "fieldtype": "Data", "width": 160}
     ]
