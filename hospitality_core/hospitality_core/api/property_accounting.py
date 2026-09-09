@@ -11,10 +11,26 @@ from hospitality_core.hospitality_core.api.rate_calculation import money
 
 
 def exchange(currency,base,date):
-    from erpnext.setup.utils import get_exchange_rate
-    rate=flt(get_exchange_rate(currency,base,date))
+    # TRƯỚC ĐÂY: gọi thẳng erpnext.setup.utils.get_exchange_rate() — xác
+    # nhận THẬT qua đọc mã nguồn ERPNext: hàm đó, khi KHÔNG tìm thấy bản ghi
+    # "Currency Exchange" đã lưu khớp ngày, sẽ tự động GỌI SỐNG 1 API bên
+    # ngoài (frankfurter/CES qua `requests.get`) để lấy tỷ giá thay thế —
+    # với 1 hệ thống ghi sổ/xuất hóa đơn pháp lý, để tỷ giá 1 chứng từ phụ
+    # thuộc vào 1 lệnh gọi mạng không kiểm soát được (có thể lỗi, đổi theo
+    # thời điểm gọi, hoặc bị chặn nếu site không có Internet) là rủi ro tài
+    # chính thật — không phải giả định. Đổi sang tra cứu TRỰC TIẾP bản ghi
+    # "Currency Exchange" đã lưu (giống đúng phần lõi mà get_exchange_rate()
+    # tự làm TRƯỚC KHI rơi vào fallback bên ngoài), bắt buộc phải có bản ghi
+    # thật cho đúng cặp tiền tệ tại/trước ngày đó — không có thì báo lỗi rõ
+    # ràng để kế toán tự tạo bản ghi thủ công, thay vì âm thầm dùng tỷ giá
+    # không kiểm soát được.
+    if currency==base:
+        return 1.0
+    rate=flt(frappe.db.get_value('Currency Exchange',
+        {'from_currency':currency,'to_currency':base,'date':['<=',date]},
+        'exchange_rate',order_by='date desc'))
     if rate<=0:
-        frappe.throw(_('Thiếu tỷ giá {0}/{1} ngày {2}.').format(currency,base,date))
+        frappe.throw(_('Thiếu tỷ giá {0}/{1} ngày {2} — cần tạo bản ghi Currency Exchange thủ công.').format(currency,base,date))
     return rate
 
 
@@ -123,8 +139,21 @@ def create_invoice(folio_name,posting_names=None):
     evidence=json.loads(postings[0].evidence)
     inv.set('taxes',_tax_rows(evidence))
     for p in postings:
-        rate = json.loads(p.evidence)['rate']
-        inv.append('items',dict(item_code='ROOM-RENT',qty=-1 if rate < 0 else 1,rate=abs(rate),
+        rate = flt(json.loads(p.evidence)['rate'])
+        # TRƯỚC ĐÂY: qty=-1 nếu rate âm (điều chỉnh giảm LOS), rate=abs(rate) —
+        # xác nhận THẬT (crash khi chạy test trên Docker) đây là tổ hợp
+        # KHÔNG BAO GIỜ submit được: 1 hóa đơn gộp cả khoản charge gốc (+)
+        # LẪN khoản điều chỉnh giảm LOS (-) — ERPNext's status_updater.py's
+        # validate_qty() (chạy vô điều kiện ở on_submit(), không có cách nào
+        # tắt riêng cho 1 chứng từ) CẤM tuyệt đối dòng qty<0 trên hóa đơn
+        # KHÔNG PHẢI is_return — mà is_return lại yêu cầu MỌI dòng đều âm,
+        # mâu thuẫn với dòng charge gốc dương trên CÙNG hóa đơn. Đổi sang
+        # qty=1 cố định, để dấu (+/-) nằm ở rate — cần bật
+        # `Selling Settings.allow_negative_rates_for_items` (xem
+        # migrations/property_v2.py) vì ERPNext cũng chặn rate âm mặc định;
+        # KHÔNG đổi giá trị amount=qty*rate (dấu vẫn ra đúng), chỉ đổi cách
+        # mã hóa để tương thích ràng buộc lõi.
+        inv.append('items',dict(item_code='ROOM-RENT',qty=1,rate=rate,
             hospitality_posting=p.name,income_account=settings.income_account,cost_center=settings.cost_center,
             hospitality_property=folio.property,description=f'Room Charge {p.business_date} ({p.transaction_id})'))
     inv.flags.hospitality_service=True
@@ -186,7 +215,18 @@ def _relink_amended_allocations(doc):
 
 
 def validate_invoice(doc,method=None):
+    # TRƯỚC ĐÂY: return ngay khi hospitality_folio rỗng — nhưng KHÔNG phân
+    # biệt "hóa đơn chưa từng gắn Hospitality" (an toàn, bỏ qua đúng) với
+    # "hóa đơn ĐÃ gắn Hospitality nhưng ai đó vừa XÓA field này đi để né toàn
+    # bộ các check bên dưới" — xác nhận THẬT qua test sống: gán
+    # `invoice.hospitality_folio=None` rồi save() không hề bị chặn, dù mọi
+    # ràng buộc giá/thuế/chiết khấu phía dưới đáng lẽ phải áp dụng. Phải tự
+    # đọc giá trị CŨ trong DB (không tin `doc` đang có thể đã bị sửa) trước
+    # khi cho phép return sớm.
+    old_folio = None if doc.is_new() else frappe.db.get_value('Sales Invoice', doc.name, 'hospitality_folio')
     if not doc.get('hospitality_folio'):
+        if old_folio:
+            frappe.throw(_('Không được gỡ liên kết Guest Folio khỏi hóa đơn Hospitality đã tạo.'))
         return
     folio=frappe.get_doc('Guest Folio',doc.hospitality_folio)
     if folio.get('accounting_version')!='Property v2':
@@ -202,12 +242,31 @@ def validate_invoice(doc,method=None):
         sources=frappe.get_all('Hospitality Invoice Allocation',filters={'invoice':doc.name,'status':['!=','Released']},fields=['posting','amount'])
         if sources and {r.posting for r in sources}!={i.get('hospitality_posting') for i in doc.items}:
             frappe.throw(_('Không thêm/xóa dòng nguồn trên hóa đơn Hospitality; hãy giải phóng và tạo lại bản nháp.'))
+        # TRƯỚC ĐÂY: chỉ kiểm tra qty/rate từng dòng — không hề kiểm tra
+        # doc.taxes hay chiết khấu cấp hóa đơn — xác nhận THẬT qua test sống:
+        # sửa taxes[0].rate hoặc additional_discount_percentage rồi save()
+        # không hề bị chặn, dù số tiền thực nhận có thể lệch hẳn so với
+        # khoản phí đã chốt/phân bổ (Hospitality Invoice Allocation.amount
+        # dùng item.net_amount — phụ thuộc trực tiếp vào thuế/chiết khấu).
+        if flt(doc.get('additional_discount_percentage')) or flt(doc.get('discount_amount')):
+            frappe.throw(_('Không áp dụng chiết khấu cấp hóa đơn cho hóa đơn Hospitality — chiết khấu đã tính vào từng dòng phí.'))
+        evidence_template=None
         for item in doc.items:
             if item.get('hospitality_posting'):
                 posting=frappe.get_doc('Hospitality Charge Posting',item.hospitality_posting)
-                rate = flt(json.loads(posting.evidence)['rate'])
-                if posting.folio!=folio.name or item.qty!=(-1 if rate < 0 else 1) or flt(item.rate)!=abs(rate):
+                evidence=json.loads(posting.evidence)
+                rate=flt(evidence['rate'])
+                if posting.folio!=folio.name or item.qty!=1 or flt(item.rate)!=rate:
                     frappe.throw(_('Không thay đổi giá hoặc nguồn phí đã chốt.'))
+                evidence_template=evidence_template or evidence
+        if evidence_template:
+            expected_taxes=_tax_rows(evidence_template)
+            actual_taxes=_tax_rows({'taxes':[t.as_dict() for t in doc.taxes]})
+            mismatch=len(expected_taxes)!=len(actual_taxes) or any(
+                flt(e.get('rate'))!=flt(a.get('rate')) or e.get('account_head')!=a.get('account_head')
+                for e,a in zip(expected_taxes,actual_taxes))
+            if mismatch:
+                frappe.throw(_('Không thay đổi thuế/phí đã chốt của hóa đơn Hospitality.'))
 
 
 def invoice_submitted(doc,method=None):

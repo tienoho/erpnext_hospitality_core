@@ -14,6 +14,14 @@
             }});
     };
     const requestId = () => window.crypto.randomUUID();
+    const promptAction = (frm, fields, method, args = {}) => {
+        const name = frm.doc.name, modified = frm.doc.modified;
+        frappe.prompt(fields, values => {
+            if (frm.doc.name !== name || frm.doc.modified !== modified || frm.is_dirty())
+                return frappe.msgprint(__('Chứng từ đã thay đổi; mở lại thao tác.'));
+            call(frm, method, {name, ...args, ...values});
+        });
+    };
     const read = (frm,method,args,callback) => {
         if (frm.is_dirty()) return frappe.msgprint(__('Lưu chứng từ trước khi thao tác.'));
         const name=frm.doc.name, version=frm._fnb_request=(frm._fnb_request || 0)+1;
@@ -40,6 +48,15 @@
             if (frm.is_new()) return;
             const d = frm.doc;
             if (dt === 'FNB Settings' && !d.enabled) action(frm,'Kích hoạt sau nghiệm thu','configuration.activate',{property:d.property});
+            if (dt === 'FNB Outlet' && !d.enabled) action(frm,'Kích hoạt outlet','configuration.activate_outlet');
+            if (['FNB Settings', 'FNB Outlet'].includes(dt) && d.enabled) {
+                frm.add_custom_button(__(d.paused ? 'Mở lại F&B' : 'Tạm dừng F&B'), () => promptAction(frm,
+                    [{fieldname:'reason',label:__('Lý do'),fieldtype:'Small Text',reqd:1}],
+                    'configuration.set_paused', {doctype:dt,paused:d.paused ? 0 : 1}), __('F&B'));
+                if (d.paused) frm.add_custom_button(__('Vô hiệu hóa F&B'), () => promptAction(frm,
+                    [{fieldname:'reason',label:__('Lý do'),fieldtype:'Small Text',reqd:1}],
+                    'configuration.deactivate', {doctype:dt}), __('F&B'));
+            }
             if (dt === 'FNB Recipe Version' && d.status === 'Draft') action(frm,'Duyệt công thức','recipes.approve_recipe');
             if (dt === 'FNB Cost Standard' && d.status === 'Draft') action(frm,'Duyệt giá chuẩn','reports.approve_standard');
             if (dt === 'FNB Production Batch' && d.status === 'Draft') action(frm,'Duyệt và ghi mẻ','service.produce',{request_id:requestId()});
@@ -83,12 +100,26 @@
             if (dt === 'FNB Stock Count') {
                 if (d.status === 'Draft') action(frm,'Khóa kho và mở đếm','counts.start_count');
                 if (d.status === 'Counting') {
+                    frm.add_custom_button(__('Khai báo hàng tìm thấy'), () => promptAction(frm, [
+                        {fieldname:'item',label:__('Item'),fieldtype:'Link',options:'Item',reqd:1},
+                        {fieldname:'batch_no',label:__('Lô'),fieldtype:'Link',options:'Batch'},
+                        {fieldname:'reason',label:__('Lý do (cần đếm lại toàn bộ sau khi thêm)'),fieldtype:'Small Text',reqd:1}
+                    ], 'counts.add_found_item'), __('F&B'));
                     for (const recount of [false,true]) frm.add_custom_button(__(recount?'Nhập đếm lại':'Nhập số đếm'),()=>{
                         const fields=d.items.map((r,i)=>({fieldname:`r${i}`,label:`${r.item} (${r.uom}) ${r.batch_no || ''}`,fieldtype:'Float',reqd:1}));
                         frappe.prompt(fields,values=>call(frm,'counts.record_count',{name:d.name,recount,
                             values:Object.fromEntries(d.items.map((r,i)=>[r.name,values[`r${i}`]]))}),__('Kiểm kê'));
                     },__('F&B'));
-                    action(frm,'Duyệt chênh lệch','counts.approve_count',{request_id:requestId()});
+                    frm.add_custom_button(__('Duyệt chênh lệch'), () => {
+                        const name=d.name, modified=d.modified;
+                        frappe.prompt(d.items.map((r,i)=>({fieldname:`v${i}`,fieldtype:'Float',
+                            label:`${r.item} (${r.uom}) ${r.batch_no || ''} — ${__('Giá bản vị nếu hàng tìm thấy chưa có giá sổ')}`})), values=>{
+                            if (frm.doc.name!==name || frm.doc.modified!==modified || frm.is_dirty())
+                                return frappe.msgprint(__('Chứng từ đã thay đổi; mở lại thao tác.'));
+                            call(frm,'counts.approve_count',{name,request_id:requestId(),valuation_rates:
+                                Object.fromEntries(d.items.map((r,i)=>[r.name,values[`v${i}`]]).filter(([,v])=>v>0))});
+                        });
+                    }, __('F&B'));
                     frm.add_custom_button(__('Hủy phiên và mở khóa'),()=>frappe.prompt([{fieldname:'reason',label:__('Lý do'),fieldtype:'Small Text',reqd:1}],
                         values=>call(frm,'counts.abort_count',{name:d.name,...values})),__('F&B'));
                 }

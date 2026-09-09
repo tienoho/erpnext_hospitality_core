@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_DOWN
 
 import frappe
 from frappe import _
-from frappe.utils import flt, get_datetime, getdate, now_datetime, nowdate
+from frappe.utils import flt, cint, get_datetime, getdate, now_datetime, nowdate
 from hospitality_core.hospitality_core.api.property_scope import key, require_property, manager
 
 
@@ -41,9 +41,18 @@ def validate_configuration(doc):
         frappe.throw(_('Không đổi pháp nhân của chương trình điểm đã tạo.'))
     thresholds=set(); names=set()
     for tier in doc.tiers:
-        if tier.min_spend<0 or tier.min_spend in thresholds or tier.tier_name in names:
+        if flt(tier.min_spend)<0 or tier.min_spend in thresholds or tier.tier_name in names:
             frappe.throw(_('Ngưỡng tier không âm và không trùng; tên tier phải duy nhất.'))
-        if not 0<=flt(tier.room_discount_percent)<=100 or tier.breakfast_per_night<0:
+        # TRƯỚC ĐÂY: "tier.breakfast_per_night<0" so sánh trực tiếp trên giá
+        # trị THÔ của field Int — Frappe chạy validate() TÙY BIẾN (nơi hàm
+        # này được gọi) TRƯỚC bước tự chuẩn hóa kiểu dữ liệu field-level
+        # (xác nhận đúng mẫu lỗi đã gặp ở configuration.py's
+        # validate_standard()) — nếu admin để trống "Breakfast Per Night" khi
+        # tạo 1 tier (rất hợp lý cho tier không có suất ăn sáng, VD tier
+        # "Base"), giá trị vẫn là None (không phải 0) tại thời điểm này, nên
+        # "None < 0" crash TypeError thô thay vì thông báo nghiệp vụ rõ ràng.
+        # Bọc cint() để coi trống = 0, khớp ý đồ "chưa cấu hình suất ăn sáng".
+        if not 0<=flt(tier.room_discount_percent)<=100 or cint(tier.breakfast_per_night)<0:
             frappe.throw(_('Quyền lợi tier không hợp lệ.'))
         thresholds.add(tier.min_spend); names.add(tier.tier_name)
     if doc.enabled:

@@ -39,7 +39,34 @@ INTERNAL = {'Hospitality Charge Posting', 'Hospitality Invoice Allocation', 'Hos
 LINKS = {'room': 'Hotel Room', 'room_type': 'Hotel Room Type', 'hotel_reception': 'Hotel Reception',
          'rate_plan': 'Room Rate Plan', 'reservation': 'Hotel Reservation', 'folio': 'Guest Folio',
          'group_booking': 'Hotel Group Booking', 'master_folio': 'Guest Folio',
-         'channel_connection': 'Hospitality Channel Connection'}
+         'channel_connection': 'Hospitality Channel Connection',
+         # Lost and Found Item's Link tới Hotel Room không đặt tên "room" như
+         # mọi doctype khác (đặt tên "found_location" — chỗ tìm thấy đồ) nên
+         # trước đây KHÔNG khớp bất kỳ key nào ở trên: doc.property không bao
+         # giờ được tự suy ra từ phòng, rơi thẳng xuống resolve() không tham
+         # số — hàm này CHỈ chấp nhận đúng 1 cơ sở đang "allowed" cho user
+         # hiện tại (với quản trị viên, allowed_properties() trả về TẤT CẢ
+         # Hospitality Property bất kể enabled) — ngay khi site có từ 2 cơ sở
+         # trở lên (đúng mô hình multi-property mà Property v2 hướng tới),
+         # MỌI lần tạo Lost and Found Item sẽ crash "Vui lòng chọn cơ sở;
+         # không thể suy ra duy nhất một cơ sở hợp lệ." — tính năng báo cáo
+         # đồ thất lạc ngừng hoạt động hoàn toàn trên site đa cơ sở.
+         'found_location': 'Hotel Room',
+         # CÙNG LỚP LỖI, nghiêm trọng hơn: "Folio Transaction Move Log" (do
+         # folio.py's move_transactions() tạo — nền tảng dùng chung cho CẢ
+         # merge_folios() LẪN execute_split_tour_folio(), tức MỌI thao tác
+         # chuyển giao dịch giữa 2 folio trong toàn app) có 2 Link tới Guest
+         # Folio tên "source_folio"/"target_folio" (không phải "folio"/
+         # "master_folio" như các doctype khác) — cũng KHÔNG khớp key nào
+         # trong LINKS trước đây, khiến property không được suy ra, và HÀM
+         # NÀY SẼ CRASH ngay khi site có từ 2 cơ sở trở lên — chặn đứng TOÀN
+         # BỘ tính năng gộp/tách folio trên site đa cơ sở. Thêm cả 2 field
+         # (không chỉ 1) để nhân tiện được kiểm tra chéo AN TOÀN: nếu
+         # source_folio/target_folio lỡ thuộc 2 cơ sở khác nhau (không nên
+         # xảy ra vì merge_folios()/move_transactions() không hỗ trợ chuyển
+         # xuyên cơ sở), vòng lặp LINKS sẽ tự phát hiện và throw
+         # "thuộc cơ sở khác" thay vì âm thầm gán sai.
+         'source_folio': 'Guest Folio', 'target_folio': 'Guest Folio'}
 
 
 def key(*parts):
@@ -263,7 +290,23 @@ def validate_document(doc, method=None):
     if doc.meta.has_field('operating_company'):
         doc.operating_company = prop.operating_company
     if doc.meta.has_field('currency'):
-        doc.currency = doc.get('currency') or prop.currency
+        if doc.doctype in ('Hotel Room Type', 'Room Rate Plan'):
+            # 2 doctype nay la catalog/cau hinh CUA property (khong phai
+            # giao dich khach co the chon tien te khac property, kieu USD
+            # tren property VND) — khong co ly do nghiep vu hop le nao de
+            # currency lech khoi prop.currency (rate_plan.py's snapshot_for()
+            # con throw thang neu lech). Ep buoc VO DIEU KIEN giong het
+            # operating_company o tren, KHONG dung "or" fallback: field
+            # 'currency' la ten chuan cua Frappe, bi Document.insert()'s
+            # _set_defaults() (chay TRUOC before_validate) tu dong dien tu
+            # Global Defaults cua SITE khi con trong — nen field KHONG BAO
+            # GIO thuc su rong luc toi day, fallback "doc.get(...) or ..."
+            # (con giu ben duoi cho cac doctype giao dich) khong bao gio
+            # kich hoat va co the am tham giu sai tien te (site mac dinh
+            # thay vi tien te that cua property).
+            doc.currency = prop.currency
+        else:
+            doc.currency = doc.get('currency') or prop.currency
     old = doc.get_doc_before_save()
     if old:
         for f in ['property','operating_company','currency']:

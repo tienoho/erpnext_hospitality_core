@@ -104,11 +104,19 @@ def make_gl_entries_for_folio_transaction(txn_doc, method=None):
         # cả 2 field này (xem ghi chú chi tiết ở reverse_charge_time_gl_on_invoice_submit()
         # bên dưới, cùng lỗi lặp lại ở MỌI hàm ghi GL trong file này).
         debit_amt, credit_amt = max(delta, 0), max(-delta, 0)
+        # hospitality_property: GL Entry nam trong CORE_SCOPED (property_scope.py)
+        # nhung KHONG co co che tu dong dien nhu SCOPED — TRUOC DAY khong ham
+        # ghi GL nao trong ca file nay gan field nay (grep xac nhan 0 ket qua
+        # xuyen suot file), khien moi dong GL Legacy bi AN cho user bi gioi
+        # han property (bao cao vd taxes_and_charges_report.py loc dung
+        # hospitality_property se khong bao gio thay cac dong nay). Da them
+        # dong nhat cho ca 6 ham ghi GL trong file nay.
         entry = dict(doctype='GL Entry', posting_date=txn_doc.posting_date, account=account,
             company=company, cost_center=settings.cost_center, voucher_type='Guest Folio',
             voucher_no=txn_doc.parent, voucher_detail_no=txn_doc.name,
             debit=debit_amt, credit=credit_amt,
             debit_in_account_currency=debit_amt, credit_in_account_currency=credit_amt,
+            hospitality_property=folio_property,
             remarks=f'{txn_doc.description} (Ref: {txn_doc.name})')
         if account == settings.receivable_account:
             entry.update(party_type='Customer', party=customer)
@@ -188,7 +196,7 @@ def reverse_charge_time_gl_on_invoice_submit(doc, method=None):
     gl_entries = []
     for t in txns:
         existing = frappe.db.sql("""
-            SELECT account, debit, credit FROM `tabGL Entry`
+            SELECT account, debit, credit, party_type, party FROM `tabGL Entry`
             WHERE voucher_type='Guest Folio' AND voucher_no=%s AND voucher_detail_no=%s
               AND ifnull(is_cancelled, 0) = 0
         """, (t.parent, t.name), as_dict=True)
@@ -203,11 +211,24 @@ def reverse_charge_time_gl_on_invoice_submit(doc, method=None):
             # PHẢI debit/credit thô. Site này chỉ 1 tiền tệ (VND, không quy
             # đổi đa tiền tệ) nên 2 cặp luôn bằng nhau — thiếu cặp thứ 2 sẽ
             # khiến số dư tính theo tiền tệ tài khoản LUÔN RA 0 bất kể ghi gì.
+            #
+            # TRƯỚC ĐÂY: không copy party_type/party từ dòng GL gốc — xác
+            # nhận thật (crash khi test trên Docker): dòng gốc ghi nợ tài
+            # khoản Phải Thu LUÔN kèm party_type='Customer'/party=<khách>
+            # (ERPNext's GL Entry.validate()'s check_mandatory() bắt buộc
+            # với mọi account_type Receivable/Payable) — dòng đảo ở đây ghi
+            # CÙNG tài khoản đó (chiều ngược lại) mà thiếu party sẽ bị chính
+            # ERPNext từ chối ngay "Customer is required against Receivable
+            # account", khiến TOÀN BỘ luồng phát hành HĐĐT Legacy
+            # (issue_einvoice_from_folio() -> submit) crash ngay lần đầu
+            # dùng thật — không phải rủi ro giả định, đã tái hiện được.
             gl_entries.append(dict(doctype='GL Entry', posting_date=doc.posting_date, account=row.account,
                 company=doc.company, cost_center=settings.cost_center, voucher_type='Sales Invoice',
                 voucher_no=doc.name, voucher_detail_no=t.name,
+                party_type=row.party_type, party=row.party,
                 debit=flt(row.credit), credit=flt(row.debit),
                 debit_in_account_currency=flt(row.credit), credit_in_account_currency=flt(row.debit),
+                hospitality_property=doc.get('hospitality_property'),
                 remarks=f'Đảo bút toán charge-time (Guest Folio {t.parent}, giao dịch {t.name}) khi lập hóa đơn chính thức {doc.name}'))
 
     for entry in gl_entries:
@@ -246,6 +267,7 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
         "voucher_type": "Payment Entry",
         "voucher_no": payment_doc.name,
         "remarks": f"Income Realization (Net) for Folio {folio_id}",
+        "hospitality_property": payment_doc.get('hospitality_property'),
         "cost_center": settings.cost_center,
         "company": payment_doc.company or frappe.db.get_default("company")
     }))
@@ -262,6 +284,7 @@ def handle_payment_income_realization(payment_doc, folio_id, amount, cancel=0):
         "voucher_type": "Payment Entry",
         "voucher_no": payment_doc.name,
         "remarks": f"Income Realization (Net) for Folio {folio_id}",
+        "hospitality_property": payment_doc.get('hospitality_property'),
         "cost_center": settings.cost_center,
         "company": payment_doc.company or frappe.db.get_default("company")
     }))
@@ -309,6 +332,7 @@ def redirect_pos_income_to_suspense(pos_invoice, method=None):
         "voucher_type": "POS Invoice",
         "voucher_no": pos_invoice.name,
         "remarks": f"Deferring Income for Room Charge (Invoice {pos_invoice.name})",
+        "hospitality_property": pos_invoice.get('hospitality_property'),
         "cost_center": settings.cost_center,
         "company": pos_invoice.company or frappe.db.get_default("company")
     }))
@@ -324,6 +348,7 @@ def redirect_pos_income_to_suspense(pos_invoice, method=None):
         "voucher_type": "POS Invoice",
         "voucher_no": pos_invoice.name,
         "remarks": f"Deferring Income for Room Charge (Invoice {pos_invoice.name})",
+        "hospitality_property": pos_invoice.get('hospitality_property'),
         "cost_center": settings.cost_center,
         "company": pos_invoice.company or frappe.db.get_default("company")
     }))
@@ -391,6 +416,7 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
             "remarks": f"Tax Reclassification (Income) for POS {pos_invoice.name}",
+            "hospitality_property": pos_invoice.get('hospitality_property'),
             "cost_center": settings.cost_center,
             "company": pos_invoice.company or frappe.db.get_default("company")
         }))
@@ -407,6 +433,7 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
             "remarks": f"Tax Reclassification (Suspense) for POS {pos_invoice.name}",
+            "hospitality_property": pos_invoice.get('hospitality_property'),
             "cost_center": settings.cost_center,
             "company": pos_invoice.company or frappe.db.get_default("company")
         }))
@@ -423,6 +450,7 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
             "remarks": f"Consumption Tax (5%) for POS {pos_invoice.name}",
+            "hospitality_property": pos_invoice.get('hospitality_property'),
             "cost_center": settings.cost_center,
             "company": pos_invoice.company or frappe.db.get_default("company")
         }))
@@ -439,6 +467,7 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
             "remarks": f"VAT (7.5%) for POS {pos_invoice.name}",
+            "hospitality_property": pos_invoice.get('hospitality_property'),
             "cost_center": settings.cost_center,
             "company": pos_invoice.company or frappe.db.get_default("company")
         }))
@@ -455,6 +484,7 @@ def reclassify_pos_taxes(pos_invoice, method=None):
             "voucher_type": "POS Invoice",
             "voucher_no": pos_invoice.name,
             "remarks": f"Service Charge (10%) for POS {pos_invoice.name}",
+            "hospitality_property": pos_invoice.get('hospitality_property'),
             "cost_center": settings.cost_center,
             "company": pos_invoice.company or frappe.db.get_default("company")
         }))
@@ -496,6 +526,10 @@ def create_expense_gl_entries(expense_doc, method=None):
         "voucher_no": expense_doc.name,
         "remarks": f"Expense: {expense_doc.expense_category} - {expense_doc.description or ''}",
         "is_cancelled": 1 if is_cancelled else 0,
+        # Hospitality Expense nam trong SCOPED (field 'property'), GL Entry
+        # nam trong CORE_SCOPED (field 'hospitality_property') — 2 ten khac
+        # nhau cho cung 1 khai niem, phai tu dich khi chuyen tu nguon sang dich.
+        "hospitality_property": expense_doc.get('property'),
         "cost_center": expense_doc.cost_center,
         "company": company
     }))
@@ -517,6 +551,7 @@ def create_expense_gl_entries(expense_doc, method=None):
                 "voucher_no": expense_doc.name,
                 "remarks": f"Tax: {tax.description or tax.account_head} for {expense_doc.name}",
                 "is_cancelled": 1 if is_cancelled else 0,
+                "hospitality_property": expense_doc.get('property'),
                 "cost_center": expense_doc.cost_center,
                 "company": company
             }))
@@ -536,6 +571,7 @@ def create_expense_gl_entries(expense_doc, method=None):
         "voucher_no": expense_doc.name,
         "remarks": f"Payment via {expense_doc.paid_via} for {expense_doc.name}",
         "is_cancelled": 1 if is_cancelled else 0,
+        "hospitality_property": expense_doc.get('property'),
         "cost_center": expense_doc.cost_center,
         "company": company
     }))

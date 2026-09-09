@@ -22,6 +22,28 @@ frappe.ui.form.on('Hotel Reservation', {
     },
     membership: function (frm) { render_room_rate_preview(frm); },
     currency: function (frm) { render_room_rate_preview(frm); },
+    property: function (frm) {
+        // Chỉ áp dụng cho đặt phòng MỚI — property_scope.py đã chặn đổi
+        // property/currency trên bản ghi đã lưu (đúng nghĩa), nên không có
+        // rủi ro ghi đè currency của 1 đặt phòng cũ khi mở lại form.
+        //
+        // Lý do cần tự set ở đây: Frappe tự điền field 'currency' bằng tiền
+        // tệ MẶC ĐỊNH TOÀN SITE (Global Defaults) ngay khi mở form New —
+        // TRƯỚC KHI lễ tân kịp chọn property. Nếu để nguyên, property_scope.py
+        // phía server sẽ KHÔNG BAO GIỜ tự sửa lại (field đã "trông như có
+        // giá trị"), dẫn tới đặt phòng âm thầm mang sai tiền tệ ngay khi có
+        // property thứ 2 dùng tiền tệ khác site mặc định. Chọn property xong
+        // thì tự đặt lại đúng tiền tệ của property đó — lễ tân vẫn có thể tự
+        // tay đổi lại currency SAU ĐÓ nếu khách thật sự thanh toán bằng
+        // ngoại tệ khác (đã hỗ trợ, không bị chặn).
+        if (frm.is_new() && frm.doc.property) {
+            frappe.db.get_value('Hospitality Property', frm.doc.property, 'currency').then(r => {
+                if (r.message && r.message.currency) {
+                    frm.set_value('currency', r.message.currency);
+                }
+            });
+        }
+    },
     refresh: function (frm) {
         // Cảnh báo trực quan nếu khách đang trong danh sách đen — server
         // (validate_blacklist() trong hotel_reservation.py) mới là chốt chặn

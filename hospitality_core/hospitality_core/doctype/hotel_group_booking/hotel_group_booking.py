@@ -108,7 +108,24 @@ class HotelGroupBooking(Document):
             res.operating_company = self.get("operating_company")
             res.currency = self.get("currency")
         
-        virtual_filters = {"room_type": "Virtual"}
+        # TRƯỚC ĐÂY: lọc Hotel Room bằng filters={"room_type": "Virtual"} —
+        # SAI HẲN, xác nhận thật khi viết test sống: "Hotel Room Type" dùng
+        # autoname="hash" (đọc thẳng hotel_room_type.json), nên TÊN THẬT
+        # (docname, giá trị thật sự lưu trong Hotel Room.room_type — 1 Link
+        # field) của bản ghi có nhãn "Virtual" luôn là 1 chuỗi hash ngẫu
+        # nhiên (VD "a1b2c3d4e5"), KHÔNG BAO GIỜ là chuỗi "Virtual". Hậu quả:
+        # dù admin làm ĐÚNG THEO CHỈ DẪN của chính thông báo lỗi bên dưới
+        # (tạo Hotel Room Type với room_type_name="Virtual" + 1 Hotel Room
+        # thuộc loại đó), virtual_rooms LUÔN rỗng — TOÀN BỘ tính năng xác
+        # nhận đặt đoàn (create_group_structure()) không bao giờ hoạt động
+        # được trên bất kỳ site nào. Sửa: tra đúng docname thật của Hotel
+        # Room Type có nhãn "Virtual" trước, rồi mới lọc Hotel Room theo
+        # đúng docname đó.
+        virtual_type_filters = {"room_type_name": "Virtual"}
+        if self.get("property"):
+            virtual_type_filters["property"] = self.property
+        virtual_type_names = frappe.get_all("Hotel Room Type", filters=virtual_type_filters, pluck="name")
+        virtual_filters = {"room_type": ["in", virtual_type_names or [""]]}
         if self.get("property"):
             virtual_filters["property"] = self.property
         virtual_rooms = frappe.get_all("Hotel Room", filters=virtual_filters, pluck="name")
@@ -155,11 +172,62 @@ class HotelGroupBooking(Document):
         # taking a real room away from a paying guest.
         res.room = virtual_room
         res.room_type = frappe.db.get_value("Hotel Room", virtual_room, "room_type")
+        # hotel_reception là Link bắt buộc (reqd=1) trên Hotel Reservation,
+        # không có fetch_from/default nào cả — mọi đường tạo Hotel Reservation
+        # tự động (VD channel_manager.py's OTA webhook dùng
+        # settings.default_hotel_reception) đều phải tự cấp giá trị này.
+        # TRƯỚC ĐÂY hàm này bỏ sót hoàn toàn — res.insert() sẽ luôn crash
+        # frappe.MandatoryError ngay khi validate() (bước kiểm tra field ảnh
+        # hưởng bởi bug "Virtual" room-type ở trên) qua được, khiến TOÀN BỘ
+        # tính năng xác nhận đặt đoàn vẫn không dùng được dù đã cấu hình đúng
+        # phòng ảo — chỉ lộ ra khi chạy test sống, không static review nào
+        # bắt được vì lỗi này bị lỗi khác che khuất suốt các vòng review trước.
+        res.hotel_reception = frappe.db.get_value("Hotel Room", virtual_room, "hotel_reception")
         res.rate_plan = None  # Phòng ảo chỉ neo folio, không áp bảng giá phòng thật.
         res.discount_type = self.discount_type
         res.discount_value = self.discount_value
 
         res.insert(ignore_permissions=True)
+
+        # create_folio() (api/reservation.py) luôn tạo Guest Folio mới với
+        # status="Provisional" — mặc định ĐÚNG cho 1 đặt phòng khách thường
+        # (chỉ thành "Open" lúc check-in thật, xem process_check_in() dòng
+        # ~220). Nhưng Master Folio của đoàn đóng vai trò THUẦN TÚY là mỏ neo
+        # thanh toán/công nợ (giống hệt Master Folio của Company — xem
+        # ensure_company_folio() ở trên, luôn ép "Open" ngay lúc tạo với đúng
+        # lý do "Company Folios are indefinite... not tied to physical stay"),
+        # không phải 1 kỳ lưu trú thật gắn với ngày đến. Nếu để nguyên
+        # "Provisional", record_group_deposit() (api/group_booking.py) —
+        # được xây riêng để cho phép thu cọc THẬT ngay lúc XÁC NHẬN đoàn,
+        # trước ngày đến rất lâu — sẽ luôn bị create_company_folio_payment()
+        # chặn "Cannot record a payment on a folio with status: Provisional"
+        # cho tới tận lúc mass_check_in() thật sự chạy vào đúng ngày đến —
+        # nghĩa là tính năng thu cọc trước hoàn toàn không dùng được, chỉ lộ
+        # ra qua chạy test sống (mọi review tĩnh trước đó không phát hiện vì
+        # không mô phỏng được đúng thứ tự "confirm rồi thử ghi cọc trước khi
+        # check-in"). Set thẳng "Open" ngay đây — an toàn, vì check-in thật
+        # sau này (process_check_in()) chỉ set lại "Open" một lần nữa (vô hại,
+        # đã idempotent).
+        #
+        # Lỗi thứ 2, phát hiện ngay sau lỗi status: dù `res.company =
+        # self.master_payer` được gán ở trên, HotelReservation.validate()
+        # (dòng đầu tiên: "if not self.is_company_guest: self.company =
+        # None") XÓA TRẮNG field này ngay lúc insert() vì is_company_guest
+        # không được set — CHỦ Ý (không set is_company_guest=1 ở đây, vì làm
+        # vậy sẽ kích hoạt luôn `self.ensure_company_folio()` ở validate(),
+        # tạo THÊM 1 Master Folio "Company" riêng biệt cho cùng khách hàng,
+        # trùng lặp với đúng Guest Folio vừa tạo qua create_folio()). Hệ quả:
+        # create_folio()'s `folio.company = reservation_doc.company` luôn ghi
+        # rỗng — create_company_folio_payment() (record_group_deposit() gọi
+        # tới) từ chối thẳng "This Company Folio has no company linked.",
+        # nghĩa là thu cọc đoàn không bao giờ hoạt động được dù đã qua fix
+        # status ở trên. Gán lại thẳng vào Guest Folio (không đụng tới Hotel
+        # Reservation.company, giữ đúng is_company_guest=0 hiện tại để không
+        # vô tình bật lại ensure_company_folio()).
+        frappe.db.set_value("Guest Folio", res.folio, {
+            "status": "Open",
+            "company": self.master_payer,
+        })
         return res
 
     def create_bulk_reservations(self):
@@ -181,6 +249,10 @@ class HotelGroupBooking(Document):
             res.guest = self.get_corporate_guest_name(self.master_payer)
             res.room = resolve_hotel_room(row.room, property=self.get("property"))
             res.room_type = row.room_type or frappe.db.get_value("Hotel Room", res.room, "room_type")
+            # Cùng lỗi/lý do như create_master_payer_reservation(): hotel_reception
+            # là Link bắt buộc, không có default/fetch nào — phải tự lấy từ
+            # đúng phòng thật đang đặt cho dòng này.
+            res.hotel_reception = frappe.db.get_value("Hotel Room", res.room, "hotel_reception")
             res.rate_plan = row.rate_plan
             res.arrival_date = self.arrival_date
             res.departure_date = self.departure_date

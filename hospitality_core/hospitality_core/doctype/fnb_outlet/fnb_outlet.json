@@ -54,6 +54,18 @@
    "fieldtype": "Check"
   },
   {
+   "fieldname": "paused",
+   "label": "Paused",
+   "fieldtype": "Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pause_reason",
+   "label": "Pause Reason",
+   "fieldtype": "Small Text",
+   "read_only": 1
+  },
+  {
    "fieldname": "pos_profiles",
    "label": "Pos Profiles",
    "fieldtype": "Table",
@@ -74,6 +86,8 @@
   "warehouse",
   "responsible_user",
   "enabled",
+  "paused",
+  "pause_reason",
   "pos_profiles",
   "menu"
  ],

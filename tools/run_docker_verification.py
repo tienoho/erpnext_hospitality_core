@@ -17,6 +17,41 @@ from run_property_integration import PropertyDatabaseTests
 from erpnext.stock.utils import get_stock_balance
 
 
+def ensure_legacy_accounting_settings(company):
+    """`accounting.py` (đường Legacy — redirect_pos_income_to_suspense(),
+    reclassify_pos_taxes(), make_gl_entries_for_folio_transaction()) đọc
+    `Hospitality Accounting Settings` (Single, KHÁC hẳn `Hospitality Company
+    Accounting Settings` của Property v2 mà accounting_reservation() đã tự
+    cấu hình) — cần cấu hình riêng, độc lập."""
+    settings = frappe.get_single('Hospitality Accounting Settings')
+    # QUAN TRỌNG: kiểm tra receivable_account hiện tại có ĐÚNG thuộc company
+    # đang cần không, không chỉ "đã có giá trị gì đó là xong" — phát hiện
+    # thật: "Hospitality Accounting Settings" là Single TOÀN SITE dùng chung
+    # với run_city_ledger_financial_control_tests.py/run_group_booking_tests.py's
+    # fixture Legacy tương tự (mỗi file 1 company RIÊNG) — nếu file đó chạy
+    # TRƯỚC và đã cấu hình xong cho company của NÓ, early-return cũ ở đây sẽ
+    # bỏ qua việc cấu hình lại cho company của CHÍNH file này, dẫn tới lỗi
+    # "Giao dịch thuộc pháp nhân X nhưng cấu hình kế toán Legacy toàn cục
+    # đang trỏ tới pháp nhân Y" (đã xác nhận thật khi chạy nhiều file liên
+    # tiếp không reinstall).
+    if settings.receivable_account and frappe.db.get_value('Account', settings.receivable_account, 'company') == company:
+        return
+    def account(label, root_type):
+        parent = frappe.db.get_value('Account', {'company': company, 'root_type': root_type, 'is_group': 1},
+            'name', order_by='lft')
+        return frappe.get_doc(dict(doctype='Account', account_name=label, parent_account=parent,
+            company=company, account_currency='VND')).insert().name
+    settings.enable_vietqr = 0
+    settings.receivable_account = frappe.get_cached_value('Company', company, 'default_receivable_account')
+    settings.income_account = frappe.get_cached_value('Hospitality Company Accounting Settings', company, 'income_account')
+    settings.income_suspense_account = account('Docker Legacy Income Suspense', 'Liability')
+    settings.consumption_tax_account = account('Docker Legacy Consumption Tax', 'Liability')
+    settings.vat_account = account('Docker Legacy VAT', 'Liability')
+    settings.service_charge_account = account('Docker Legacy Service Charge', 'Liability')
+    settings.cost_center = frappe.get_cached_value('Company', company, 'cost_center')
+    settings.save(ignore_permissions=True)
+
+
 class DockerVerificationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -31,7 +66,9 @@ class DockerVerificationTests(unittest.TestCase):
         reservation, settings = f.accounting_reservation()
         self.assertEqual(reservation.accounting_version, 'Property v2')
         frappe.db.set_value('Hotel Reservation', reservation.name, 'allow_pos_posting', 1)
+        frappe.db.set_single_value('POS Settings', 'invoice_type', 'POS Invoice')
         company = reservation.operating_company
+        ensure_legacy_accounting_settings(company)
         warehouse = frappe.db.get_value('Warehouse', {'company': company, 'is_group': 0}, 'name')
         if not frappe.db.exists('UOM', 'Nos'):
             frappe.get_doc(dict(doctype='UOM', uom_name='Nos')).insert()
@@ -47,8 +84,19 @@ class DockerVerificationTests(unittest.TestCase):
         receipt.submit()
         return reservation, settings, item, warehouse, company
 
-    def make_pos_invoice(self, reservation, item, warehouse, company, mode_of_payment, amount, is_return=0, return_against=None):
-        customer = reservation.billing_customer
+    def make_pos_invoice(self, reservation, item, warehouse, company, mode_of_payment, amount, is_return=0,
+                          return_against=None, customer=None, hotel_room=None):
+        # enforce_payment_mode_rules() (fix phiên trước) bắt buộc: có Phòng ->
+        # CHỈ 'Guest Account'; Walk-in Customer không Phòng -> CẤM 'Guest
+        # Account'/'Complimentary' (mode khác như tiền mặt thì được); khách
+        # khác Walk-in không Phòng -> CHỈ 'Complimentary'. Mặc định dùng
+        # 'Walk in Customer' (đúng quy tắc cho thanh toán tiền mặt thường).
+        if customer is None:
+            customer = 'Walk in Customer'
+            if not frappe.db.exists('Customer', customer):
+                frappe.get_doc(dict(doctype='Customer', customer_name=customer, customer_type='Individual',
+                    customer_group=frappe.db.get_value('Customer Group', {'is_group': 0}),
+                    territory=frappe.db.get_value('Territory', {'is_group': 0}))).insert(ignore_permissions=True)
         pos_profile_name = 'Docker Verify POS'
         if not frappe.db.exists('POS Profile', pos_profile_name):
             income = frappe.db.get_value('Hospitality Company Accounting Settings', company, 'income_account')
@@ -59,11 +107,18 @@ class DockerVerificationTests(unittest.TestCase):
                 cost_center=frappe.db.get_value('Hospitality Company Accounting Settings', company, 'cost_center'),
                 write_off_account=income, write_off_cost_center=frappe.db.get_value('Hospitality Company Accounting Settings', company, 'cost_center'),
                 payments=[dict(mode_of_payment=mode_of_payment, default=1)])).insert(ignore_permissions=True)
+        if not frappe.db.exists('POS Opening Entry', {'pos_profile': pos_profile_name, 'status': 'Open'}):
+            opening = frappe.get_doc(dict(doctype='POS Opening Entry', company=company, pos_profile=pos_profile_name,
+                user='Administrator', period_start_date=now_datetime(), posting_date=nowdate(),
+                balance_details=[dict(mode_of_payment=mode_of_payment, opening_amount=0)]))
+            opening.insert(ignore_permissions=True)
+            opening.submit()
         qty = -1 if is_return else 1
         inv = frappe.get_doc(dict(doctype='POS Invoice', company=company, customer=customer,
-            pos_profile=pos_profile_name, currency='VND', conversion_rate=1,
+            pos_profile=pos_profile_name, currency='VND', conversion_rate=1, hotel_room=hotel_room,
             selling_price_list=frappe.db.get_single_value('Selling Settings', 'selling_price_list'),
             posting_date=nowdate(), is_return=is_return, return_against=return_against,
+            paid_amount=amount * (-1 if is_return else 1),
             items=[dict(item_code=item.name, qty=qty, rate=50000, warehouse=warehouse)],
             payments=[dict(mode_of_payment=mode_of_payment, amount=amount * (-1 if is_return else 1))]))
         inv.insert(ignore_permissions=True)
@@ -125,9 +180,18 @@ class DockerVerificationTests(unittest.TestCase):
     # ------------------------------------------------------------------
     def test_room_charge_for_stock_item_not_blocked_on_property_v2(self):
         reservation, settings, item, warehouse, company = self.fixture()
+        receivable = frappe.get_cached_value('Company', company, 'default_receivable_account')
         if not frappe.db.exists('Mode of Payment', 'Guest Account'):
-            frappe.get_doc(dict(doctype='Mode of Payment', mode_of_payment='Guest Account', type='General')).insert()
-        inv = self.make_pos_invoice(reservation, item, warehouse, company, 'Guest Account', 50000)
+            frappe.get_doc(dict(doctype='Mode of Payment', mode_of_payment='Guest Account', type='General',
+                accounts=[dict(company=company, default_account=receivable)])).insert()
+        elif not frappe.db.exists('Mode of Payment Account', {'parent': 'Guest Account', 'company': company}):
+            mop = frappe.get_doc('Mode of Payment', 'Guest Account')
+            mop.append('accounts', dict(company=company, default_account=receivable))
+            mop.save(ignore_permissions=True)
+        # enforce_payment_mode_rules(): hóa đơn gắn Phòng CHỈ được thanh toán
+        # qua 'Guest Account' — dùng đúng khách/phòng của reservation.
+        inv = self.make_pos_invoice(reservation, item, warehouse, company, 'Guest Account', 50000,
+            customer=reservation.billing_customer, hotel_room=reservation.room)
         self.assertEqual(get_stock_balance(item.name, warehouse), 9)
         txns = frappe.get_all('Folio Transaction', filters={'reference_doctype': 'POS Invoice',
             'reference_name': inv.name, 'item': item.name})
@@ -146,9 +210,13 @@ class DockerVerificationTests(unittest.TestCase):
         folio = frappe.get_doc('Guest Folio', reservation.folio)
         receivable = frappe.get_cached_value('Company', company, 'default_receivable_account')
         cash = frappe.db.get_value('Account', {'company': company, 'account_type': 'Cash', 'is_group': 0}, 'name')
+        if not frappe.db.exists('Mode of Payment', 'Docker Verify Cash'):
+            frappe.get_doc(dict(doctype='Mode of Payment', mode_of_payment='Docker Verify Cash', type='Cash',
+                accounts=[dict(company=company, default_account=cash)])).insert()
         pe = frappe.get_doc(dict(doctype='Payment Entry', payment_type='Receive', company=company,
             party_type='Customer', party=reservation.billing_customer, paid_from=receivable, paid_to=cash,
-            paid_amount=100000, received_amount=100000, mode_of_payment='Cash',
+            paid_amount=100000, received_amount=100000, mode_of_payment='Docker Verify Cash',
+            reference_no=reservation.folio, reference_date=nowdate(),
             hospitality_property=reservation.property, hospitality_event_key=f'docker-verify-{now_datetime()}'))
         pe.insert(ignore_permissions=True)
         pe.submit()
@@ -172,12 +240,22 @@ class DockerVerificationTests(unittest.TestCase):
         self.assertEqual(remaining, 2, 'split_transaction() phải tạo được 2 dòng mới trên folio Property v2.')
 
     def test_housekeeping_minibar_on_property_v2_folio(self):
+        # validate_inventory_source() (fix của "luồng khác" ở vòng bugfix
+        # trước) CHẶN CÓ CHỦ ĐÍCH mọi charge Item tồn kho (is_stock_item=1)
+        # ghi thẳng qua Folio mà không có chứng từ xuất kho thật đứng sau —
+        # minibar qua housekeeping_mobile.py KHÔNG tạo Stock Entry nào, nên
+        # phải dùng Item phi tồn kho (dịch vụ) cho đúng thiết kế đã quyết
+        # định, không phải lỗi cần sửa ở product code.
         from hospitality_core.hospitality_core.api.housekeeping_mobile import log_minibar_consumption
         reservation, settings, item, warehouse, company = self.fixture()
+        frappe.db.set_value('Hotel Reservation', reservation.name, 'status', 'Checked In')
         frappe.set_user('Administrator')
-        result = log_minibar_consumption(reservation.room, [dict(item=item.name, qty=1, amount=30000)])
+        minibar_item = frappe.db.exists('Item', 'DOCKER-VERIFY-MINIBAR') or frappe.get_doc(dict(
+            doctype='Item', item_code='DOCKER-VERIFY-MINIBAR', item_name='Docker Verify Minibar',
+            item_group='Services', stock_uom='Nos', is_stock_item=0)).insert().name
+        result = log_minibar_consumption(reservation.room, [dict(item=minibar_item, qty=1, amount=30000)])
         self.assertTrue(result if isinstance(result, list) else True)
-        txns = frappe.get_all('Folio Transaction', filters={'parent': reservation.folio, 'item': item.name})
+        txns = frappe.get_all('Folio Transaction', filters={'parent': reservation.folio, 'item': minibar_item})
         self.assertGreaterEqual(len(txns), 1,
             'Ghi phí minibar qua housekeeping_mobile.py phải thành công trên folio Property v2.')
 
@@ -206,20 +284,32 @@ class VietnamEinvoiceVerificationTests(unittest.TestCase):
 
     def test_legacy_invoice_from_folio_has_address_and_issues_mock_einvoice(self):
         from hospitality_core.hospitality_core.api.invoicing import create_invoice_from_folio
+        if not frappe.db.exists('Address Template', {'is_default': 1}):
+            frappe.get_doc(dict(doctype='Address Template', country='Vietnam', is_default=1,
+                template="{{ address_line1 }}\n{{ city }}\n{{ country }}")).insert(ignore_permissions=True)
         from hospitality_core.hospitality_core.api.einvoice import issue_einvoice_from_folio
 
         f = PropertyDatabaseTests()
-        # Folio Legacy độc lập (không qua Property v2) để test đúng đường
-        # create_invoice_from_folio() (Legacy) + vietnam_einvoice.
+        # Gọi accounting_reservation() trước CHỈ để mở property 'HV-A' nhận
+        # booking mới (accept_new_bookings=1) — không dùng reservation nó trả
+        # về, vì cần 1 folio LEGACY riêng (không qua Property v2) để test
+        # đúng đường create_invoice_from_folio() (Legacy) + vietnam_einvoice.
+        f.accounting_reservation()
         customer = frappe.get_doc(dict(doctype='Customer', customer_name='Docker Einvoice Customer',
-            customer_type='Company', customer_group=frappe.db.get_value('Customer Group', {'is_group': 1}),
-            territory=frappe.db.get_value('Territory', {'is_group': 1}), tax_id='0101234567')).insert()
+            customer_type='Company', customer_group=frappe.db.get_value('Customer Group', {'is_group': 0}),
+            territory=frappe.db.get_value('Territory', {'is_group': 0}), tax_id='0101234567')).insert()
         address = frappe.get_doc(dict(doctype='Address', address_title='Docker Einvoice Customer',
             address_type='Billing', address_line1='123 Test Street', city='Ha Noi', country='Vietnam',
             links=[dict(link_doctype='Customer', link_name=customer.name)])).insert()
         guest = frappe.get_doc(dict(doctype='Guest', full_name='Docker Einvoice Guest', customer=customer.name)).insert()
         company = frappe.db.get_value('Hospitality Property', 'HV-A', 'operating_company')
-        room = f.room('HV-A')
+        ensure_legacy_accounting_settings(company)
+        # accounting_reservation() ở trên đã tự tạo room_type "Integration
+        # Deluxe" + phòng số '101' — dùng lại đúng room_type đó, đặt số
+        # phòng khác để tránh trùng (property_scope.py chặn trùng room_number
+        # trong cùng cơ sở).
+        existing_room_type = frappe.db.get_value('Hotel Room Type', {'property': 'HV-A'}, 'name')
+        room = f.room('HV-A', room_type=existing_room_type, number='DOCKER-EINVOICE-101')
         reservation = frappe.get_doc(dict(doctype='Hotel Reservation', property='HV-A', currency='VND',
             guest=guest.name, billing_customer=customer.name, room=room.name, room_type=room.room_type,
             hotel_reception=room.hotel_reception, arrival_date=nowdate(), departure_date=add_days(nowdate(), 1))).insert()

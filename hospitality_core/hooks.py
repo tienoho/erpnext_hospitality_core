@@ -164,5 +164,15 @@ for _dt in ['POS Invoice','Sales Invoice']:
     _add_event(_dt,'before_submit','hospitality_core.hospitality_core.api.fnb.pos.validate_return_approval')
     _add_event(_dt,'before_submit','hospitality_core.hospitality_core.api.fnb.pos.check_reserved_stock')
 doc_events['POS Invoice']['on_submit'].insert(0,'hospitality_core.hospitality_core.api.fnb.pos.prepare_pos_stock')
+_add_event('POS Invoice','before_cancel','hospitality_core.hospitality_core.api.fnb.pos.prevent_physical_source_cancel')
 for _dt in {dt for dt in SCOPED if dt.startswith('FNB ')} | {'Warehouse'}:
+    has_permission[_dt]='hospitality_core.hospitality_core.api.fnb.guards.scoped_permission'
+
+override_doctype_class = {'Report':'hospitality_core.hospitality_core.api.fnb.stock_reports.ScopedStockReport'}
+override_doctype_class['Repost Item Valuation']='hospitality_core.hospitality_core.api.fnb.reposting.ScopedRepostItemValuation'
+_add_event('Repost Item Valuation','before_submit','hospitality_core.hospitality_core.api.fnb.reposting.validate_repost')
+before_request = ['hospitality_core.hospitality_core.api.fnb.stock_reports.before_request']
+has_permission['Prepared Report']='hospitality_core.hospitality_core.api.fnb.stock_reports.prepared_permission'
+has_permission['File']='hospitality_core.hospitality_core.api.fnb.stock_reports.file_permission'
+for _dt in ['Stock Ledger Entry', 'Bin', 'Stock Reservation Entry', 'Serial and Batch Bundle']:
     has_permission[_dt]='hospitality_core.hospitality_core.api.fnb.guards.scoped_permission'

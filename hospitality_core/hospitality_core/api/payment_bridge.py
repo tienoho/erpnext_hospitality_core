@@ -414,6 +414,34 @@ def create_company_folio_payment(folio_name, amount, mode_of_payment, hotel_rece
     if folio.status != "Open":
         frappe.throw(_("Cannot record a payment on a folio with status: {0}").format(folio.status))
 
+    # Hàm này (và create_folio_payment() — bản dành cho khách lẻ) chỉ triển
+    # khai đúng cơ chế kế toán LEGACY: tạo Payment Entry KHÔNG set
+    # hospitality_accounting_version, dựa vào process_payment_entry()'s hook
+    # (on_submit của Payment Entry) để vừa ghi Folio Transaction giảm số dư
+    # VỪA chạy handle_payment_income_realization() (chuyển Suspense->Income
+    # theo đúng mô hình kế toán Legacy). Property v2 dùng mô hình HOÀN TOÀN
+    # khác (income đã ghi nhận thẳng lúc phát sinh charge qua post_charge(),
+    # không qua Suspense) và có luồng thanh toán RIÊNG
+    # (property_accounting.py's receive_payment()) — nhưng luồng đó hiện chỉ
+    # xử lý thanh toán KHÁCH LẺ (party=folio.billing_customer, bill_to='Guest'
+    # cứng), CHƯA có phiên bản dành cho Company/Group giống hàm này. Nếu cứ
+    # để hàm Legacy này chạy tiếp trên 1 folio đã là 'Property v2' (như Master
+    # Folio đoàn của 1 property đã cutover), sẽ xảy ra 1 trong 2 hậu quả xấu:
+    # (a) crash "Account is required" nếu global Hospitality Accounting
+    # Settings (Legacy) chưa cấu hình song song (thường ĐÚNG NHƯ VẬY trên 1
+    # site đã chuyển hẳn sang Property v2), hoặc (b), nguy hiểm hơn, ghi
+    # nhận doanh thu TRÙNG LẦN THỨ HAI qua handle_payment_income_realization()
+    # nếu lỡ có cấu hình Legacy song song — vì doanh thu đã được ghi nhận
+    # đúng 1 lần lúc phát sinh charge (post_charge()) rồi. Chặn tường minh,
+    # rõ ràng ở đây thay vì để crash khó hiểu hoặc âm thầm ghi sai GL — cho
+    # tới khi có 1 hàm thanh toán Company/Group riêng cho Property v2.
+    if folio.get("accounting_version") == "Property v2":
+        frappe.throw(_(
+            "Folio {0} đã dùng kế toán Property v2 — chức năng ghi nhận thanh toán Công ty/Đoàn này chỉ hỗ trợ "
+            "Folio kế toán Legacy. Property v2 hiện chưa có hàm thanh toán Công ty/Đoàn riêng (chỉ có "
+            "receive_payment() cho khách lẻ)."
+        ).format(folio.name))
+
     if not folio.company:
         frappe.throw(_("This Company Folio has no company linked. Please set the Company field first."))
 

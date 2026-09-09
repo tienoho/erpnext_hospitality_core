@@ -192,7 +192,7 @@ def approve_waste(name, request_id):
     if doc.status!='Draft' or not doc.reason or not doc.items:
         frappe.throw(_('Phiếu cần ở trạng thái nháp, có số lượng và lý do.'))
     approve_actor(doc)
-    out,cfg=outlet(doc.outlet)
+    out,cfg=outlet(doc.outlet, allow_paused=True)
     origin=None
     if doc.disposition!='Inventory Loss':
         origin=load('FNB Inventory Event',doc.source_event,'read')
@@ -204,6 +204,31 @@ def approve_waste(name, request_id):
         event.purpose=origin.purpose
     if doc.disposition=='Inventory Loss':
         post_stock(event,out,cfg,rows_from_doc(doc))
+    elif doc.disposition=='Return Correction':
+        if origin.event_type != 'Return' or origin.source_doctype != 'POS Invoice' or not origin.stock_entry:
+            frappe.throw(_('Điều chỉnh nhập sai cần sự kiện hoàn kho POS gốc.'))
+        entry = frappe.get_doc('Stock Entry', origin.stock_entry)
+        if entry.docstatus != 1:
+            frappe.throw(_('Chứng từ nhập nguồn phải còn submit.'))
+        remaining = {}
+        for row in entry.items:
+            k = (row.item_code, row.batch_no or None)
+            remaining[k] = remaining.get(k, 0) + row.transfer_qty
+        for prior in frappe.get_all('FNB Inventory Event', filters={'origin': origin.name,
+                'event_type': 'Waste', 'name': ['!=', event.name]}, fields=['snapshot']):
+            data = json.loads(prior.snapshot or '{}')
+            if data.get('disposition') == 'Return Correction':
+                for row in data['items']:
+                    k = (row['item'], row.get('batch_no') or None)
+                    remaining[k] = remaining.get(k, 0) - row['qty']
+        for row in payload['items']:
+            k = (row['item'], row.get('batch_no') or None)
+            remaining[k] = remaining.get(k, 0) - row['qty']
+            if remaining[k] < -1e-9:
+                frappe.throw(_('Lượng điều chỉnh vượt phần nhập nguồn chưa điều chỉnh.'))
+        event.purpose = origin.purpose
+        event.quantity = sum(row['qty'] for row in payload['items'])
+        post_stock(event, out, cfg, payload['items'])
     elif doc.disposition=='Prepared Waste':
         if origin.event_type!='Prepare' or origin.source_doctype!='FNB Service Ticket':
             frappe.throw(_('Chỉ phân loại món đã chế biến có phiếu nguồn.'))
@@ -216,6 +241,10 @@ def approve_waste(name, request_id):
         if qty+flt(prior)>origin.quantity:
             frappe.throw(_('Món nguồn đã ghi hủy.'))
         event.quantity=qty
+        snapshot=json.loads(row.snapshot)
+        if snapshot.get('mode')=='Stock' and not origin.stock_entry:
+            # Hàng bán trực tiếp chưa qua POS vẫn còn trên sổ, phải xuất lượng thực bỏ.
+            post_stock(event,out,cfg,rows_from_doc(doc))
         # Giữ dấu vết chế biến ở event; dòng phiếu giải phóng phần không phục vụ.
         row.prepared_qty-=qty
         row.cancelled_qty+=qty

@@ -53,6 +53,12 @@
    "options": "FNB Recipe Version"
   },
   {
+   "fieldname": "supersedes",
+   "label": "Supersedes",
+   "fieldtype": "Link",
+   "options": "FNB Recipe Version"
+  },
+  {
    "fieldname": "import_key",
    "label": "Import Key",
    "fieldtype": "Data",
@@ -143,6 +149,7 @@
   "outlet",
   "item",
   "template",
+  "supersedes",
   "import_key",
   "import_content_hash",
   "quantity",

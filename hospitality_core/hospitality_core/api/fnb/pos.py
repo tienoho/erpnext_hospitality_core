@@ -42,6 +42,8 @@ def before_validate(doc, method=None):
         return
     at=get_datetime(str(doc.posting_date)+' '+str(doc.get('posting_time') or '00:00:00'))
     old=doc.get_doc_before_save()
+    if not doc.get('is_return') and (not old or not old.docstatus) and (out.get('paused') or cfg.get('paused')):
+        frappe.throw(_('F&B đang tạm dừng; chưa được tạo hoặc submit hóa đơn mới.'))
     if not doc.flags.fnb_service:
         for field in ['fnb_approved_by','fnb_approval_hash','fnb_source_event','fnb_version']:
             if (doc.get(field) or '')!=((old.get(field) if old else '') or ''):
@@ -92,8 +94,12 @@ def before_validate(doc, method=None):
             recipe,snapshot=select_recipe(out.name,row.item_code,at)
             snapshot.update(mode='Recipe',cost_group=mode.cost_group)
         row.fnb_snapshot=frappe.as_json(snapshot)
-    if any(menu_item(out,r.item_code).stock_mode=='Stock' for r in doc.items):
-        doc.update_stock=1
+    stock_rows=[r for r in doc.items if menu_item(out,r.item_code).stock_mode=='Stock']
+    if stock_rows:
+        delivered=[bool(r.get('delivery_note') and r.get('dn_detail')) for r in stock_rows]
+        if any(delivered) and not all(delivered):
+            frappe.throw(_('Tách hóa đơn hàng đã giao qua Delivery Note và hàng xuất trực tiếp.'))
+        doc.update_stock=0 if all(delivered) else 1
     if doc.doctype=='POS Invoice':
         doc.update_stock=0
 
@@ -211,7 +217,7 @@ def process_invoice(doc):
             event=make_event(doc,'Prepare',key,sig,source_line=row.name,quantity=row.stock_qty,purpose='Sale',
                 posting_datetime=str(doc.posting_date)+' '+str(doc.get('posting_time') or '00:00:00'),snapshot=frappe.as_json(snapshot))
             post_stock(event,out,cfg,ingredients(snapshot,row.stock_qty))
-        if snapshot['mode']=='Stock' and doc.doctype=='POS Invoice':
+        if snapshot['mode']=='Stock' and doc.doctype=='POS Invoice' and not (row.get('delivery_note') and row.get('dn_detail')):
             old,key,sig=event_existing(doc,'Issue',row.name,dict(item=row.item_code,qty=row.stock_qty))
             if not old:
                 event=make_event(doc,'Issue',key,sig,source_line=row.name,quantity=row.stock_qty,purpose='Sale',
@@ -236,7 +242,7 @@ def check_reserved_stock(doc,method=None):
     credit={}
     lines={r.name:r for r in doc.items}
     for row in doc.items:
-        if json.loads(row.fnb_snapshot)['mode']=='Stock':
+        if json.loads(row.fnb_snapshot)['mode']=='Stock' and not row.get('delivery_note'):
             quantities[row.item_code]=quantities.get(row.item_code,0)+flt(row.stock_qty)
     # Khóa phiếu theo thứ tự cố định để hai hóa đơn không cùng dùng một phần giữ hàng.
     tickets={name:load('FNB Service Ticket',name,'read') for name in sorted({a.ticket for a in (doc.get('fnb_allocations') or [])})}
@@ -286,8 +292,17 @@ def post_pos_returns(doc,out,cfg):
         old,key,sig=event_existing(doc,'Return',row.name,dict(item=row.item_code,qty=quantity,source=original.name))
         if old:
             continue
+        original_line=next((r for r in original.items if r.name==row.get('pos_invoice_item')),None)
+        if not original_line or original_line.item_code!=row.item_code:
+            frappe.throw(_('Hoàn kho cần mã dòng POS gốc đúng Item.'))
         sources=frappe.get_all('FNB Inventory Event',filters={'source_doctype':'POS Invoice','source_name':original.name,
-            'event_type':'Issue'},fields=['name','stock_entry','source_line'],order_by='creation')
+            'source_line':original_line.name,'event_type':'Issue'},fields=['name','stock_entry','source_line'],order_by='creation')
+        source_batches={r.batch_no for source in sources if source.stock_entry
+            for r in frappe.get_doc('Stock Entry',source.stock_entry).items if r.item_code==row.item_code and r.batch_no}
+        if len(source_batches)>1 and not row.get('batch_no'):
+            frappe.throw(_('Dòng gốc có nhiều lô; chọn lô thực nhận và tách dòng hoàn theo lô.'))
+        if row.get('batch_no') and row.batch_no not in source_batches:
+            frappe.throw(_('Lô thực nhận không thuộc dòng POS gốc.'))
         remaining=quantity
         material=[]
         used=[]
@@ -296,7 +311,7 @@ def post_pos_returns(doc,out,cfg):
                 continue
             entry=frappe.get_doc('Stock Entry',source.stock_entry)
             for stockrow in entry.items:
-                if stockrow.item_code!=row.item_code:
+                if stockrow.item_code!=row.item_code or (row.get('batch_no') and stockrow.batch_no!=row.batch_no):
                     continue
                 prior=frappe.get_all('FNB Inventory Event',filters={'event_type':'Return','property':out.property},fields=['snapshot'])
                 returned=0
@@ -326,6 +341,14 @@ def validate_return_approval(doc,method=None):
             frappe.throw(_('Nhập lại hàng thực tế cần người khác duyệt đúng nội dung phiếu hoàn.'))
 
 
+def prevent_physical_source_cancel(doc,method=None):
+    if doc.get('fnb_version')!='FNB v1':
+        return
+    if frappe.db.exists('FNB Inventory Event',{'source_doctype':doc.doctype,'source_name':doc.name,
+        'stock_entry':['is','set']}):
+        frappe.throw(_('POS đã có xuất/nhập kho vật lý. Dùng chứng từ hoàn Financial Only hoặc Physical Return có nguồn; không hủy rồi xuất lại hàng đã giao.'))
+
+
 def post_room_charge(doc):
     from .common import digest
     charged=sum(flt(r.amount) for r in doc.payments if r.mode_of_payment=='Guest Account')
@@ -335,11 +358,22 @@ def post_room_charge(doc):
         frappe.throw(_('Ghi phòng F&B cần chọn phòng tường minh.'))
     from hospitality_core.hospitality_core.doctype.hotel_room.hotel_room import resolve_hotel_room
     resolved_room = resolve_hotel_room(doc.hotel_room, doc.get('hospitality_property'))
-    rows=frappe.get_all('Guest Folio',filters={'room':resolved_room,'property':doc.hospitality_property,'status':'Open'},pluck='name')
+    if doc.get('is_return'):
+        source=frappe.get_doc(doc.doctype,doc.return_against)
+        source.check_permission('read')
+        original_rows=frappe.get_all('Folio Transaction',filters={'reference_doctype':doc.doctype,
+            'reference_name':source.name,'fnb_pos_key':['is','set'],'is_void':0},fields=['parent'])
+        rows=list({r.parent for r in original_rows})
+        if len(rows)!=1:
+            frappe.throw(_('Không xác định duy nhất Folio ghi phòng của POS gốc để hoàn tiền.'))
+    else:
+        rows=frappe.get_all('Guest Folio',filters={'room':resolved_room,'property':doc.hospitality_property,'status':'Open'},pluck='name')
     if len(rows)!=1:
         frappe.throw(_('Cần đúng một Folio đang mở trong cơ sở của POS.'))
     folio=frappe.get_doc('Guest Folio',rows[0],for_update=True)
     folio.check_permission('write')
+    if folio.property!=doc.hospitality_property or folio.status!='Open':
+        frappe.throw(_('Folio gốc đã đóng hoặc khác cơ sở; xử lý hoàn theo công nợ gốc, không ghi vào khách đang ở phòng.'))
     if folio.operating_company!=doc.company or folio.currency!=doc.currency:
         frappe.throw(_('Folio và POS phải cùng Company/currency.'))
     res=frappe.get_doc('Hotel Reservation',folio.reservation)

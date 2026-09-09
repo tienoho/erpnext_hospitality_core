@@ -142,7 +142,11 @@ def get_data(filters):
 				AND gf.docstatus < 2
 				AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
 				AND COALESCE(ft.mirror_source, '') = ''
-				AND ft.reference_doctype != 'Folio Transaction'
+				-- reference_doctype la NULL (khong phai chuoi rong) tren MOI
+				-- giao dich thuong — SQL "NULL != 'x'" cho ra NULL (khong TRUE),
+				-- loai LUON giao dich thuong neu khong boc COALESCE (loi that,
+				-- tim thay o gross_revenue_report.py, ap dung cung fix o day).
+				AND COALESCE(ft.reference_doctype, '') != 'Folio Transaction'
 				{ft_property_sql}
 		""", (report_date, reception) + property_params)[0][0] or 0.0
 	else:
@@ -156,7 +160,11 @@ def get_data(filters):
 				AND gf.docstatus < 2
 				AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
 				AND COALESCE(ft.mirror_source, '') = ''
-				AND ft.reference_doctype != 'Folio Transaction'
+				-- reference_doctype la NULL (khong phai chuoi rong) tren MOI
+				-- giao dich thuong — SQL "NULL != 'x'" cho ra NULL (khong TRUE),
+				-- loai LUON giao dich thuong neu khong boc COALESCE (loi that,
+				-- tim thay o gross_revenue_report.py, ap dung cung fix o day).
+				AND COALESCE(ft.reference_doctype, '') != 'Folio Transaction'
 				{ft_property_sql}
 		""", (report_date,) + property_params)[0][0] or 0.0
 

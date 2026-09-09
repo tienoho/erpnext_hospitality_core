@@ -57,7 +57,7 @@
    "fieldtype": "Link",
    "label": "Reported By",
    "options": "User",
-   "default": "user"
+   "default": "__user"
   },
   {
    "fieldname": "column_break_cost",

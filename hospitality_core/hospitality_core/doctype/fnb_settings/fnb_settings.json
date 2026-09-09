@@ -35,6 +35,18 @@
    "read_only": 1
   },
   {
+   "fieldname": "paused",
+   "label": "Paused",
+   "fieldtype": "Check",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pause_reason",
+   "label": "Pause Reason",
+   "fieldtype": "Small Text",
+   "read_only": 1
+  },
+  {
    "fieldname": "cutover_at",
    "label": "Cutover At",
    "fieldtype": "Datetime"
@@ -124,6 +136,8 @@
   "operating_company",
   "currency",
   "enabled",
+  "paused",
+  "pause_reason",
   "cutover_at",
   "main_warehouse",
   "transit_warehouse",

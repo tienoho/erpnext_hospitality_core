@@ -1,4 +1,6 @@
-"""Kiểm thử database trên site test riêng; không chạy trên site vận hành."""
+"""Kiểm thử database trên site chung của bench (đã gộp theo yêu cầu người
+dùng — trước đây dùng site test riêng 'hospitality-v2.test', nay hợp nhất về
+'localhost' để tránh phân tán dữ liệu/site test)."""
 import json
 import sys
 import unittest
@@ -6,7 +8,7 @@ from pathlib import Path
 
 import frappe
 
-SITE='hospitality-v2.test'
+SITE='localhost'
 SITES=Path('/home/frappe/test-bench/sites')
 if not SITES.exists() or not Path('/source/hospitality_core').exists():
     raise SystemExit('Cần container hospitality-v2-test và site test riêng.')
@@ -133,6 +135,18 @@ class PropertyDatabaseTests(unittest.TestCase):
         price_list = frappe.get_doc(dict(doctype='Price List', price_list_name='Integration Selling',
             selling=1, enabled=1, currency=currency)).insert()
         frappe.db.set_single_value('Selling Settings', 'selling_price_list', price_list.name)
+        # Sau khi gộp bộ test sang site 'localhost' (đã qua Setup Wizard/cấu
+        # hình thật, khác site test rỗng 'hospitality-v2.test' cũ), phát hiện
+        # frappe.defaults.get_defaults()['selling_price_list'] tra ra
+        # 'Standard Selling' — 1 default TOAN SITE luu trong bang
+        # tabDefaultValue, HOAN TOAN doc lap voi field 'Selling Settings' Single
+        # va KHONG bi anh huong boi clear-cache/FLUSHALL Redis (khac han loi
+        # Redis cache staleness da biet truoc). frappe.new_doc()'s co che dien
+        # gia tri mac dinh (get_new_doc() -> get_user_default_value()) uu tien
+        # frappe.defaults truoc khi doc "Selling Settings" — set_single_value()
+        # o tren khong du. Phai ghi de rieng qua set_default() de dam bao Sales
+        # Invoice moi tao lay dung price list cua test.
+        frappe.db.set_default('selling_price_list', price_list.name)
         preview = frappe.new_doc('Sales Invoice')
         self.assertEqual(preview.selling_price_list, price_list.name,
             dict(stored=frappe.db.get_single_value('Selling Settings', 'selling_price_list', cache=False),
@@ -168,12 +182,36 @@ class PropertyDatabaseTests(unittest.TestCase):
         if not frappe.db.exists('Fiscal Year', year):
             frappe.get_doc(dict(doctype='Fiscal Year', year=year, year_start_date=year+'-01-01',
                 year_end_date=year+'-12-31')).insert()
+        else:
+            # Site 'localhost' (sau khi gop bo test ve day) da co san Fiscal
+            # Year nam nay nhung bi GIOI HAN theo 1 danh sach company THAT cua
+            # Tap doan Tuan Chau (bang con 'companies') — khac han site test
+            # rong 'hospitality-v2.test' truoc day (Fiscal Year luon khong bi
+            # gioi han). Neu bang con nay KHONG RONG (dang o che do gioi han),
+            # phai them company cua fixture nay vao thi GL Entry moi khong bi
+            # tu choi "not in any active Fiscal Year". Khong dong vao neu bang
+            # con dang RONG (nghia la khong gioi han gi ca — them 1 dong vao
+            # se VO TINH bat dau gioi han, thay doi hanh vi cho MOI company
+            # khac dang dua vao "rong = khong gioi han").
+            fy = frappe.get_doc('Fiscal Year', year)
+            existing_companies = {d.company for d in (fy.get('companies') or [])}
+            if existing_companies and company.name not in existing_companies:
+                fy.append('companies', dict(company=company.name))
+                fy.save(ignore_permissions=True)
         if not frappe.db.exists('Item Group', 'Services'):
             root = frappe.db.get_value('Item Group', {'is_group': 1}, 'name', order_by='lft')
             frappe.get_doc(dict(doctype='Item Group', item_group_name='Services', parent_item_group=root)).insert()
+        # is_group=0 (khong phai 1) — Customer.validate_customer_group() cua
+        # ERPNext CAM chon 1 Customer Group/Territory kieu NHOM (group) lam
+        # gia tri truc tiep, chi chap nhan nhom LA (leaf). Tren site test
+        # rong 'hospitality-v2.test' truoc day, get_value(is_group=1) thuong
+        # tra ve None (khong co fixture Customer Group/Territory nao ca) nen
+        # loi nay khong lo ra; sau khi gop sang 'localhost' (co du fixture
+        # chuan ERPNext nhu "All Customer Groups"/"All Territories" la group
+        # goc) thi loi nay moi that su kich hoat — sua dung ca 2 site.
         customer = frappe.get_doc(dict(doctype='Customer', customer_name='Integration Guest',
-            customer_type='Individual', customer_group=frappe.db.get_value('Customer Group', {'is_group': 1}),
-            territory=frappe.db.get_value('Territory', {'is_group': 1}))).insert()
+            customer_type='Individual', customer_group=frappe.db.get_value('Customer Group', {'is_group': 0}),
+            territory=frappe.db.get_value('Territory', {'is_group': 0}))).insert()
         guest = frappe.get_doc(dict(doctype='Guest', full_name='Integration Guest', customer=customer.name)).insert()
         room = self.room('HV-A')
         plan = None

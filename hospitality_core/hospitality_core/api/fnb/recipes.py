@@ -56,9 +56,19 @@ def approve_recipe(name):
     approve_actor(doc)
     doc.validate()
     # Khóa outlet làm mutex cho cả hai bản mới chưa có dòng để khóa.
+    previous=None
     if doc.outlet:
         out,config=outlet(doc.outlet,active=False)
-        for other in frappe.get_all('FNB Recipe Version',filters={'outlet':doc.outlet,'item':doc.item,'status':'Approved'},fields=['effective_from','effective_to']):
+        if doc.get('supersedes'):
+            previous=load('FNB Recipe Version',doc.supersedes)
+            if previous.status!='Approved' or previous.outlet!=doc.outlet or previous.item!=doc.item:
+                frappe.throw(_('Phiên bản thay thế phải đúng Item/outlet và đã duyệt.'))
+            at=get_datetime(doc.effective_from)
+            if at<=now_datetime() or at<=get_datetime(previous.effective_from) or (previous.effective_to and at>=get_datetime(previous.effective_to)):
+                frappe.throw(_('Phiên bản kế tiếp phải bắt đầu trong tương lai, bên trong hiệu lực bản được thay thế.'))
+        for other in frappe.get_all('FNB Recipe Version',filters={'outlet':doc.outlet,'item':doc.item,'status':'Approved'},fields=['name','effective_from','effective_to']):
+            if previous and other.name==previous.name:
+                continue
             if (not doc.effective_to or get_datetime(other.effective_from)<get_datetime(doc.effective_to)) and (not other.effective_to or get_datetime(doc.effective_from)<get_datetime(other.effective_to)):
                 frappe.throw(_('Công thức trùng khoảng hiệu lực.'))
     snapshot=expand(doc)
@@ -75,7 +85,26 @@ def approve_recipe(name):
     doc.status='Approved'
     doc.approved_by=frappe.session.user
     doc.approved_at=now_datetime()
+    if previous:
+        previous.effective_to=doc.effective_from
+        save(previous)
     save(doc)
+    return doc.name
+
+
+@frappe.whitelist(methods=['POST'])
+@atomic
+def create_successor(name,effective_from):
+    source=load('FNB Recipe Version',name,'read')
+    from .common import role
+    role({'FNB Cost Controller','FNB Finance Approver','System Manager'})
+    if source.status!='Approved' or source.is_group_template or get_datetime(effective_from)<=now_datetime():
+        frappe.throw(_('Chọn công thức địa phương đã duyệt và ngày hiệu lực trong tương lai.'))
+    # Bản nháp có thể chỉnh; duyệt mới kết thúc hiệu lực bản gốc trong cùng transaction.
+    doc=frappe.get_doc(dict(doctype='FNB Recipe Version',property=source.property,outlet=source.outlet,
+        item=source.item,quantity=source.quantity,uom=source.uom,effective_from=effective_from,supersedes=source.name,
+        ingredients=[dict(item=r['item'],qty=r['qty'],uom=r['uom']) for r in json.loads(source.snapshot)['ingredients']]))
+    doc.insert()
     return doc.name
 
 

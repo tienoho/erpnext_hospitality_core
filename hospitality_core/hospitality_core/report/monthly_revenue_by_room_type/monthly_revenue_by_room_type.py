@@ -65,6 +65,11 @@ def get_data(filters):
 		conditions += " AND ft.property IN %(_properties)s"
 		params["_properties"] = allowed_properties or [""]
 
+	# LUU Y: JOIN duoi day dung "res.room = room.name" (khong phai
+	# room.room_number) — Hotel Room dung autoname='hash', ten ban ghi la
+	# chuoi hash ngau nhien khong lien quan room_number. res.room (Link
+	# field) luon la TEN ban ghi; noi voi room.room_number se LUON tra ve 0
+	# dong (da tung la loi that o day + gross_revenue_report.py, da fix).
 	rows = frappe.db.sql(f"""
 		SELECT
 			DATE_FORMAT(ft.posting_date, '%%Y-%%m') as month,
@@ -74,7 +79,7 @@ def get_data(filters):
 		FROM `tabFolio Transaction` ft
 		JOIN `tabGuest Folio` gf ON ft.parent = gf.name
 		JOIN `tabHotel Reservation` res ON gf.reservation = res.name
-		JOIN `tabHotel Room` room ON res.room = room.room_number
+		JOIN `tabHotel Room` room ON res.room = room.name
 		JOIN `tabItem` item ON ft.item = item.name
 		WHERE
 			(item.item_code IN ('ROOM-RENT', 'DISCOUNT', 'COMPLIMENTARY') OR item.item_group = 'Accommodation')

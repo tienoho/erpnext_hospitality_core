@@ -86,7 +86,11 @@ def execute(filters=None):
         AND ft.description NOT LIKE '%%Payment%%'
         AND ft.description NOT LIKE '%%Transfer%%'
         AND COALESCE(ft.mirror_source, '') = ''
-        AND ft.reference_doctype != 'Folio Transaction'
+        -- reference_doctype la NULL (khong phai chuoi rong) tren MOI giao
+        -- dich thuong — SQL "NULL != 'x'" cho ra NULL (khong TRUE), loai LUON
+        -- giao dich thuong neu khong boc COALESCE (loi that, tim thay o
+        -- gross_revenue_report.py, ap dung cung fix o day).
+        AND COALESCE(ft.reference_doctype, '') != 'Folio Transaction'
         {property_condition}
     """, (from_date, to_date) + property_params, as_dict=True)
 

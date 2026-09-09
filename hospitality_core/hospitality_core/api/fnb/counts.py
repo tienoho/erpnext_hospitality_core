@@ -21,6 +21,9 @@ def start_count(name):
     controls=lock_warehouses([doc.warehouse],now_datetime())
     if not controls:
         frappe.throw(_('Kho chưa được ánh xạ F&B.'))
+    if frappe.db.exists('Repost Item Valuation', {'company': doc.operating_company,
+            'status': ['in', ['Queued', 'In Progress', 'Failed']], 'docstatus': 1}):
+        frappe.throw(_('Cần hoàn tất tác vụ định giá trước khi mở kiểm kê.'))
     pending=frappe.db.sql('''SELECT t.name FROM `tabFNB Service Ticket` t
         JOIN `tabFNB Service Line` l ON l.parent=t.name JOIN `tabItem` i ON i.name=l.item
         JOIN `tabFNB Outlet` o ON o.name=t.outlet
@@ -52,8 +55,6 @@ def start_count(name):
         else:
             snapshot.append(dict(item=item,batch_no=None,qty=qty,rate=rate,uom=master.stock_uom))
             doc.append('items',dict(item=item,qty=1,uom=master.stock_uom))
-    if not snapshot:
-        frappe.throw(_('Kho chưa có mặt hàng để đếm.'))
     doc.count_snapshot=frappe.as_json(snapshot)
     doc.posting_datetime=at
     doc.status='Counting'
@@ -61,6 +62,49 @@ def start_count(name):
     control=load('FNB Warehouse Control',doc.warehouse,'read')
     control.active_count=doc.name
     save(control)
+    return doc.name
+
+
+@frappe.whitelist(methods=['POST'])
+@atomic
+def add_found_item(name, item, reason, batch_no=None):
+    role({'FNB Storekeeper', 'FNB Cost Controller', 'System Manager'})
+    doc = load('FNB Stock Count', name)
+    if doc.status != 'Counting' or not str(reason or '').strip():
+        frappe.throw(_('Cần phiên đang đếm và lý do khai báo hàng tìm thấy.'))
+    lock_warehouses([doc.warehouse], count=doc.name)
+    master = frappe.get_doc('Item', item)
+    master.check_permission('read')
+    if not master.is_stock_item or master.has_serial_no or master.disabled:
+        frappe.throw(_('Item kiểm kê phải có tồn, đang hoạt động và không dùng serial.'))
+    if bool(master.has_batch_no) != bool(batch_no):
+        frappe.throw(_('Chọn đúng lô theo thiết lập Item.'))
+    if batch_no:
+        batch = frappe.get_doc('Batch', batch_no)
+        batch.check_permission('read')
+        if batch.item != item:
+            frappe.throw(_('Lô không thuộc Item.'))
+    if any(row.item == item and (row.batch_no or None) == (batch_no or None) for row in doc.items):
+        return doc.name
+    from erpnext.stock.utils import get_stock_balance
+    at = get_datetime(doc.posting_datetime)
+    qty, rate = get_stock_balance(item, doc.warehouse, at.date(), at.time(), with_valuation_rate=True)
+    if batch_no:
+        from erpnext.stock.doctype.batch.batch import get_batch_qty
+        qty = get_batch_qty(batch_no=batch_no, warehouse=doc.warehouse, item_code=item,
+            posting_datetime=at, for_stock_levels=True, consider_negative_batches=True,
+            do_not_check_future_batches=True)
+    snapshot = json.loads(doc.count_snapshot or '[]')
+    snapshot.append(dict(item=item, batch_no=batch_no or None, qty=qty, rate=rate,
+        uom=master.stock_uom, found_by=frappe.session.user, reason=reason))
+    doc.count_snapshot = frappe.as_json(snapshot)
+    doc.append('items', dict(item=item, batch_no=batch_no, qty=1, uom=master.stock_uom, notes=reason))
+    # A changed counting scope needs two complete independent counts again.
+    for row in doc.items:
+        row.count_entered = row.recount_entered = 0
+        row.counted_qty = row.recounted_qty = 0
+    doc.counted_by = doc.recounted_by = None
+    save(doc)
     return doc.name
 
 
@@ -98,15 +142,17 @@ def record_count(name, values, recount=False):
 
 @frappe.whitelist(methods=['POST'])
 @atomic
-def approve_count(name, request_id):
+def approve_count(name, request_id, valuation_rates=None):
     doc=load('FNB Stock Count',name)
-    payload={r.name:[r.counted_qty,r.recounted_qty,r.count_entered,r.recount_entered] for r in doc.items}
+    from .common import parse_payload
+    valuation_rates = parse_payload(valuation_rates, dict, empty=dict, label='Giá trị kiểm kê')
+    payload=dict(counts={r.name:[r.counted_qty,r.recounted_qty,r.count_entered,r.recount_entered] for r in doc.items}, rates=valuation_rates)
     existing,key,sig=event_existing(doc,'Count',request_id,payload)
     if existing:
         return existing.name
     role({'FNB Cost Controller','FNB Finance Approver','System Manager'})
     approve_actor(doc)
-    if doc.status!='Counting' or not doc.counted_by or not doc.recounted_by or not all(r.count_entered and r.recount_entered for r in doc.items):
+    if doc.status!='Counting' or not doc.items or not doc.counted_by or not doc.recounted_by or not all(r.count_entered and r.recount_entered for r in doc.items):
         frappe.throw(_('Cần hoàn tất hai lượt đếm độc lập.'))
     if doc.counted_by==frappe.session.user:
         frappe.throw(_('Người đếm đầu không được duyệt chênh lệch.'))
@@ -126,8 +172,11 @@ def approve_count(name, request_id):
         if abs(flt(row.recounted_qty)-flt(baseline['qty']))>1e-9:
             if not doc.reason:
                 frappe.throw(_('Cần lý do/phân tích chênh lệch kiểm kê.'))
+            rate = baseline['rate']
+            if baseline.get('found_by') and not rate and row.recounted_qty > 0:
+                rate = positive(valuation_rates.get(row.name), 'Giá hàng tìm thấy cần người duyệt xác nhận')
             reco.append('items',dict(item_code=row.item,warehouse=doc.warehouse,qty=row.recounted_qty,
-                valuation_rate=baseline['rate'],allow_zero_valuation_rate=int(not baseline['rate']),
+                valuation_rate=rate,allow_zero_valuation_rate=int(not rate),
                 batch_no=row.batch_no,use_serial_batch_fields=int(bool(row.batch_no))))
     if reco.items:
         reco.flags.fnb_service=True

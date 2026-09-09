@@ -80,7 +80,7 @@ def approve_native(doctype, name):
     doc.check_permission('write')
     if doc.docstatus!=0 or not doc.get('fnb_outlet'):
         frappe.throw(_('Cần chứng từ nháp có outlet F&B.'))
-    out,cfg=outlet(doc.fnb_outlet)
+    out,cfg=outlet(doc.fnb_outlet, allow_paused=bool(doc.get('is_return')))
     approve_actor(doc)
     if doctype in {'POS Invoice','Sales Invoice'} and (not doc.is_return or doc.fnb_return_disposition!='Physical Return'):
         frappe.throw(_('Chỉ duyệt hóa đơn hoàn hàng vật lý trong nghiệp vụ này.'))
@@ -88,24 +88,38 @@ def approve_native(doctype, name):
         frappe.throw(_('Company không khớp outlet.'))
     lock_warehouses(warehouses(doc))
     if doctype=='Purchase Receipt':
-        if not cfg.allow_direct_receipt and any(r.warehouse!=cfg.main_warehouse for r in doc.items if r.qty>0):
-            frappe.throw(_('Chưa cho phép nhận mua trực tiếp vào bếp/bar.'))
-        for row in doc.items:
-            if not row.purchase_order_item:
-                frappe.throw(_('Nhận hàng F&B cần dòng Purchase Order đã duyệt.'))
-            source=frappe.db.get_value('Purchase Order Item',row.purchase_order_item,['rate','qty','received_qty','parent'],as_dict=True)
-            if not source or frappe.db.get_value('Purchase Order',source.parent,'docstatus')!=1:
-                frappe.throw(_('Đơn mua chưa submit.'))
-            if abs(flt(row.rate)-flt(source.rate))>abs(flt(source.rate))*cfg.price_tolerance_percent/100+1e-9:
-                frappe.throw(_('Giá nhận vượt dung sai; điều chỉnh và duyệt lại đơn mua.'))
-            if flt(source.received_qty)+flt(row.qty)>flt(source.qty)*(1+cfg.quantity_tolerance_percent/100)+1e-9:
-                frappe.throw(_('Lượng nhận vượt dung sai; điều chỉnh và duyệt lại đơn mua.'))
+        validate_receipt_tolerance(doc, cfg)
     doc.flags.fnb_service=True
     doc.fnb_approved_by=frappe.session.user
     doc.save()
     doc.fnb_approval_hash=signature(doc)
     doc.db_set('fnb_approval_hash',doc.fnb_approval_hash,update_modified=False)
     return doc.name
+
+
+def validate_receipt_tolerance(doc, cfg):
+    if not cfg.allow_direct_receipt and any(r.warehouse != cfg.main_warehouse for r in doc.items if r.qty > 0):
+        frappe.throw(_('Chưa cho phép nhận mua trực tiếp vào bếp/bar.'))
+    sources = {}
+    for name in sorted({r.purchase_order_item for r in doc.items if r.purchase_order_item}):
+        sources[name] = frappe.get_doc('Purchase Order Item', name, for_update=True)
+    quantities = {}
+    for row in doc.items:
+        source = sources.get(row.purchase_order_item)
+        if not source or frappe.db.get_value('Purchase Order', source.parent, 'docstatus') != 1:
+            frappe.throw(_('Nhận hàng F&B cần dòng Purchase Order đã duyệt và submit.'))
+        if row.item_code != source.item_code or (not doc.is_return and row.uom != source.uom) or row.purchase_order != source.parent:
+            frappe.throw(_('Dòng nhận phải khớp Item/UOM và đơn mua nguồn.'))
+        factor = positive(row.conversion_factor, 'Hệ số quy đổi nhận')
+        source_factor = positive(source.conversion_factor, 'Hệ số quy đổi đơn mua')
+        source_rate = flt(source.rate) / source_factor
+        if abs(flt(row.rate) / factor - source_rate) > abs(source_rate) * cfg.price_tolerance_percent / 100 + 1e-9:
+            frappe.throw(_('Giá nhận vượt dung sai; điều chỉnh và duyệt lại đơn mua.'))
+        quantities[source.name] = quantities.get(source.name, 0) + max(0, flt(row.qty) * factor / source_factor)
+    for name, qty in quantities.items():
+        source = sources[name]
+        if qty and flt(source.received_qty) + qty > flt(source.qty) * (1 + cfg.quantity_tolerance_percent / 100) + 1e-9:
+            frappe.throw(_('Lượng nhận vượt dung sai; điều chỉnh và duyệt lại đơn mua.'))
 
 
 @frappe.whitelist(methods=['POST'])
@@ -163,7 +177,7 @@ def dispatch_request(name, quantities, request_id):
 def receive_transfer(stock_entry, quantities, request_id):
     doc=frappe.get_doc('Stock Entry',stock_entry,for_update=True)
     doc.check_permission('read')
-    out,cfg=outlet(doc.fnb_outlet)
+    out,cfg=outlet(doc.fnb_outlet, allow_paused=True)
     quantities=frappe.parse_json(quantities) if isinstance(quantities,str) else quantities
     if not isinstance(quantities,dict):
         frappe.throw(_('Số lượng nhận phải là ánh xạ mã dòng → số lượng.'))
@@ -209,7 +223,7 @@ def pending_transfer(doctype,name):
         frappe.throw(_('Loại chứng từ cấp/nhận không hợp lệ.'))
     doc=frappe.get_doc(doctype,name)
     doc.check_permission('read')
-    out,cfg=outlet(doc.fnb_outlet)
+    out,cfg=outlet(doc.fnb_outlet, allow_paused=doctype=='Stock Entry')
     if doc.docstatus!=1:
         frappe.throw(_('Cần chứng từ đã submit.'))
     if doctype=='Material Request':

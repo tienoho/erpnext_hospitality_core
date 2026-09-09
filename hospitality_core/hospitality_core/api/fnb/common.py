@@ -43,15 +43,53 @@ def positive(value, label='Số lượng', zero=False):
 
 
 def atomic(fn):
+    # TRƯỚC ĐÂY: chỉ savepoint 1 lần + rollback(save_point=...) khi lỗi —
+    # xác nhận THẬT qua 2 lần test đua THẬT trên Docker (2 tiến trình cùng
+    # approve_recipe()/start_count() cho cùng outlet/kho, outlet() dùng FOR
+    # UPDATE làm mutex nhân tạo): nhánh THUA CUỘC đôi lúc nhận
+    # `OperationalError: SAVEPOINT ... does not exist`, đôi lúc nhận thẳng
+    # `frappe.QueryDeadlockError` ("Deadlock found when trying to get lock")
+    # — XÁC NHẬN đây là CÙNG 1 hiện tượng: MySQL/InnoDB tự phát hiện deadlock
+    # thật giữa 2 giao dịch (mutex outlet()'s FOR UPDATE làm giảm nhưng
+    # KHÔNG loại trừ hoàn toàn khả năng deadlock chu trình, có thể do cùng
+    # lúc tranh chấp thêm 1 tài nguyên khác — VD dòng Series đặt tên BOM/
+    # FNB Warehouse Control) và tự ROLLBACK TOÀN BỘ giao dịch của "nạn nhân"
+    # để giải phóng — hủy luôn savepoint đang giữ, khiến rollback(save_point=)
+    # sau đó thất bại nếu code chưa kịp thấy lỗi deadlock ở đúng câu lệnh gây
+    # ra nó. Hậu quả: người dùng/hỗ trợ thấy lỗi kỹ thuật khó hiểu thay vì
+    # thông báo nghiệp vụ rõ ràng ("Công thức trùng khoảng hiệu lực."/"Kho
+    # ... đang kiểm kê."), hoặc tệ hơn là mất hẳn thao tác đáng lẽ RETRY được
+    # (deadlock là hiện tượng THOÁNG QUA dưới tải đồng thời — cách xử lý
+    # ĐÚNG chuẩn, khớp đúng lý do frappe.QueryDeadlockError tồn tại như 1
+    # loại exception RIÊNG trong core, là tự động thử lại toàn bộ thao tác
+    # từ đầu, không phải coi là lỗi nghiệp vụ vĩnh viễn). Đã sửa: bắt riêng
+    # frappe.QueryDeadlockError, tự rollback sạch rồi THỬ LẠI toàn bộ hàm
+    # (tối đa 3 lần, savepoint mới mỗi lần) — sau khi rollback đầy đủ, lần
+    # thử lại sẽ thấy đúng trạng thái mới nhất (kể cả bản ghi 'Approved' của
+    # nhánh thắng vừa commit) nên tự nhiên rơi về đúng lỗi nghiệp vụ nếu vẫn
+    # xung đột thật, không phải retry vô nghĩa. Với lỗi KHÁC (nghiệp vụ), vẫn
+    # dự phòng rollback toàn phần nếu rollback(save_point=) tự nó lỗi, rồi
+    # ném lại đúng lỗi gốc.
     @functools.wraps(fn)
     def wrapped(*args, **kwargs):
-        point = 'fnb_' + frappe.generate_hash(length=12)
-        frappe.db.savepoint(point)
-        try:
-            return fn(*args, **kwargs)
-        except Exception:
-            frappe.db.rollback(save_point=point)
-            raise
+        for attempt in range(3):
+            point = 'fnb_' + frappe.generate_hash(length=12)
+            frappe.db.savepoint(point)
+            try:
+                return fn(*args, **kwargs)
+            except frappe.QueryDeadlockError:
+                try:
+                    frappe.db.rollback(save_point=point)
+                except Exception:
+                    frappe.db.rollback()
+                if attempt == 2:
+                    raise
+            except Exception:
+                try:
+                    frappe.db.rollback(save_point=point)
+                except Exception:
+                    frappe.db.rollback()
+                raise
     return wrapped
 
 
@@ -73,15 +111,17 @@ def load(dt, name, permission='write'):
     return doc
 
 
-def settings(property, active=True):
+def settings(property, active=True, allow_paused=False):
     require_property(property)
     doc = frappe.get_doc('FNB Settings', property)
     if active and not doc.enabled:
         frappe.throw(_('F&B chưa được kích hoạt tại cơ sở.'))
+    if active and doc.get('paused') and not allow_paused:
+        frappe.throw(_('F&B đang tạm dừng tại cơ sở; cần mở lại trước khi ghi nghiệp vụ.'))
     return doc
 
 
-def outlet(name, active=True):
+def outlet(name, active=True, allow_paused=False):
     # LƯU Ý HIỆU NĂNG (ĐÃ CÂN NHẮC, KHÔNG SỬA): load() luôn khóa FOR UPDATE
     # bất kể permission='read' — outlet() được gọi ở HẦU HẾT mọi thao tác bếp/
     # POS/kho của module F&B, khóa dòng FNB Outlet suốt cả transaction khiến
@@ -101,7 +141,9 @@ def outlet(name, active=True):
     doc = load('FNB Outlet', name, 'read')
     if active and not doc.enabled:
         frappe.throw(_('Outlet chưa được kích hoạt.'))
-    return doc, settings(doc.property, active)
+    if active and doc.get('paused') and not allow_paused:
+        frappe.throw(_('Outlet F&B đang tạm dừng.'))
+    return doc, settings(doc.property, active, allow_paused=allow_paused)
 
 
 def _zoneinfo(tz_name, property):

@@ -17,16 +17,33 @@ def post_stock(event, outlet, config, rows, purpose='Material Issue', output=Non
         stock_entry_type=purpose,purpose=purpose,set_posting_time=1,posting_date=at.date(),posting_time=at.time(),
         hospitality_property=event.property,fnb_outlet=outlet.name,fnb_version='FNB v1',fnb_source_event=event.name))
     expanded=[]
+    allocated={}
+    destroying=purpose=='Material Issue' and event.purpose=='Waste'
+    # Trừ trước các lô được chọn tường minh khỏi lượng có thể tự chọn.
+    for source in rows:
+        if source.get('batch_no'):
+            key=(source['item'],source['batch_no'])
+            allocated[key]=allocated.get(key,0)+positive(source['qty'])
+    if purpose != 'Material Receipt':
+        from erpnext.stock.doctype.batch.batch import get_batch_qty
+        for (item, batch), quantity in allocated.items():
+            available = get_batch_qty(batch_no=batch, item_code=item, warehouse=warehouse,
+                posting_datetime=at, for_stock_levels=destroying)
+            if quantity > flt(available) + 1e-9:
+                frappe.throw(_('Tổng lượng xuất lô {0} vượt tồn khả dụng.').format(batch))
     for source in rows:
         if purpose!='Material Receipt' and not source.get('batch_no') and frappe.get_cached_value('Item',source['item'],'has_batch_no'):
             from erpnext.stock.doctype.batch.batch import get_batch_qty
-            batches=get_batch_qty(item_code=source['item'],warehouse=warehouse,posting_datetime=at)
+            batches=get_batch_qty(item_code=source['item'],warehouse=warehouse,posting_datetime=at,
+                for_stock_levels=destroying)
             batches=sorted(batches,key=lambda r:(str(frappe.get_cached_value('Batch',r.batch_no,'expiry_date') or '9999-12-31'),r.batch_no))
             remaining=positive(source['qty'])
             for batch in batches:
-                take=min(max(0,flt(batch.qty)),remaining)
+                key=(source['item'],batch.batch_no)
+                take=min(max(0,flt(batch.qty)-allocated.get(key,0)),remaining)
                 if take:
                     expanded.append(dict(source,qty=take,batch_no=batch.batch_no))
+                    allocated[key]=allocated.get(key,0)+take
                     remaining-=take
                 if remaining<=1e-9:
                     break
@@ -57,7 +74,7 @@ def post_stock(event, outlet, config, rows, purpose='Material Issue', output=Non
             if not batch:
                 frappe.throw(_('Cần chọn lô nguyên liệu {0}.').format(item.name))
             batch_doc=frappe.get_doc('Batch',batch)
-            if batch_doc.item!=item.name or batch_doc.disabled or (batch_doc.expiry_date and str(batch_doc.expiry_date)<str(at.date())):
+            if batch_doc.item!=item.name or (not destroying and (batch_doc.disabled or (batch_doc.expiry_date and str(batch_doc.expiry_date)<str(at.date())))):
                 frappe.throw(_('Lô không đúng Item, bị khóa hoặc đã hết hạn.'))
             row.update(batch_no=batch,use_serial_batch_fields=1)
         entry.append('items',row)

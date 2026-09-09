@@ -85,3 +85,17 @@ def execute():
     from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import make_dimension_in_accounting_doctypes
     dimension = frappe.get_doc('Accounting Dimension', {'document_type': 'Hospitality Property'})
     make_dimension_in_accounting_doctypes(dimension)
+    # property_accounting.py's create_invoice() gộp NHIỀU Hospitality Charge
+    # Posting (1 charge gốc dương + 0..n điều chỉnh LOS/manual có thể âm)
+    # vào CÙNG 1 Sales Invoice — xác nhận THẬT qua test sống trên Docker:
+    # ERPNext's status_updater.py's validate_qty() CẤM tuyệt đối dòng qty<0
+    # trên hóa đơn không phải is_return (không có cách tắt riêng cho 1
+    # chứng từ), nên create_invoice() nay dùng qty=1 cố định + rate MANG
+    # DẤU thay vì qty=-1/rate=abs() như trước — nhưng ERPNext cũng mặc định
+    # CẤM rate âm trừ khi bật cờ này (Selling Settings, áp dụng TOÀN SITE).
+    # Chấp nhận đánh đổi có cân nhắc: dòng có rate âm ở đây LUÔN do chính
+    # code này tự dựng (không phải người dùng gõ tay), và is_negative_grand_
+    # total_allowed() của ERPNext vẫn CHẶN grand_total<0 cho Sales Invoice
+    # bất kể cờ này (chỉ ảnh hưởng Sales/Purchase Order) — nên bật cờ không
+    # mở đường cho 1 hóa đơn có tổng tiền âm lọt qua ở bất kỳ luồng nào khác.
+    frappe.db.set_single_value('Selling Settings', 'allow_negative_rates_for_items', 1)

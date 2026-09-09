@@ -51,8 +51,14 @@ def get_data(filters):
 
 	# 1. Fetch Revenue Data (Charges)
 	# We aggregate Folio Transactions (non-void, non-payment) linked to Reservations via Guest Folios.
+	# TRUOC DAY JOIN dung "res.room = room.room_number" — SAI: Hotel Room
+	# dung autoname='hash' (ten ban ghi la chuoi hash ngau nhien, khong lien
+	# quan gi field room_number hien thi). res.room (Link field) luon la TEN
+	# ban ghi (hash) — khong bao gio khop room.room_number, khien JOIN nay
+	# LUON tra ve 0 dong (bao cao rong am tham, khong bao loi). Da sua khop
+	# dung ban chat Link field (res.room = room.name).
 	revenue_query = """
-		SELECT 
+		SELECT
 			res.room as room_number,
 			room.room_type,
 			room.hotel_reception,
@@ -61,13 +67,19 @@ def get_data(filters):
 		FROM `tabFolio Transaction` ft
 		JOIN `tabGuest Folio` gf ON ft.parent = gf.name
 		JOIN `tabHotel Reservation` res ON gf.reservation = res.name
-		JOIN `tabHotel Room` room ON res.room = room.room_number
+		JOIN `tabHotel Room` room ON res.room = room.name
 		WHERE
 			ft.posting_date BETWEEN %s AND %s
 			AND ft.is_void = 0
 			AND (ft.reference_doctype != 'Payment Entry' OR ft.reference_doctype IS NULL)
 			AND COALESCE(ft.mirror_source, '') = ''
-			AND ft.reference_doctype != 'Folio Transaction'
+			-- TRUOC DAY: "ft.reference_doctype != 'Folio Transaction'" khong an
+			-- toan voi NULL — reference_doctype la NULL (khong phai chuoi rong)
+			-- tren MOI giao dich thuong (khong phai mirror), va SQL "NULL !=
+			-- 'x'" cho ra NULL (khong phai TRUE), khien WHERE loai bo LUON ca
+			-- giao dich thuong do — bao cao gan nhu luon rong. Da boc COALESCE
+			-- khop dung mau NULL-safe da dung dung o dong ngay tren.
+			AND COALESCE(ft.reference_doctype, '') != 'Folio Transaction'
 			AND gf.is_company_master = 0
 			AND NOT EXISTS (SELECT 1 FROM `tabHotel Group Booking` hgb WHERE hgb.master_folio = gf.name)
 			AND gf.docstatus < 2

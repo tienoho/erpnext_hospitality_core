@@ -69,7 +69,12 @@ def get_data(filters):
 			ft.is_void = 0
 			AND ft.item IN ('ROOM-RENT', 'DISCOUNT', 'COMPLIMENTARY')
 			AND COALESCE(ft.mirror_source, '') = ''
-			AND ft.reference_doctype != 'Folio Transaction'
+			-- reference_doctype la NULL (khong phai chuoi rong) tren MOI giao
+			-- dich thuong (khong phai mirror) — SQL "NULL != 'x'" cho ra NULL
+			-- (khong phai TRUE), khien WHERE loai LUON ca giao dich thuong do
+			-- neu khong boc COALESCE (da tung la loi that, tim thay va sua o
+			-- gross_revenue_report.py, ap dung cung fix o day).
+			AND COALESCE(ft.reference_doctype, '') != 'Folio Transaction'
 			-- Loại "Master Payer Reservation" của đặt đoàn (luôn neo vào 1
 			-- Hotel Room loại 'Virtual', xem hotel_group_booking.py's
 			-- create_master_payer_reservation()) — vì báo cáo này JOIN THẲNG

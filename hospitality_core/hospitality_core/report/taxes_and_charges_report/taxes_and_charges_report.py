@@ -70,6 +70,11 @@ def get_columns():
     ]
 
 def get_data(filters):
+    # TRUOC DAY khong co dong nay — mo report lan dau (chua chon filter nao,
+    # filters=None) se crash "'NoneType' object has no attribute 'get'"
+    # ngay o dong filters.get("from_date") ben duoi. Cac report khac trong
+    # app deu co guard nay, rieng file nay bi bo sot.
+    filters = filters or {}
     settings = frappe.get_single("Hospitality Accounting Settings")
     tax_accounts = [
         settings.consumption_tax_account,

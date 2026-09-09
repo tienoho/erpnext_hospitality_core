@@ -285,6 +285,13 @@ def bulk_reserve_rooms(group_booking, guest, rooms, arrival_date, departure_date
             res.room = resolved_room
             # Get room type
             res.room_type = frappe.db.get_value("Hotel Room", resolved_room, "room_type")
+            # hotel_reception là Link bắt buộc (reqd=1) trên Hotel Reservation,
+            # không có default/fetch nào — cùng lỗi đã tìm/fix trong
+            # hotel_group_booking.py's create_master_payer_reservation()/
+            # create_bulk_reservations(), xác nhận đây KHÔNG phải lỗi cá biệt
+            # 1 hàm mà là khoảng trống chung của mọi đường tạo Hotel
+            # Reservation tự động không qua Desk form.
+            res.hotel_reception = frappe.db.get_value("Hotel Room", resolved_room, "hotel_reception")
             res.arrival_date = arrival_date
             res.departure_date = departure_date
             res.group_booking = group_booking

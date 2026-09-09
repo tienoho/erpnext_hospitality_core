@@ -61,7 +61,11 @@ def execute(filters=None):
         WHERE ft.posting_date BETWEEN %(start)s AND %(end)s
         AND ft.is_void = 0
         AND COALESCE(ft.mirror_source, '') = ''
-        AND ft.reference_doctype != 'Folio Transaction'
+        -- reference_doctype la NULL (khong phai chuoi rong) tren MOI giao
+        -- dich thuong — SQL "NULL != 'x'" cho ra NULL (khong TRUE), loai LUON
+        -- giao dich thuong neu khong boc COALESCE (loi that, tim thay o
+        -- gross_revenue_report.py, ap dung cung fix o day).
+        AND COALESCE(ft.reference_doctype, '') != 'Folio Transaction'
         AND (gf.is_company_master = 0 OR gf.is_company_master IS NULL)
         AND NOT EXISTS (SELECT 1 FROM `tabHotel Group Booking` hgb WHERE hgb.master_folio = gf.name)
         AND (ft.item IN ('DISCOUNT', 'COMPLIMENTARY')

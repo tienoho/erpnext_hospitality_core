@@ -486,12 +486,35 @@ class HotelReservation(Document):
 
         # Requirement: "make it possible for everybody to edit the is company and company field"
         # We handle the impact on billing and folio management here.
+        #
+        # TRƯỚC ĐÂY: khối này chạy cho MỌI Hotel Reservation có folio, kể cả
+        # đặt phòng ẢO neo Master Folio của đoàn (is_group_guest=1) — nhưng
+        # toàn bộ logic sync company/company-transactions bên dưới (bao gồm
+        # cả 2 nhánh is_company_guest ở dưới) chỉ được thiết kế cho khách
+        # CÔNG TY, không hề biết tới khái niệm "khách ĐOÀN". Vì
+        # create_master_payer_reservation() (hotel_group_booking.py) CHỦ Ý
+        # không set is_company_guest=1 trên đặt phòng ảo (tránh kích hoạt
+        # nhầm ensure_company_folio(), tạo trùng 1 Master Folio "Company"
+        # khác), self.company của nó LUÔN là None (bị validate() ở trên xóa
+        # trắng ngay từ dòng đầu). Hậu quả: BẤT KỲ lần save() nào sau đó của
+        # chính đặt phòng ảo này (VD tự động gọi ở process_check_in()'s
+        # self.save() dòng ~225, hoặc mass_check_out()) đều thấy
+        # "folio_doc.company (đã gán đúng self.master_payer lúc xác nhận
+        # đoàn) != self.company (None)" rồi XÓA TRẮNG company của Master
+        # Folio đoàn ngay lập tức — phá vỡ record_group_deposit()/City Ledger
+        # cho đoàn đó vĩnh viễn kể từ lần check-in đầu tiên trở đi (chỉ hoạt
+        # động đúng trong khoảng ngắn giữa lúc xác nhận đoàn và lần save() kế
+        # tiếp). Chỉ lộ ra qua chạy test sống (kịch bản "xác nhận đoàn rồi
+        # check-in rồi mới ghi cọc/kiểm tra công nợ"). Bỏ qua hẳn khối đồng
+        # bộ này cho khách ĐOÀN — company của Master Folio đoàn do
+        # create_master_payer_reservation() quản lý riêng, không đi qua cơ
+        # chế is_company_guest.
         if self.folio:
             folio_doc = frappe.get_doc("Guest Folio", self.folio)
-            
-            if folio_doc.company != self.company:
+
+            if not self.is_group_guest and folio_doc.company != self.company:
                 folio_doc.db_set("company", self.company)
-                
+
                 if self.is_company_guest and self.company:
                     self.ensure_company_folio()
                     # Transition existing 'Guest' transactions to 'Company'
@@ -499,7 +522,7 @@ class HotelReservation(Document):
                 elif not self.is_company_guest:
                     # Transition existing 'Company' transactions back to 'Guest'
                     self.sync_transactions_from_company(folio_doc)
-            
+
             if folio_doc.room != self.room:
                 folio_doc.db_set("room", self.room)
 

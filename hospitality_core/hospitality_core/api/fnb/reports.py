@@ -77,7 +77,7 @@ def cost_summary(property, from_date, to_date, outlet=None):
     totals['Native Stock Sales']=dict(cost=native_cost,stock_qty_by_item={})
     total_cost=sum(r['cost'] for r in totals.values())
     counts=frappe.get_all('FNB Stock Count',filters={'property':property,'status':'Closed','business_date':['between',[from_date,to_date]]},pluck='name')
-    selling_cost=totals.get('Sale',{}).get('cost',0)+native_cost
+    selling_cost=sum(totals.get(purpose,{}).get('cost',0) for purpose in ('Sale','Buffet','Banquet'))+native_cost
     return dict(currency=frappe.get_cached_value('Company',prop.operating_company,'default_currency'),
         from_date=from_date,to_date=to_date,property=property,outlet=outlet,revenue=revenue,
         cost=total_cost,selling_cost=selling_cost,cost_percent=selling_cost/revenue*100 if revenue>0 else None,
@@ -189,6 +189,9 @@ def close_period(name):
     if frappe.db.exists('FNB Service Ticket',{'property':doc.property,'status':['in',['Sent','Prepared','Served']],
         'business_date':['<=',doc.to_date]}):
         frappe.throw(_('Còn phiếu phục vụ chưa đối soát.'))
+    if frappe.db.exists('FNB Service Session',{'property':doc.property,'status':['in',['Draft','Approved']],
+        'business_date':['<=',doc.to_date]}):
+        frappe.throw(_('Còn phiên buffet/tiệc/bữa sáng chưa kết thúc; hoàn tất khách thực dùng và hàng thừa trước khi chốt kỳ.'))
     for wh in controls:
         if not frappe.db.exists('FNB Stock Count',{'warehouse':wh,'status':'Closed','business_date':doc.to_date}):
             frappe.throw(_('Kho {0} chưa có kiểm kê chốt ngày cuối kỳ.').format(wh))

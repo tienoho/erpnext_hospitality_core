@@ -36,7 +36,16 @@ def set_room_status(room, status):
 
     frappe.db.sql("SELECT name FROM `tabHotel Room` WHERE name=%s FOR UPDATE", room)
 
-    if status == "Available":
+    # TRƯỚC ĐÂY: chỉ ép "Available" về "Occupied" khi phòng còn khách Checked
+    # In — housekeeping_mobile.py's update_room_status() (PWA di động, cùng
+    # nghiệp vụ, khác code path) đã ép CẢ "Available" LẪN "Inspected" từ 1
+    # vòng review trước (đúng ý đồ: race giữa buồng phòng đánh dấu xong việc
+    # và lễ tân check-in đồng thời). Bản desktop này bị BỎ SÓT nhánh
+    # "Inspected", tạo ra 1 đường khác dẫn tới CÙNG dữ liệu (Hotel Room) mà
+    # thiếu đúng phòng vệ đã áp dụng ở nơi khác — khớp lớp lỗi tương tự case
+    # "housekeeping mobile mất khóa row" đã tìm thấy trước đó, chỉ đảo ngược
+    # vai trò (lần này desktop là bên thiếu).
+    if status in ("Available", "Inspected"):
         active_res = frappe.db.exists("Hotel Reservation", {
             "room": room,
             "status": "Checked In"
