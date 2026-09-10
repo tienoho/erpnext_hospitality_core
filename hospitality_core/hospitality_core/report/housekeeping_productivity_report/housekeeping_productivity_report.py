@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, get_datetime, add_days
 from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
+from hospitality_core.hospitality_core.api.employee_link import resolve_employees
 
 
 def execute(filters=None):
@@ -14,6 +15,9 @@ def execute(filters=None):
 def get_columns():
 	return [
 		{"label": _("Nhân Viên"), "fieldname": "staff", "fieldtype": "Link", "options": "User", "width": 200},
+		{"label": _("Tên Nhân Viên"), "fieldname": "employee_name", "fieldtype": "Data", "width": 150},
+		{"label": _("Phòng Ban"), "fieldname": "department", "fieldtype": "Data", "width": 130},
+		{"label": _("Chức Vụ"), "fieldname": "designation", "fieldtype": "Data", "width": 130},
 		{"label": _("Ngày"), "fieldname": "date", "fieldtype": "Date", "width": 100},
 		{"label": _("Số Phòng Đã Dọn"), "fieldname": "rooms_cleaned", "fieldtype": "Int", "width": 130},
 		{"label": _("Tổng Thời Gian Dọn (Phút)"), "fieldname": "total_minutes", "fieldtype": "Float", "width": 170, "precision": 1},
@@ -133,10 +137,16 @@ def get_data(filters):
 	""", maint_params, as_dict=True)
 	maint_map = {(m.reported_by, m.report_date): m.cnt for m in maint_rows}
 
+	employee_info = resolve_employees([val["staff"] for val in agg.values()])
+
 	result = []
 	for key, val in agg.items():
 		val["avg_minutes"] = (val["total_minutes"] / val["rooms_cleaned"]) if val["rooms_cleaned"] else 0
 		val["maintenance_flagged"] = maint_map.get(key, 0)
+		info = employee_info.get(val["staff"])
+		val["employee_name"] = info.get("employee_name") if info else None
+		val["department"] = info.get("department") if info else None
+		val["designation"] = info.get("designation") if info else None
 		result.append(val)
 
 	result.sort(key=lambda r: (r["date"], r["staff"] or ""))

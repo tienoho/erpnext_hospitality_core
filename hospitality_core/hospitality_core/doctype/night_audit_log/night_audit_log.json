@@ -7,6 +7,7 @@
   "audit_date",
   "run_datetime",
   "run_by",
+  "run_by_employee_name",
   "column_break_summary",
   "no_show_count",
   "overstay_count",
@@ -42,6 +43,14 @@
    "label": "Người/Tiến Trình Chạy",
    "options": "User",
    "read_only": 1
+  },
+  {
+   "fieldname": "run_by_employee_name",
+   "fieldtype": "Data",
+   "label": "Tên Nhân Viên",
+   "read_only": 1,
+   "is_virtual": 1,
+   "description": "Tên nhân viên thật, resolve qua Employee.user_id nếu `run_by` là 1 nhân viên có hồ sơ Employee. Để trống nếu `run_by` là tài khoản hệ thống (VD Administrator chạy tự động qua scheduler)."
   },
   {
    "fieldname": "column_break_summary",

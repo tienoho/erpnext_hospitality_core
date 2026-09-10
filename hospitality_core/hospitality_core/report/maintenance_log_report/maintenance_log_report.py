@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from hospitality_core.hospitality_core.api.report_scope import allowed_properties_for_report
+from hospitality_core.hospitality_core.api.employee_link import resolve_employees
 
 def execute(filters=None):
     if not filters:
@@ -13,6 +14,8 @@ def execute(filters=None):
         {"label": _("Issue Type"), "fieldname": "issue_type", "fieldtype": "Data", "width": 100},
         {"label": _("Description"), "fieldname": "description", "fieldtype": "Data", "width": 250},
         {"label": _("Reported By"), "fieldname": "reported_by_name", "fieldtype": "Data", "width": 120},
+        {"label": _("Department"), "fieldname": "department", "fieldtype": "Data", "width": 120},
+        {"label": _("Designation"), "fieldname": "designation", "fieldtype": "Data", "width": 120},
         {"label": _("Status"), "fieldname": "status", "fieldtype": "Data", "width": 100},
         {"label": _("Resolution Notes"), "fieldname": "resolution_notes", "fieldtype": "Data", "width": 200}
     ]
@@ -41,6 +44,7 @@ def execute(filters=None):
             hmr.room,
             hmr.issue_type,
             hmr.description,
+            hmr.reported_by,
             u.full_name as reported_by_name,
             hmr.status,
             hmr.resolution_notes
@@ -53,7 +57,17 @@ def execute(filters=None):
         ORDER BY
             hmr.creation DESC
     """
-    
+
     data = frappe.db.sql(sql, params, as_dict=True)
-    
+
+    # Làm giàu tên/phòng ban/chức vụ từ Employee (qua user_id) khi resolve
+    # được — chỉ hiển thị thêm, không đổi field reported_by/reported_by_name
+    # gốc; user không có Employee (Administrator, tài khoản hệ thống) sẽ có
+    # department/designation rỗng, không coi là lỗi.
+    employee_info = resolve_employees([row.get("reported_by") for row in data])
+    for row in data:
+        info = employee_info.get(row.get("reported_by"))
+        row["department"] = info.get("department") if info else None
+        row["designation"] = info.get("designation") if info else None
+
     return columns, data
