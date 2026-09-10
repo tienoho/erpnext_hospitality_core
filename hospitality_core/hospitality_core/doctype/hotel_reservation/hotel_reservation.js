@@ -605,15 +605,42 @@ frappe.ui.form.on('Hotel Reservation', {
                 });
             }, __('Khóa Thẻ Từ'));
 
+            frm.add_custom_button(__('Đọc Thẻ'), function () {
+                if (window.frappe && frappe.hospitality && frappe.hospitality.read_keycard) {
+                    frappe.hospitality.read_keycard();
+                } else {
+                    fetch('http://127.0.0.1:8765/api/lock/read_card')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                frappe.msgprint({
+                                    title: __('Thông Tin Thẻ'),
+                                    indicator: 'green',
+                                    message: `Phòng: <b>${data.room_no}</b> | UID: <code>${data.card_uid}</code> | Hạn: ${data.checkout_time}`
+                                });
+                            } else {
+                                frappe.msgprint({ title: __('Lỗi Đọc Thẻ'), message: data.error || data.message, indicator: 'red' });
+                            }
+                        })
+                        .catch(() => {
+                            frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
+                        });
+                }
+            }, __('Khóa Thẻ Từ'));
+
             frm.add_custom_button(__('Xóa / Thu Hồi Thẻ'), function () {
-                fetch('http://127.0.0.1:8765/api/lock/clear_card', { method: 'POST' })
-                    .then(res => res.json())
-                    .then(data => {
-                        frappe.show_alert({ message: __('Đã xóa và thu hồi thẻ phòng!'), indicator: 'green' });
-                    })
-                    .catch(() => {
-                        frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
-                    });
+                if (window.frappe && frappe.hospitality && frappe.hospitality.clear_keycard) {
+                    frappe.hospitality.clear_keycard();
+                } else {
+                    fetch('http://127.0.0.1:8765/api/lock/clear_card', { method: 'POST' })
+                        .then(res => res.json())
+                        .then(data => {
+                            frappe.show_alert({ message: __('Đã xóa và thu hồi thẻ phòng!'), indicator: 'green' });
+                        })
+                        .catch(() => {
+                            frappe.show_alert({ message: __('Chưa kết nối Hardware Bridge'), indicator: 'red' });
+                        });
+                }
             }, __('Khóa Thẻ Từ'));
         }
     },

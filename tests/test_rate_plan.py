@@ -35,8 +35,17 @@ class PricingTests(unittest.TestCase):
             with self.subTest(day=day):
                 self.assertEqual(quote_day(rules(), day)['base_rate'], expected)
 
-    def test_default_never_gets_los(self):
-        self.assertEqual(quote_day(rules(), '2027-01-01', '2026-12-25', '2027-01-02')['final_rate'], 150)
+    def test_default_rate_still_gets_los_when_nights_qualify(self):
+        # QUYẾT ĐỊNH ĐÃ CHỐT (xem rate_calculation.py's quote_day() comment):
+        # LOS là chính sách theo TỔNG SỐ ĐÊM của cả kỳ lưu trú, độc lập với
+        # việc đêm đó có rơi vào mùa vụ hay không (Season và LOS là 2 trục
+        # độc lập) — 1 đêm dùng default_rate (ngoài mọi mùa vụ) VẪN được
+        # tính LOS nếu tổng số đêm đủ điều kiện. Trước đây test này (tên cũ
+        # "test_default_never_gets_los") khẳng định NGƯỢC LẠI — đã đổi tên +
+        # sửa kỳ vọng khớp đúng quyết định đã chốt.
+        # nights=8 (25/12 -> 02/01) đủ điều kiện tier min_nights=7 (20%):
+        # 150 - 150*20% = 120.
+        self.assertEqual(quote_day(rules(), '2027-01-01', '2026-12-25', '2027-01-02')['final_rate'], 120)
 
     def test_zero_weekend_means_weekday(self):
         r = rules(); r['seasons'][0]['weekend_rate'] = 0
@@ -77,7 +86,11 @@ class PricingTests(unittest.TestCase):
     def test_cross_season_and_default(self):
         r = rules(); r['seasons'][0]['valid_to'] = '2026-09-03'
         r['seasons'].append(dict(r['seasons'][0], valid_from='2026-09-04', valid_to='2026-09-04', weekend_rate=300))
-        self.assertEqual([q['final_rate'] for q in quote_stay(r, '2026-09-03', '2026-09-06')['nightly_rates']], [90, 270, 150])
+        # Đêm thứ 3 (09-05) không khớp mùa vụ nào -> dùng default_rate=150,
+        # nhưng LOS (tier min_nights=3, 10%) vẫn áp dụng đúng theo quyết định
+        # đã chốt (Season và LOS là 2 trục độc lập): 150 - 10% = 135, không
+        # còn giữ nguyên 150 như hành vi cũ đã bị bác bỏ.
+        self.assertEqual([q['final_rate'] for q in quote_stay(r, '2026-09-03', '2026-09-06')['nightly_rates']], [90, 270, 135])
 
     def test_discount_capped_after_los(self):
         q = quote_day(rules(), '2026-09-06', '2026-09-06', '2026-09-09', 'Amount', 95)

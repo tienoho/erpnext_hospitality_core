@@ -134,7 +134,7 @@ print(result)
 2. **Check Stock Entries:**
    - Go to **Stock > Stock Ledger**
    - Filter by Item: `YAM` and `EGG`
-   - You should see Material Consumption entries:
+   - You should see "Material Consumption for Manufacture" Stock Entries:
      - Yam: -2 Portions
      - Egg: -4 Nos
 

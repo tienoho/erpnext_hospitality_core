@@ -1,0 +1,11 @@
+{
+    "vendor": "Hune",
+    "port": "COM3",
+    "baudrate": 9600,
+    "hotel_code": "TCG01",
+    "building_no": "01",
+    "dll_path": "",
+    "is_hardware_connected": false,
+    "simulation_mode": true,
+    "last_operation": null
+}

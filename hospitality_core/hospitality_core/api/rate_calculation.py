@@ -88,8 +88,17 @@ def quote_day(snapshot, target_date, arrival_date=None, departure_date=None,
         nights = (as_date(departure_date) - as_date(arrival_date)).days
         if nights < 1:
             raise ValueError('Ngày trả phòng phải sau ngày nhận phòng.')
-    # Kế hoạch v2 đã chốt: giá mặc định không áp LOS; VIP tính sau LOS.
-    result = discount_breakdown(base, tiers, nights, bool(season), discount_type,
+    # QUYẾT ĐỊNH ĐÃ CHỐT VỚI NGƯỜI DÙNG (xác nhận lại lần thứ 3, xem
+    # serialized-waddling-valley.md mục "Rà soát các tài liệu... LOS bị
+    # revert"): giảm giá LOS là chính sách theo TỔNG SỐ ĐÊM của cả kỳ lưu
+    # trú, KHÔNG PHẢI thuộc tính riêng của từng đêm — Season (giá theo mùa)
+    # và LOS (giảm giá theo số đêm) là 2 TRỤC ĐỘC LẬP. Vì vậy `eligible`
+    # PHẢI luôn True, không được gắn với `bool(season)` — 1 đêm rơi ngoài
+    # mùa vụ (dùng default_rate) VẪN được tính vào LOS nếu tổng số đêm đủ
+    # điều kiện. Đã bị đảo ngược về `bool(season)` ít nhất 2 lần bởi 1 tiến
+    # trình/phiên khác — nếu thấy dòng này lại là `bool(season)`, đó là hồi
+    # quy, không phải chủ đích; xác nhận lại với người dùng trước khi đổi.
+    result = discount_breakdown(base, tiers, nights, True, discount_type,
                                 discount_value, complimentary, snapshot.get('precision', 2), snapshot.get('vip_percent', 0))
     result.update(date=str(target), season_name=season.get('season_name') if season else None,
                   source='season' if season else 'default', weekend=weekend, nights=nights,

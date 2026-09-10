@@ -18,6 +18,7 @@ import unittest
 import frappe
 from frappe.utils import nowdate, add_days, getdate, flt
 from run_property_integration import PropertyDatabaseTests
+from run_docker_verification import ensure_legacy_accounting_settings
 
 
 class OperationalReportsTests(unittest.TestCase):
@@ -532,6 +533,149 @@ class OperationalReportsTests(unittest.TestCase):
         row = next((d for d in data if d['reservation'] == self.reservation.name), None)
         self.assertIsNotNone(row)
         self.assertEqual(row['company'], 'Police Report Test Agency')
+
+    # ==================================================================
+    # room_only_sales.py — báo cáo bị bỏ sót hoàn toàn khỏi kế hoạch Đợt 4
+    # ban đầu (xác nhận bằng grep 19 file test hiện có — 0 kết quả), phát
+    # hiện qua audit lại toàn bộ 30 thư mục report/. KHÔNG đụng POS Invoice/
+    # POS Closing Entry — an toàn rollback-per-test.
+    # ==================================================================
+    def test_room_only_sales_nets_discount_against_room_rent(self):
+        self.fixture()
+        self.make_charge(self.reservation.folio, 'ROOM-RENT', 500000)
+        # DISCOUNT lưu amount ÂM (giảm số dư folio) — khớp quy ước dùng xuyên
+        # suốt các file test khác (VD run_financial_reports_tests.py's
+        # make_charge(folio, 'DISCOUNT', -150000)); report tự đảo dấu (`-SUM(...)`)
+        # để hiển thị cột "Discount" dương.
+        self.make_charge(self.reservation.folio, 'DISCOUNT', -50000)
+        from hospitality_core.hospitality_core.report.room_only_sales.room_only_sales import execute
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
+        row = next((r for r in data if r.get('reservation') == self.reservation.name), None)
+        self.assertIsNotNone(row, 'Phải có 1 dòng cho đặt phòng vừa charge ROOM-RENT/DISCOUNT.')
+        self.assertEqual(flt(row['room_rent']), 500000)
+        self.assertEqual(flt(row['discount']), 50000)
+        self.assertEqual(flt(row['amount']), 450000, 'Net Amount = Room Rent - Discount.')
+        total_row = next((r for r in data if r.get('guest_name') == '<b>Total</b>'), None)
+        self.assertIsNotNone(total_row, 'Phải có dòng tổng cộng ở cuối báo cáo.')
+
+    def test_room_only_sales_excludes_void_and_mirror_transactions(self):
+        self.fixture()
+        self.make_charge(self.reservation.folio, 'ROOM-RENT', 300000)
+        self.make_charge(self.reservation.folio, 'ROOM-RENT', 999999, is_void=1, void_reason='Test void')
+        # mirror_source là Link tới 1 Folio Transaction THẬT (validate_links
+        # bắt buộc) — tạo 1 giao dịch gốc thật rồi dùng .name làm mirror_source,
+        # khớp mẫu run_financial_reports_tests.py's mirror-transaction test.
+        original = self.make_charge(self.reservation.folio, 'ROOM-RENT', 111111)
+        self.make_charge(self.reservation.folio, 'ROOM-RENT', 888888, mirror_source=original.name)
+        from hospitality_core.hospitality_core.report.room_only_sales.room_only_sales import execute
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
+        row = next((r for r in data if r.get('reservation') == self.reservation.name), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(flt(row['room_rent']), 300000 + 111111,
+            'Giao dịch is_void=1 hoặc có mirror_source phải bị loại khỏi tổng Room Rent.')
+
+    def test_room_only_sales_date_filter_excludes_other_days(self):
+        self.fixture()
+        self.make_charge(self.reservation.folio, 'ROOM-RENT', 400000, posting_date=add_days(nowdate(), -5))
+        from hospitality_core.hospitality_core.report.room_only_sales.room_only_sales import execute
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
+        row = next((r for r in data if r.get('reservation') == self.reservation.name), None)
+        self.assertIsNone(row, 'Charge nằm ngoài khoảng ngày lọc không được xuất hiện trong báo cáo.')
+
+    # ==================================================================
+    # daily_payment_collection.py — nhánh Payment Entry (nhánh POS Invoice
+    # dùng UNION ALL riêng, cố tình KHÔNG test ở đây: tạo/submit POS Invoice
+    # thật gây commit vĩnh viễn trên site `localhost`, đúng rủi ro đã ghi
+    # nhận ở "Đợt 4 (phần 2)" — nếu cần phủ nhánh đó, phải dùng fixture cô
+    # lập kiểu run_pos_reports_tests.py, không phải file rollback-based này).
+    # ==================================================================
+    def make_payment_entry(self, folio_name, company, party, amount, mode_of_payment='Cash'):
+        # Hospitality Accounting Settings (Single TOÀN SITE, đọc bởi
+        # accounting.py's handle_payment_income_realization() — hook on_submit
+        # của Payment Entry) có thể đang trỏ sang company của 1 file test
+        # KHÁC chạy trước đó (VD run_pos_reports_tests.py's "POS Report Test
+        # Co") — PHẢI gán lại đúng company này trước, đúng bài học "Single
+        # toàn site cần gán lại theo ngữ cảnh hiện tại mỗi lần dùng".
+        ensure_legacy_accounting_settings(company)
+        receivable = frappe.get_cached_value('Company', company, 'default_receivable_account')
+        cash = frappe.db.get_value('Account', {'company': company, 'account_type': 'Cash', 'is_group': 0}, 'name')
+        cost_center = frappe.db.get_value('Cost Center', {'company': company, 'is_group': 0}, 'name')
+        # Mode of Payment's "type" field chỉ nhận 4 giá trị chuẩn ERPNext
+        # (Cash/Bank/General/Phone) — tên hiển thị (mode_of_payment) và "type"
+        # là 2 khái niệm khác nhau; "Card" là tên hiển thị hợp lệ nhưng phải
+        # gắn type="Bank".
+        pe_type = 'Bank' if mode_of_payment not in ('Cash', 'Phone', 'General') else mode_of_payment
+        # daily_payment_collection.py's tổng "TOTAL CASH" so khớp CHÍNH XÁC
+        # tên hiển thị mode_of_payment.lower()=='cash' — dùng lại đúng bản ghi
+        # chuẩn "Cash" có sẵn của ERPNext (dùng chung, không company-scoped ở
+        # cấp tên) thay vì tạo tên riêng, để test đúng nhánh tổng hợp CASH.
+        mop_name = 'Cash' if mode_of_payment == 'Cash' else f'Op Reports {mode_of_payment}'
+        if not frappe.db.exists('Mode of Payment', mop_name):
+            frappe.get_doc(dict(doctype='Mode of Payment', mode_of_payment=mop_name, type=pe_type,
+                accounts=[dict(company=company, default_account=cash)])).insert(ignore_permissions=True)
+        elif not frappe.db.exists('Mode of Payment Account', {'parent': mop_name, 'company': company}):
+            mop_doc = frappe.get_doc('Mode of Payment', mop_name)
+            mop_doc.append('accounts', dict(company=company, default_account=cash))
+            mop_doc.save(ignore_permissions=True)
+        pe = frappe.get_doc(dict(doctype='Payment Entry', payment_type='Receive', company=company,
+            party_type='Customer', party=party, paid_from=receivable, paid_to=cash,
+            paid_amount=amount, received_amount=amount, mode_of_payment=mop_name, cost_center=cost_center,
+            reference_no=folio_name, reference_date=nowdate()))
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+        return pe
+
+    def test_daily_payment_collection_includes_payment_entry_referencing_folio(self):
+        self.fixture()
+        pe = self.make_payment_entry(self.reservation.folio, self.reservation.operating_company,
+            self.reservation.billing_customer, 250000, mode_of_payment='Cash')
+        from hospitality_core.hospitality_core.report.daily_payment_collection.daily_payment_collection import execute
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
+        row = next((d for d in data if d.get('name') == pe.name), None)
+        self.assertIsNotNone(row, 'Payment Entry tham chiếu đúng 1 Guest Folio thật phải xuất hiện trong báo cáo.')
+        self.assertEqual(row['voucher_type'], 'Payment Entry')
+        self.assertEqual(flt(row['paid_amount']), 250000)
+        cash_total = next((d for d in data if d.get('party_name') == '<b>TOTAL CASH</b>'), None)
+        self.assertIsNotNone(cash_total)
+        self.assertEqual(flt(cash_total['paid_amount']), 250000)
+
+    def test_daily_payment_collection_excludes_unrelated_payment_entry(self):
+        self.fixture()
+        # Payment Entry KHÔNG tham chiếu Guest Folio nào (reference_no không
+        # khớp FOLIO%/MASTER%, remarks không chứa "Hotel") — không phải giao
+        # dịch khách sạn, không được lẫn vào báo cáo thu ngân khách sạn.
+        ensure_legacy_accounting_settings(self.reservation.operating_company)
+        receivable = frappe.get_cached_value('Company', self.reservation.operating_company, 'default_receivable_account')
+        cash = frappe.db.get_value('Account', {'company': self.reservation.operating_company,
+            'account_type': 'Cash', 'is_group': 0}, 'name')
+        cost_center = frappe.db.get_value('Cost Center', {'company': self.reservation.operating_company,
+            'is_group': 0}, 'name')
+        mop_name = 'Op Reports Cash'
+        if not frappe.db.exists('Mode of Payment', mop_name):
+            frappe.get_doc(dict(doctype='Mode of Payment', mode_of_payment=mop_name, type='Cash',
+                accounts=[dict(company=self.reservation.operating_company, default_account=cash)])).insert(ignore_permissions=True)
+        pe = frappe.get_doc(dict(doctype='Payment Entry', payment_type='Receive',
+            company=self.reservation.operating_company, party_type='Customer',
+            party=self.reservation.billing_customer, paid_from=receivable, paid_to=cash,
+            paid_amount=150000, received_amount=150000, mode_of_payment=mop_name, cost_center=cost_center,
+            reference_no='UNRELATED-REF-123', reference_date=nowdate()))
+        pe.insert(ignore_permissions=True)
+        pe.submit()
+        from hospitality_core.hospitality_core.report.daily_payment_collection.daily_payment_collection import execute
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
+        row = next((d for d in data if d.get('name') == pe.name), None)
+        self.assertIsNone(row, 'Payment Entry không tham chiếu Guest Folio/không phải giao dịch khách sạn phải bị loại.')
+
+    def test_daily_payment_collection_hotel_reception_filter(self):
+        f = self.fixture()
+        pe = self.make_payment_entry(self.reservation.folio, self.reservation.operating_company,
+            self.reservation.billing_customer, 100000, mode_of_payment='Card')
+        # hotel_reception rỗng trên PE vừa tạo -> lọc theo 1 reception cụ thể phải loại nó ra.
+        from hospitality_core.hospitality_core.report.daily_payment_collection.daily_payment_collection import execute
+        reception = frappe.db.get_value('Hotel Reception', {'property': self.reservation.property}, 'name')
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate(), 'hotel_reception': reception})
+        row = next((d for d in data if d.get('name') == pe.name), None)
+        self.assertIsNone(row, 'PE co hotel_reception khac (rong) voi filter phai bi loai.')
 
 
 if __name__ == "__main__":

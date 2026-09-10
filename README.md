@@ -61,6 +61,12 @@ Built for single properties as well as multi-property hotel groups requiring str
 
 ## 🚀 Feature Modules Deep Dive
 
+> **Path note**: paths below are written relative to the app package root
+> (i.e. `hospitality_core/` here means
+> `hospitality_core/hospitality_core/` on disk from the repo root — Frappe
+> apps nest an inner package of the same name). Use `find`/your editor's
+> "go to file" rather than a literal `cd hospitality_core/api/...`.
+
 ### 1. Modern Front Office Suite
 
 #### Front Desk Console (`hospitality_core/page/front_desk_console/`)

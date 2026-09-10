@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 title Tuan Chau Resort - Door Lock Hardware Bridge
 color 0A
 echo ====================================================================

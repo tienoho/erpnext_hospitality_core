@@ -31,3 +31,13 @@ Thêm nút pause/resume/deactivate/activate outlet và khai báo hàng tìm th�
 - Python F&B và script regression đã compile thành công.
 
 Giới hạn: chưa kiểm tra giao diện bằng trình duyệt thật, HTTP/export/file end-to-end và đua nhiều worker của các patch mới. Ca POS + Delivery Note hiện kiểm tra nhánh tiêu hao với dependency kho được mock; không thay thế nghiệm thu cả form Delivery Note → POS. Site test đang được task khác sử dụng nên phải phân biệt lỗi môi trường khi chạy lại. Không tuyên bố toàn bộ Cost Control đã được nghiệm thu production.
+
+## Phụ lục — 3 fix bổ sung tìm thấy sau tài liệu này (bởi phiên rà soát khác, không tính trong "12 mục" ở trên)
+
+Rà soát lại toàn bộ `api/fnb/` sau khi tài liệu này được viết đã phát hành thêm live-Docker để tìm và fix 3 lỗi thật KHÔNG nằm trong 12 mục trên (xác nhận qua đối chiếu trực tiếp code + comment "TRƯỚC ĐÂY" ghi rõ trong từng hàm, ngày phát hiện trùng khớp 2026-09-09-10):
+
+1. **`api/fnb/common.py`'s `atomic()`**: thêm cơ chế tự động thử lại (tối đa 3 lần) khi gặp `frappe.QueryDeadlockError` — deadlock InnoDB thật phát hiện qua test đồng thời (2 tiến trình cùng `approve_recipe()`/`start_count()`), trước đây để lộ thẳng lỗi kỹ thuật (`SAVEPOINT ... does not exist` hoặc `QueryDeadlockError`) ra người dùng thay vì tự phục hồi.
+2. **`api/fnb/guards.py`'s `signature()`**: sửa lỗi hash `posting_date`/`posting_time` vô điều kiện — ERPNext's `validate_posting_time()` tự ghi đè 2 field này về thời điểm hiện tại mỗi lần `validate()` (trừ khi `set_posting_time=1`), khiến chữ ký duyệt LUÔN đổi giữa lúc `approve_native()`'s `.save()` và `.submit()`, chặn nhầm MỌI chứng từ duyệt-rồi-submit-sau (luồng bình thường, không phải edge case).
+3. **`api/fnb/configuration.py`'s `validate_standard()`**: thêm kiểm tra tường minh `source_doctype`/`source_name` rỗng trước khi gọi `frappe.get_doc()` — tránh crash kỹ thuật thô (`ValueError`) thay vì thông báo nghiệp vụ rõ ràng khi bỏ trống 1 trong 2 trường bắt buộc.
+
+Cả 3 đã được kiểm chứng qua `tools/run_fnb_procurement_costing_tests.py`/`run_fnb_control_integration.py` chạy thật trên Docker (xem `serialized-waddling-valley.md`). Ghi chú lại đây để tổng số fix của đợt review 09/09/2026 không bị hiểu nhầm là chỉ có 12 mục.

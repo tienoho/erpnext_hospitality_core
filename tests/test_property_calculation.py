@@ -75,11 +75,17 @@ class PropertyCalculationTests(unittest.TestCase):
         self.assertEqual(quote['vip_discount'],18)
         self.assertEqual(pricing.discount_breakdown(100,[],1,discount_type='Amount',discount_value=200,vip_percent=20)['final_rate'],0)
 
-    def test_default_excludes_los_but_allows_vip(self):
+    def test_default_rate_gets_los_then_vip(self):
+        # QUYẾT ĐỊNH ĐÃ CHỐT: LOS áp dụng theo TỔNG SỐ ĐÊM, không phụ thuộc
+        # mùa vụ — kể cả khi seasons=[] (mọi đêm đều dùng default_rate).
+        # nights=4 (01/09 -> 05/09) đủ điều kiện tier min_nights=3 (10%):
+        # 100 - 10% = 90 (after_los), rồi VIP 20% trên 90 = 18 -> final 72.
+        # Tên test cũ "test_default_excludes_los_but_allows_vip" khẳng định
+        # hành vi CŨ (đã bị bác bỏ) — đã đổi tên + sửa kỳ vọng.
         result=pricing.quote_day(dict(default_rate=100,seasons=[],los_discounts=[{'min_nights':3,'discount_percent':10}],
             vip_percent=20,currency='USD'),'2026-09-01','2026-09-01','2026-09-05')
-        self.assertEqual(result['final_rate'],80)
-        self.assertEqual(result['los_discount'],0)
+        self.assertEqual(result['final_rate'],72)
+        self.assertEqual(result['los_discount'],10)
         self.assertEqual(result['currency'],'USD')
 
 

@@ -122,6 +122,12 @@ frappe.hospitality.clear_keycard = async function() {
                 message: __('Đã xóa và thu hồi thẻ phòng thành công!'),
                 indicator: 'green'
             });
+            return result;
+        } else {
+            frappe.show_alert({
+                message: result.error || result.message || __('Không thể xóa thẻ phòng.'),
+                indicator: 'red'
+            });
         }
     } catch (err) {
         frappe.show_alert({
@@ -130,3 +136,71 @@ frappe.hospitality.clear_keycard = async function() {
         });
     }
 };
+
+/**
+ * Đọc thông tin thẻ phòng từ đầu đọc thẻ tại Lễ tân
+ */
+frappe.hospitality.read_keycard = async function() {
+    frappe.show_alert({
+        message: __('Đang đọc thông tin thẻ từ...'),
+        indicator: 'blue'
+    });
+    try {
+        const response = await frappe.hospitality._fetch_with_timeout(`${frappe.hospitality.BRIDGE_URL}/api/lock/read_card`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        if (result.success) {
+            frappe.msgprint({
+                title: __('Thông Tin Thẻ Phòng'),
+                indicator: 'green',
+                message: `
+                    <div style="padding: 10px; line-height: 1.6;">
+                        <p><b>Số phòng:</b> <span class="badge badge-primary" style="font-size: 14px;">${result.room_no || 'N/A'}</span></p>
+                        <p><b>Mã thẻ UID:</b> <code>${result.card_uid}</code></p>
+                        <p><b>Loại thẻ:</b> ${result.card_type || 'Guest'}</p>
+                        <p><b>Hạn sử dụng:</b> Từ ${result.checkin_time} đến ${result.checkout_time}</p>
+                        <p><b>Trạng thái:</b> ${result.is_simulation ? '<span class="text-muted">(Chế độ mô phỏng)</span>' : '<b style="color: green;">(Đầu đọc vật lý)</b>'}</p>
+                    </div>
+                `
+            });
+            return result;
+        } else {
+            frappe.msgprint({
+                title: __('Lỗi Đọc Thẻ'),
+                indicator: 'red',
+                message: result.error || result.message || __('Không thể đọc thẻ từ.')
+            });
+        }
+    } catch (err) {
+        frappe.msgprint({
+            title: __('Lỗi Kết Nối Đầu Đọc Thẻ'),
+            indicator: 'red',
+            message: `
+                <p>Không thể kết nối tới dịch vụ phần cứng tại <b>http://127.0.0.1:8765</b>.</p>
+                <p>Vui lòng kiểm tra đã chạy <code>run_bridge.bat</code> hoặc <code>run_bridge_silent.vbs</code> trên máy tính Lễ tân.</p>
+            `
+        });
+    }
+};
+
+/**
+ * Quét danh sách các cổng COM đang kết nối trên máy tính Lễ tân
+ */
+frappe.hospitality.get_available_ports = async function() {
+    try {
+        const response = await frappe.hospitality._fetch_with_timeout(`${frappe.hospitality.BRIDGE_URL}/api/ports`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            return data.ports || [];
+        }
+    } catch (err) {
+        console.warn('[KeycardBridge] Failed to fetch available ports', err);
+    }
+    return [];
+};
+
