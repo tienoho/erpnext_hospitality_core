@@ -43,6 +43,41 @@ def whitelist_decorator(func):
         return frappe.whitelist()(func)
     return func
 
+
+def _resolve_country_link(alpha3_code):
+    """
+    Quy doi ma quoc tich MRZ (alpha-3, chuan ICAO 9303 — gan giong ISO
+    3166-1 alpha-3 voi vai ngoai le) sang dung ten ban ghi Country (Link
+    field cua Guest, Frappe luu ten tieng Anh VD "United States") de co the
+    tu dien vao form ngay khi quet ho chieu, thay vi luon de trong bat
+    lien tan phai tu chon thu cong.
+
+    TRUOC DAY: front_desk_console.js co ghi chu ro "co tinh BO TRONG de le
+    tan tu chon, tranh set sai du lieu" vi khong co cach nao khop truc tiep
+    ma alpha-3 voi ten Country — quyet dinh AN TOAN dung luc do (thieu
+    thong tin). Nay co the lam dung: chuyen alpha-3 -> alpha-2 qua thu vien
+    `pycountry` (du lieu chuan ISO 3166-1 quoc te, KHONG suy doan), roi tra
+    cuu Country.code (alpha-2, du lieu co san trong Frappe) — khop theo MA
+    (chuan, khong nhap nhang) thay vi khop theo TEN (nhieu bien the, VD
+    "Korea, Republic of" cua pycountry khac "South Korea" cua Frappe).
+
+    Tra ve "" (rong) neu khong the xac dinh — GIU NGUYEN hanh vi cu (le tan
+    tu chon thu cong) thay vi doan bua, dung nguyen tac da ap dung xuyen
+    suot module nay.
+    """
+    code3 = (alpha3_code or "").strip().upper()
+    if len(code3) != 3 or not code3.isalpha() or not frappe:
+        return ""
+    try:
+        import pycountry
+        country = pycountry.countries.get(alpha_3=code3)
+        if not country:
+            return ""
+        code2 = country.alpha_2.lower()
+        return frappe.db.get_value("Country", {"code": code2}, "name") or ""
+    except Exception:
+        return ""
+
 @whitelist_decorator
 def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
     """
@@ -54,6 +89,8 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
         "success": False,
         "document_type": "Unknown",
         "full_name": "",
+        "surname": "",
+        "given_name": "",
         "id_number": "",
         "date_of_birth": "",
         # TRƯỚC ĐÂY mặc định "Nam" — nếu không nhánh nào bên dưới xác định
@@ -84,9 +121,26 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
                 line2 = lines[idx + 1]
                 
                 # Parse Line 1: P<COUNTRY<SURNAME<<GIVEN_NAMES...
+                # TRUOC DAY: replace('<', ' ') tren TOAN BO phan con lai cua
+                # dong 1 — xoa mat luon ranh gioi "<<" (bo loc kep) phan biet
+                # Surname (primary identifier)/Given Names (secondary
+                # identifier) theo dung chuan ICAO 9303, gop tat ca thanh 1
+                # chuoi full_name duy nhat. Khai bao tam tru cho khach nuoc
+                # ngoai (export_quangninh_immigration_report()) can tach rieng
+                # "Ho va Ten Dem"/"Ten" — truoc day phai TU DOAN bang cach lay
+                # tu cuoi cung cua full_name (dung quy uoc ten Viet Nam, SAI
+                # voi nhieu ten phuong Tay co ho ghep/nhieu tu). MRZ von da tu
+                # tach dung 2 phan nay — chi can doc dung, khong can doan.
                 match_country = line1[2:5]
-                names_part = line1[5:].replace('<', ' ').strip()
-                
+                after_country = line1[5:]
+                if '<<' in after_country:
+                    surname_raw, given_raw = after_country.split('<<', 1)
+                else:
+                    surname_raw, given_raw = after_country, ''
+                surname = ' '.join(surname_raw.replace('<', ' ').split())
+                given_name = ' '.join(given_raw.replace('<', ' ').split())
+                names_part = f"{surname} {given_name}".strip() if given_name else surname
+
                 # Parse Line 2: PASSPORT_NO + NATIONALITY + DOB + EXPIRY
                 passport_no = line2[0:9].replace('<', '').strip()
                 nat = line2[10:13]
@@ -98,9 +152,29 @@ def parse_id_document(raw_text=None, mrz_lines=None, image_data=None):
 
                 result["document_type"] = "Passport"
                 result["full_name"] = names_part
+                result["surname"] = surname
+                result["given_name"] = given_name
                 result["id_number"] = passport_no
                 result["nationality"] = nat if nat != "VNM" else "Việt Nam"
                 result["is_alien"] = 1 if nat != "VNM" else 0
+                # Mã quoc tich alpha-3 THAT tu chinh ho chieu (chuan MRZ,
+                # dang khop ISO 3166-1 alpha-3 voi vai ngoai le) — luu rieng
+                # kem theo, KHONG phu thuoc vao viec co map duoc sang ban ghi
+                # Country (Link, ten tieng Anh) hay khong. Dung truc tiep cho
+                # cot "Quoc tich (Ma ISO-3)" khi khai bao XNC — dang tin cay
+                # nhat vi lay thang tu ho chieu, khong qua buoc doan/quy doi
+                # nao ca.
+                result["nationality_iso3"] = nat if nat and nat != "<<<" else ""
+                # Co gang tu dong tim dung ban ghi Country (Link field cua
+                # Guest) khop voi ma quoc tich MRZ — quy doi alpha-3 (MRZ) ->
+                # alpha-2 (pycountry, chuan ISO 3166-1 quoc te) -> tra cuu
+                # Country.code (alpha-2, du lieu co san trong Frappe) thay vi
+                # so khop TEN quoc gia (rui ro cao vi ten tieng Anh co nhieu
+                # bien the, VD "Korea, Republic of" vs "South Korea"). Neu
+                # khong tim duoc (thu vien thieu, ma khong chuan, hoac khong
+                # co ban ghi Country khop) — de trong, giu dung hanh vi cu
+                # (le tan tu chon thu cong), khong suy doan lieu linh.
+                result["nationality_country"] = _resolve_country_link(nat)
                 # ICAO 9303: ký tự '<' nghĩa là KHÔNG XÁC ĐỊNH — trước đây bị
                 # coi mặc định là "Nam" cùng với mọi giá trị không phải 'F',
                 # kể cả '<' hoặc dữ liệu bị cắt ngắn (rỗng) — để trống thay

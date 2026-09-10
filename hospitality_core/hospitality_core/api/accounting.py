@@ -492,9 +492,75 @@ def reclassify_pos_taxes(pos_invoice, method=None):
     if gl_entries:
         make_gl_entries(gl_entries, cancel=is_cancelled, adv_adj=True)
 
+def allow_cancel_of_pos_invoice_with_manual_gl_entries(pos_invoice, method=None):
+    """
+    Hook: POS Invoice on_cancel — PHẢI đăng ký sau cùng trong danh sách
+    on_cancel (hoặc ít nhất sau 2 hàm ở trên) để không bị chính 2 hàm đó
+    hoặc `POSInvoice.on_cancel()` ghi đè lại.
+
+    `POSInvoice.on_cancel()` (ERPNext core) gọi
+    `super(SalesInvoice, self).on_cancel()` — NHẢY THẲNG qua
+    `SalesInvoice.on_cancel()`, bỏ qua dòng
+    `self.ignore_linked_doctypes = ("GL Entry", "Stock Ledger Entry", ...)`
+    mà class cha đó tự thiết lập cho MỌI Sales Invoice khác. Thay vào đó,
+    `POSInvoice.on_cancel()` tự đặt `ignore_linked_doctypes` RIÊNG, chỉ gồm
+    `["Payment Ledger Entry", "Serial and Batch Bundle"]` — thiếu "GL Entry".
+
+    Với 1 POS Invoice KHÔNG có custom GL Entry nào (VD FNB v1 — kế toán dồn
+    hết vào Sales Invoice hợp nhất), việc thiếu này vô hại. Nhưng với POS
+    Invoice THƯỜNG mà `redirect_pos_income_to_suspense()`/
+    `reclassify_pos_taxes()` (2 hàm ngay phía trên) đã tự tạo GL Entry thẳng
+    với `voucher_type='POS Invoice'` (bù đắp cho việc `POSInvoice.on_submit()`
+    cũng tự bỏ qua kế toán chuẩn của `SalesInvoice`) — GL Entry ở ERPNext
+    LUÔN giữ `docstatus=1` vĩnh viễn kể cả sau khi "hủy" (chỉ đổi cờ
+    `is_cancelled`, không đổi docstatus, đúng quy ước chuẩn toàn hệ thống) —
+    framework's `check_if_doc_is_dynamically_linked()` sẽ LUÔN thấy các dòng
+    GL Entry này còn "Submitted" và CHẶN CỨNG việc hủy hóa đơn, dù kế toán đã
+    đảo bút toán đúng. Xác nhận trực tiếp qua debug script sống: hủy 1 POS
+    Invoice tiền mặt thường (thanh toán cash, có 3 dòng thuế) luôn crash
+    `frappe.exceptions.LinkExistsError`, dù is_cancelled đã đúng cho toàn bộ
+    GL Entry liên quan — nghĩa là KHÔNG BAO GIỜ hủy được 1 POS Invoice thường
+    đã có phát sinh thuế/doanh thu, cho tới khi có fix này.
+
+    Không tự ý thu hẹp phạm vi bỏ qua kiểm tra — dùng lại ĐÚNG danh sách đầy
+    đủ mà `SalesInvoice.on_cancel()` tự đặt cho MỌI hóa đơn khác trong hệ
+    thống (không phải tự bịa riêng cho app này), cộng dồn (không ghi đè) với
+    những gì `POSInvoice.on_cancel()` đã đặt trước đó.
+    """
+    existing = list(pos_invoice.get('ignore_linked_doctypes') or [])
+    for doctype in (
+        "GL Entry", "Stock Ledger Entry", "Repost Item Valuation", "Repost Payment Ledger",
+        "Repost Payment Ledger Items", "Repost Accounting Ledger", "Repost Accounting Ledger Items",
+        "Unreconcile Payment", "Unreconcile Payment Entries", "Payment Ledger Entry",
+        "Serial and Batch Bundle", "Tax Withholding Entry",
+    ):
+        if doctype not in existing:
+            existing.append(doctype)
+    pos_invoice.ignore_linked_doctypes = existing
+
 def create_expense_gl_entries(expense_doc, method=None):
     """
     Hook: Hospitality Expense (on_submit/on_cancel)
+
+    [ĐÃ FIX 2 lỗi thật, phát hiện qua chạy thật `expense.cancel()`]:
+    1. `hospitality_expense.py`'s `on_cancel()` gọi hàm này với
+       `cancel=1` — tham số KHÔNG TỒN TẠI trong chữ ký hàm (chỉ có
+       `method=None`) — khiến MỌI lần hủy 1 Hospitality Expense đã submit
+       đều crash `TypeError` ngay lập tức, trước khi kịp làm gì. Đã sửa lời
+       gọi thành `method='on_cancel'`.
+    2. Bản trước đó (dù bỏ qua lỗi #1) tự tính debit/credit ĐẢO CHIỀU rồi
+       `entry.insert()` TỪNG DÒNG RIÊNG LẺ, gán `is_cancelled=1` cho CHÍNH
+       dòng đảo chiều đó — nhưng KHÔNG BAO GIỜ đụng tới `is_cancelled` của
+       3 dòng GỐC (submit-time, vẫn giữ `is_cancelled=0` vĩnh viễn). Kết
+       quả: bất kỳ báo cáo/dashboard nào lọc `is_cancelled=0` (quy ước dùng
+       xuyên suốt toàn app) vẫn CỘNG DỒN đúng số tiền chi phí gốc như chưa
+       hề hủy gì — dòng "đảo chiều" bị chính is_cancelled=1 của nó loại
+       khỏi phép tính, không triệt tiêu được gì cả. Đã sửa dùng lại ĐÚNG
+       cơ chế `make_gl_entries(cancel=..., adv_adj=True)` (khớp mẫu đã
+       dùng đúng ở `redirect_pos_income_to_suspense()`/`reclassify_pos_taxes()`
+       ngay phía trên trong file này) — hàm này tự "blanket-cancel" (đặt
+       is_cancelled=1 cho CẢ 3 dòng gốc) RỒI MỚI chèn dòng đảo chiều (cũng
+       is_cancelled=1) — net về đúng 0 cho mọi phép tính lọc is_cancelled=0.
     """
     is_cancelled = False
     if method == "on_cancel" or expense_doc.docstatus == 2:
@@ -505,27 +571,28 @@ def create_expense_gl_entries(expense_doc, method=None):
         if not expense_doc.expense_account or not expense_doc.payment_account:
             frappe.throw(_("Expense Account and Payment Account are required for GL entries."))
 
+    from erpnext.accounts.general_ledger import make_gl_entries
+
     gl_entries = []
     company = expense_doc.company or frappe.db.get_default("company")
 
     # debit_in_account_currency/credit_in_account_currency phải luôn khớp
     # debit/credit (site 1 tiền tệ) — xem ghi chú đầy đủ ở
-    # reverse_charge_time_gl_on_invoice_submit().
+    # reverse_charge_time_gl_on_invoice_submit(). Luôn dựng đúng chiều GỐC
+    # (không tự đảo ở đây) — `make_gl_entries(cancel=True)` tự đảo/blanket-
+    # cancel bên trong, khớp đúng mẫu redirect_pos_income_to_suspense().
     # 1. Debit Expense Account (Net Amount)
-    expense_debit = abs(flt(expense_doc.amount)) if not is_cancelled else 0
-    expense_credit = 0 if not is_cancelled else abs(flt(expense_doc.amount))
-    gl_entries.append(frappe.get_doc({
-        "doctype": "GL Entry",
-        "posting_date": expense_doc.expense_date,
+    expense_amount = abs(flt(expense_doc.amount))
+    gl_entries.append(frappe._dict({
         "account": expense_doc.expense_account,
-        "debit": expense_debit,
-        "credit": expense_credit,
-        "debit_in_account_currency": expense_debit,
-        "credit_in_account_currency": expense_credit,
+        "debit": expense_amount,
+        "credit": 0,
+        "debit_in_account_currency": expense_amount,
+        "credit_in_account_currency": 0,
+        "posting_date": expense_doc.expense_date,
         "voucher_type": "Hospitality Expense",
         "voucher_no": expense_doc.name,
         "remarks": f"Expense: {expense_doc.expense_category} - {expense_doc.description or ''}",
-        "is_cancelled": 1 if is_cancelled else 0,
         # Hospitality Expense nam trong SCOPED (field 'property'), GL Entry
         # nam trong CORE_SCOPED (field 'hospitality_property') — 2 ten khac
         # nhau cho cung 1 khai niem, phai tu dich khi chuyen tu nguon sang dich.
@@ -537,47 +604,41 @@ def create_expense_gl_entries(expense_doc, method=None):
     # 2. Debit Tax Accounts (if any)
     for tax in expense_doc.get("taxes"):
         if flt(tax.tax_amount) > 0:
-            tax_debit = abs(flt(tax.tax_amount)) if not is_cancelled else 0
-            tax_credit = 0 if not is_cancelled else abs(flt(tax.tax_amount))
-            gl_entries.append(frappe.get_doc({
-                "doctype": "GL Entry",
-                "posting_date": expense_doc.expense_date,
+            tax_amount = abs(flt(tax.tax_amount))
+            gl_entries.append(frappe._dict({
                 "account": tax.account_head,
-                "debit": tax_debit,
-                "credit": tax_credit,
-                "debit_in_account_currency": tax_debit,
-                "credit_in_account_currency": tax_credit,
+                "debit": tax_amount,
+                "credit": 0,
+                "debit_in_account_currency": tax_amount,
+                "credit_in_account_currency": 0,
+                "posting_date": expense_doc.expense_date,
                 "voucher_type": "Hospitality Expense",
                 "voucher_no": expense_doc.name,
                 "remarks": f"Tax: {tax.description or tax.account_head} for {expense_doc.name}",
-                "is_cancelled": 1 if is_cancelled else 0,
                 "hospitality_property": expense_doc.get('property'),
                 "cost_center": expense_doc.cost_center,
                 "company": company
             }))
 
     # 3. Credit Payment Account (Grand Total)
-    payment_debit = 0 if not is_cancelled else abs(flt(expense_doc.grand_total))
-    payment_credit = abs(flt(expense_doc.grand_total)) if not is_cancelled else 0
-    gl_entries.append(frappe.get_doc({
-        "doctype": "GL Entry",
-        "posting_date": expense_doc.expense_date,
+    payment_amount = abs(flt(expense_doc.grand_total))
+    gl_entries.append(frappe._dict({
         "account": expense_doc.payment_account,
-        "debit": payment_debit,
-        "credit": payment_credit,
-        "debit_in_account_currency": payment_debit,
-        "credit_in_account_currency": payment_credit,
+        "debit": 0,
+        "credit": payment_amount,
+        "debit_in_account_currency": 0,
+        "credit_in_account_currency": payment_amount,
+        "posting_date": expense_doc.expense_date,
         "voucher_type": "Hospitality Expense",
         "voucher_no": expense_doc.name,
         "remarks": f"Payment via {expense_doc.paid_via} for {expense_doc.name}",
-        "is_cancelled": 1 if is_cancelled else 0,
         "hospitality_property": expense_doc.get('property'),
         "cost_center": expense_doc.cost_center,
         "company": company
     }))
 
-    for entry in gl_entries:
-        entry.insert(ignore_permissions=True)
+    if gl_entries:
+        make_gl_entries(gl_entries, cancel=is_cancelled, adv_adj=True)
 
 @frappe.whitelist()
 def run_pos_cancellation_test():

@@ -754,11 +754,27 @@ function open_id_scanner_dialog() {
                         }
                         // Guest.nationality là Link tới Country (ERPNext core lưu tên
                         // tiếng Anh, VD "Vietnam") — parse_id_document() trả "Việt Nam"
-                        // cho CCCD (map an toàn được), nhưng trả mã ISO-3 thô (VD "USA")
-                        // cho hộ chiếu nước ngoài, không khớp trực tiếp tên Country nào
-                        // nên cố tình BỎ TRỐNG để lễ tân tự chọn, tránh set sai dữ liệu.
+                        // cho CCCD (map an toàn được). Cho hộ chiếu nước ngoài, TRƯỚC
+                        // ĐÂY cố tình bỏ trống vì không có cách khớp mã ISO-3 thô (VD
+                        // "USA") với đúng tên bản ghi Country. Nay id_scanner.py tự quy
+                        // đổi qua alpha-2 (thư viện pycountry) rồi tra đúng Country.code
+                        // — trả sẵn tên bản ghi khớp qua `nationality_country` nếu tìm
+                        // được; vẫn để trống (lễ tân tự chọn) nếu không xác định được.
                         if (res.nationality === 'Việt Nam') {
                             guest_fields.nationality = 'Vietnam';
+                        } else if (res.nationality_country) {
+                            guest_fields.nationality = res.nationality_country;
+                        }
+                        // Họ/Tên tách riêng trực tiếp từ MRZ hộ chiếu (đúng chuẩn ICAO
+                        // 9303: primary/secondary identifier) — dùng cho đúng cột "Họ và
+                        // Tên Đệm"/"Tên" khi khai báo tạm trú khách nước ngoài
+                        // (police_declaration.py), thay vì đoán bằng cách tách từ cuối
+                        // của Full Name (chỉ đúng cho tên Việt Nam).
+                        if (res.surname) {
+                            guest_fields.surname = res.surname;
+                        }
+                        if (res.given_name) {
+                            guest_fields.given_name = res.given_name;
                         }
                         frappe.new_doc('Guest', guest_fields);
                         dialog.hide();

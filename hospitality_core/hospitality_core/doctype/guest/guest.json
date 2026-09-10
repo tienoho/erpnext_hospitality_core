@@ -19,6 +19,8 @@
   "gender",
   "date_of_birth",
   "nationality",
+  "surname",
+  "given_name",
   "merged_into"
  ],
  "fields": [
@@ -99,6 +101,18 @@
    "label": "Nationality",
    "options": "Country",
    "description": "Dùng để xác định mã quốc tịch ISO-3 khi xuất khai báo XNC cho khách nước ngoài."
+  },
+  {
+   "fieldname": "surname",
+   "fieldtype": "Data",
+   "label": "Surname (Họ)",
+   "description": "Bóc tách trực tiếp từ MRZ hộ chiếu (primary identifier) — dùng đúng cho cột 'Họ và Tên Đệm' khi khai báo tạm trú khách nước ngoài, thay vì đoán bằng cách tách theo từ cuối của Full Name (chỉ đúng cho tên Việt Nam)."
+  },
+  {
+   "fieldname": "given_name",
+   "fieldtype": "Data",
+   "label": "Given Name (Tên)",
+   "description": "Bóc tách trực tiếp từ MRZ hộ chiếu (secondary identifier) — dùng đúng cho cột 'Tên' khi khai báo tạm trú khách nước ngoài."
   },
   {
    "fieldname": "merged_into",

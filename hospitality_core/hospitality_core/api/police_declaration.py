@@ -242,16 +242,80 @@ def _is_foreign_guest(g):
     return False
 
 
+def _country_to_iso3(country_name):
+    """
+    Quy đổi tên bản ghi Country (Link field của Guest.nationality — Frappe
+    lưu tên tiếng Anh, VD "United States") sang mã ISO 3166-1 alpha-3 (VD
+    "USA") qua Country.code (alpha-2, dữ liệu chuẩn có sẵn trong Frappe) +
+    thư viện `pycountry` (chuẩn quốc tế ISO 3166-1, KHÔNG suy đoán/tự bịa
+    bảng quy đổi riêng). Trả về None nếu không xác định được (thiếu thư
+    viện, mã không chuẩn, hoặc không có bản ghi Country khớp).
+    """
+    if not country_name:
+        return None
+    try:
+        code2 = frappe.db.get_value("Country", country_name, "code")
+        if not code2:
+            return None
+        import pycountry
+        c = pycountry.countries.get(alpha_2=code2.upper())
+        return c.alpha_3 if c else None
+    except Exception:
+        return None
+
+
+def _split_foreign_guest_name(g):
+    """
+    Tách "Họ và Tên Đệm" (primary identifier)/"Tên" (secondary identifier)
+    cho khách nước ngoài, đúng thứ tự 2 cột riêng biệt mà biểu mẫu 11 cột
+    của Cổng XNC Quảng Ninh yêu cầu.
+
+    TRƯỚC ĐÂY: luôn tách bằng cách lấy TỪ CUỐI CÙNG của full_name làm "Tên",
+    phần còn lại làm "Họ và Tên Đệm" — đây là quy ước tên VIỆT NAM, không
+    đúng với đa số hộ chiếu phương Tây (thứ tự Given Name trước, Surname
+    sau, có thể gồm nhiều từ ở CẢ hai phần — VD "VAN DER BERG" là 1 họ ghép,
+    lấy từ cuối cùng "BERG" làm tên sẽ sai). Nay ưu tiên dùng ĐÚNG 2 trường
+    `surname`/`given_name` trên Guest — bóc tách trực tiếp từ MRZ hộ chiếu
+    (primary/secondary identifier theo chuẩn ICAO 9303) khi quét hộ chiếu
+    qua id_scanner.py, không đoán qua cấu trúc câu. Chỉ rơi về quy ước cũ
+    (tách theo từ cuối) khi KHÔNG có sẵn 2 trường này (VD hồ sơ khách tạo
+    thủ công/nhập tay trước khi có tính năng quét hộ chiếu, hoặc quét CCCD
+    không có surname/given_name).
+    """
+    surname = (g.get('surname') or "").strip()
+    given_name = (g.get('given_name') or "").strip()
+    if surname or given_name:
+        return surname.upper(), given_name.upper()
+    raw_name = (g.get('full_name') or "").strip()
+    parts = raw_name.split()
+    first_name = parts[-1].upper() if len(parts) > 0 else ""
+    middle_last_name = " ".join(parts[:-1]).upper() if len(parts) > 1 else ""
+    return middle_last_name, first_name
+
+
 def _normalize_iso3_nationality(nationality_val, is_alien=False):
     """
     Chuẩn hóa mã quốc tịch: nếu là Việt Nam chuyển thành VNM, nếu rỗng trả về VNM hoặc FOR.
+
+    TRƯỚC ĐÂY: với bất kỳ giá trị nào khác các biến thể "Việt Nam", hàm trả
+    về NGUYÊN VĂN giá trị đầu vào — đúng khi đầu vào đã là mã alpha-3 thật
+    (VD "DEU", lấy trực tiếp từ MRZ hộ chiếu), nhưng SAI HOÀN TOÀN khi đầu
+    vào là TÊN ĐẦY ĐỦ của bản ghi Country (Guest.nationality là Link tới
+    Country, Frappe lưu tên tiếng Anh VD "United States", KHÔNG PHẢI mã) —
+    cột "Quốc tịch (Mã ISO-3)" của báo cáo XNC khi đó xuất ra nguyên tên
+    tiếng Anh thay vì mã 3 ký tự, sai định dạng bắt buộc của Cổng XNC.
+    Nay tự phân biệt: giá trị ĐÃ GIỐNG mã alpha-3 (3 chữ cái in hoa) thì giữ
+    nguyên như cũ; còn lại (tên Country đầy đủ) thì quy đổi đúng qua
+    _country_to_iso3().
     """
     nat = (nationality_val or "").strip()
     if not nat:
         return "FOR" if is_alien else "VNM"
     if nat.lower() in ("việt nam", "vietnam", "viet nam", "vnm", "vn"):
         return "VNM"
-    return nat
+    if len(nat) == 3 and nat.isalpha() and nat.isupper():
+        return nat
+    return _country_to_iso3(nat) or nat
 
 
 @frappe.whitelist()
@@ -298,6 +362,8 @@ def get_daily_guest_list(target_date=None, company=None):
                 g.gender,
                 g.date_of_birth,
                 g.nationality,
+                g.surname,
+                g.given_name,
                 r.name AS reservation_id,
                 COALESCE(NULLIF(hr.room_number, ''), r.room, '') AS room_number,
                 r.arrival_date,
@@ -541,20 +607,7 @@ def export_quangninh_immigration_report(target_date=None, company=None, file_for
     ])
 
     for idx, g in enumerate(foreign_guests, start=1):
-        raw_name = (g.get('full_name') or "").strip()
-        # LƯU Ý: quy ước tách "Họ và Tên Đệm" / "Tên" bằng từ cuối cùng của
-        # full_name là quy ước dùng cho tên Việt Nam — CHƯA XÁC MINH được đây
-        # có đúng là cách Cổng XNC Quảng Ninh muốn nhận tên khách NƯỚC NGOÀI
-        # hay không (nhiều mẫu form của Công an VN áp dụng quy tắc này cho mọi
-        # quốc tịch, nhưng một số hộ chiếu phương Tây có thể cần tách theo
-        # đúng trường Surname/Given Name in trên hộ chiếu). Guest doctype hiện
-        # chỉ có 1 trường full_name, không có surname/given_name riêng —
-        # trước khi nộp thật cho cơ quan chức năng, cần đối chiếu quy tắc này
-        # với hướng dẫn thực tế của Cổng, hoặc bổ sung 2 trường riêng trên
-        # Guest lấy trực tiếp từ hộ chiếu (MRZ) qua id_scanner.py.
-        parts = raw_name.split()
-        first_name = parts[-1].upper() if len(parts) > 0 else ""
-        middle_last_name = " ".join(parts[:-1]).upper() if len(parts) > 1 else ""
+        middle_last_name, first_name = _split_foreign_guest_name(g)
 
         passport_no = g.get('passport_number') or g.get('identification_no') or ""
         gender_code = _vn_gender_label(g.get('gender'), form="code")
@@ -627,10 +680,7 @@ def export_quangninh_immigration_report_xlsx(target_date=None, company=None):
 
     rows = []
     for idx, g in enumerate(foreign_guests, start=1):
-        raw_name = (g.get('full_name') or "").strip()
-        parts = raw_name.split()
-        first_name = parts[-1].upper() if len(parts) > 0 else ""
-        middle_last_name = " ".join(parts[:-1]).upper() if len(parts) > 1 else ""
+        middle_last_name, first_name = _split_foreign_guest_name(g)
 
         passport_no = g.get('passport_number') or g.get('identification_no') or ""
         # Dùng cùng mã số 1/2 như bản CSV (export_quangninh_immigration_report)

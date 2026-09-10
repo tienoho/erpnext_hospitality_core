@@ -74,7 +74,13 @@ doc_events = {
             "hospitality_core.hospitality_core.api.accounting.redirect_pos_income_to_suspense",
             "hospitality_core.hospitality_core.api.accounting.reclassify_pos_taxes",
             "hospitality_core.api.composite_item_utils.process_composite_items_in_invoice",
-            "hospitality_core.hospitality_core.api.stock.deduct_stock_items_for_pos_invoice"
+            "hospitality_core.hospitality_core.api.stock.deduct_stock_items_for_pos_invoice",
+            # PHẢI đứng CUỐI CÙNG: POSInvoice.on_cancel() (ERPNext core) tự đặt
+            # lại doc.ignore_linked_doctypes (thiếu "GL Entry"), khiến framework
+            # luôn chặn hủy 1 POS Invoice thường đã có GL Entry do 2 hàm
+            # redirect_pos_income_to_suspense/reclassify_pos_taxes ở trên tự tạo
+            # — xem docstring đầy đủ trong accounting.py.
+            "hospitality_core.hospitality_core.api.accounting.allow_cancel_of_pos_invoice_with_manual_gl_entries"
         ]
     },
     "Payment Entry": {

@@ -268,6 +268,28 @@ class FinancialReportsTests(unittest.TestCase):
         self.assertEqual(flt(matching[0]['expenses']), 50000,
             'Chi phi lien ket qua Hotel Maintenance Request phai duoc tinh truc tiep vao dung phong.')
 
+    def test_hospitality_expense_cancel_zeroes_out_gl_balance(self):
+        f = self.fixture()
+        cost_center = frappe.db.get_value('Cost Center', {'company': self.company_a, 'is_group': 0}, 'name')
+        expense = frappe.get_doc(dict(doctype='Hospitality Expense', expense_date=nowdate(),
+            expense_category=self._ensure_expense_category(),
+            paid_via=self._ensure_mode_of_payment(), company=self.company_a, amount=60000, grand_total=60000,
+            cost_center=cost_center, property='HV-A')).insert(ignore_permissions=True)
+        expense.submit()
+        # TRUOC KHI FIX: expense.cancel() crash TypeError ('cancel' khong ton
+        # tai trong chu ky create_expense_gl_entries()), va ngay ca khi bo
+        # qua loi do, ban GL cu khong bao gio flip is_cancelled cua 3 dong
+        # GOC — chi phi da huy van bi tinh nhu con hieu luc trong moi bao cao
+        # loc is_cancelled=0.
+        expense.cancel()
+        rows = frappe.get_all('GL Entry', filters={'voucher_no': expense.name},
+            fields=['debit', 'credit', 'is_cancelled'])
+        self.assertTrue(rows)
+        self.assertTrue(all(r.is_cancelled for r in rows),
+            'Huy Hospitality Expense phai dat is_cancelled=1 cho CA cac dong GOC lan dong dao chieu.')
+        net = sum(flt(r.debit) - flt(r.credit) for r in rows if not r.is_cancelled)
+        self.assertEqual(net, 0, 'Sau khi huy, tong so du (loc is_cancelled=0) phai ve dung 0.')
+
     def _ensure_expense_category(self):
         if not frappe.db.exists('Expense Category', 'Test Maintenance Category'):
             expense_account = frappe.db.get_value('Account', {'company': self.company_a, 'root_type': 'Expense',
@@ -305,20 +327,30 @@ class FinancialReportsTests(unittest.TestCase):
         frappe.db.set_value('Guest Folio', res.folio, 'status', 'Open')
         return res
 
+    def _ota_row(self, platform):
+        from hospitality_core.hospitality_core.report.ota_commission_report.ota_commission_report import execute
+        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
+        row = next((r for r in data if r['ota_platform'] == platform), None)
+        return (flt(row['revenue']), flt(row['commission_percent'])) if row else (0.0, 0.0)
+
     def test_ota_commission_calculates_from_configured_rate(self):
         f = self.fixture()
+        # KHONG the gia dinh site sach: 'localhost' da co san du lieu OTA that
+        # (VD property 'TCR-RESORT', ~40 dat phong OTA) — so sanh CHENH LECH
+        # truoc/sau khi them fixture cua chinh test nay, thay vi kiem tra gia
+        # tri tuyet doi cua bao cao (bao cao khong co tham so loc company de
+        # co lap ket qua, dung y do — property scoping tra ve day du cho
+        # Administrator).
+        before_revenue, _ = self._ota_row('Agoda')
         res = self.make_ota_reservation(f, platform='Agoda')
         self.make_charge(res.folio, 'ROOM-RENT', 1000000)
         settings = frappe.get_single('Hospitality Channel Manager Settings')
         settings.set('ota_commission_rates', [dict(ota_platform='Agoda', commission_percent=15)])
         settings.save(ignore_permissions=True)
-        from hospitality_core.hospitality_core.report.ota_commission_report.ota_commission_report import execute
-        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
-        row = next((r for r in data if r['ota_platform'] == 'Agoda'), None)
-        self.assertIsNotNone(row)
-        self.assertEqual(flt(row['revenue']), 1000000)
-        self.assertEqual(flt(row['commission_percent']), 15)
-        self.assertEqual(flt(row['commission_amount']), 150000)
+        after_revenue, after_commission_percent = self._ota_row('Agoda')
+        self.assertEqual(after_revenue - before_revenue, 1000000)
+        self.assertEqual(after_commission_percent, 15)
+        self.assertEqual((after_revenue - before_revenue) * after_commission_percent / 100.0, 150000)
 
     def test_ota_commission_defaults_to_zero_when_unconfigured(self):
         f = self.fixture()
@@ -334,11 +366,13 @@ class FinancialReportsTests(unittest.TestCase):
 
     def test_ota_commission_excludes_non_ota_bookings(self):
         f = self.fixture()
-        self.make_charge(self.reservation.folio, 'ROOM-RENT', 800000)
+        # So sanh CHENH LECH tong doanh thu truoc/sau (khong gia dinh site
+        # sach — xem ghi chu o test_ota_commission_calculates_from_configured_rate).
         from hospitality_core.hospitality_core.report.ota_commission_report.ota_commission_report import execute
-        columns, data = execute({'from_date': nowdate(), 'to_date': nowdate()})
-        total_revenue = sum(flt(r['revenue']) for r in data)
-        self.assertEqual(total_revenue, 0,
+        before_total = sum(flt(r['revenue']) for r in execute({'from_date': nowdate(), 'to_date': nowdate()})[1])
+        self.make_charge(self.reservation.folio, 'ROOM-RENT', 800000)
+        after_total = sum(flt(r['revenue']) for r in execute({'from_date': nowdate(), 'to_date': nowdate()})[1])
+        self.assertEqual(after_total - before_total, 0,
             'Dat phong khong phai OTA (booking_source mac dinh Direct) khong duoc tinh vao bao cao nay.')
 
     # ==================================================================

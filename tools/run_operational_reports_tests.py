@@ -452,7 +452,12 @@ class OperationalReportsTests(unittest.TestCase):
         self.make_charge(self.reservation.folio, 'DISCOUNT', -100000)
         from hospitality_core.hospitality_core.report.daily_sales_consumption.daily_sales_consumption import execute
         columns, charges = execute({'from_date': nowdate(), 'to_date': nowdate()})
-        row = next((c for c in charges if c.get('item') == 'ROOM-RENT'), None)
+        # 'localhost' co san du lieu demo/that o property KHAC ('TCR-RESORT')
+        # co the cung co dong item='ROOM-RENT' trong cung ngay — phai loc dung
+        # theo PHONG cua chinh fixture nay, khong chi loc theo ten item (da
+        # tung gay FAIL that: next() nhat dong dau tien trung 'ROOM-RENT' bat
+        # ky, khong phai dung dong cua test nay).
+        row = next((c for c in charges if c.get('item') == 'ROOM-RENT' and c.get('room') == self.reservation.room), None)
         self.assertIsNotNone(row)
         self.assertEqual(flt(row['discount_amount']), 100000)
         self.assertEqual(flt(row['amount']), 900000)

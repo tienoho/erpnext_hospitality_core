@@ -22,9 +22,21 @@ class HospitalityExpense(Document):
 		self.update_maintenance_request()
 		
 	def on_cancel(self):
+		# TRƯỚC ĐÂY: gọi create_expense_gl_entries(self, cancel=1) — tham số
+		# `cancel` KHÔNG TỒN TẠI trong chữ ký hàm (chỉ có `method=None`),
+		# khiến MỌI lần hủy 1 Hospitality Expense đã submit crash TypeError
+		# ngay lập tức. Sửa đúng chữ ký, khớp quy ước method= dùng xuyên suốt
+		# các hook khác trong accounting.py.
 		from hospitality_core.hospitality_core.api.accounting import create_expense_gl_entries
-		create_expense_gl_entries(self, cancel=1)
+		create_expense_gl_entries(self, method='on_cancel')
 		self.update_maintenance_request()
+		# Hospitality Expense là DocType tự viết (không kế thừa lớp ERPNext
+		# core nào), Frappe's check_no_back_links_exist() sẽ CHẶN hủy nếu có
+		# GL Entry còn docstatus=1 (quy ước GL Entry giữ docstatus=1 vĩnh viễn,
+		# chỉ đổi cờ is_cancelled — không đổi docstatus, đúng thiết kế chuẩn
+		# ERPNext) — khớp đúng lớp lỗi vừa fix cho POS Invoice's on_cancel()
+		# (xem accounting.py's allow_cancel_of_pos_invoice_with_manual_gl_entries()).
+		self.ignore_linked_doctypes = ["GL Entry"]
 
 	def update_maintenance_request(self):
 		if self.maintenance_request:
