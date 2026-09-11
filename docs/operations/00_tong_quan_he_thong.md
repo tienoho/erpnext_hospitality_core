@@ -9,6 +9,7 @@
 > | [`02_buong_phong_bao_tri_pos.md`](02_buong_phong_bao_tri_pos.md) | Buồng phòng, Kỹ thuật/Bảo trì, Thu ngân Nhà hàng/POS |
 > | [`03_ke_toan_dem_kiem_toan_bao_cao.md`](03_ke_toan_dem_kiem_toan_bao_cao.md) | Kế toán, Kiểm toán đêm, Quản lý/Điều hành |
 > | [`04_van_hanh_ky_thuat_it.md`](04_van_hanh_ky_thuat_it.md) | Đội IT/Vận hành hệ thống (kỹ thuật, không dành cho nghiệp vụ) |
+> | [`05_kich_ban_demo_day_du_cac_luong.md`](05_kich_ban_demo_day_du_cac_luong.md) | Người trình bày Demo/UAT — kịch bản từng bước, kèm slide PowerPoint đi kèm |
 
 ## Hệ thống này là gì?
 
